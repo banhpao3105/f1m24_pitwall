@@ -35,6 +35,9 @@ const CONTRACT_CANDIDATES: Record<string, string[]> = {
   salary: ['Salary', 'WeeklySalary', 'Cost', 'Wage', 'Pay'],
   endDay: ['EndDay', 'ContractEndDay', 'ExpiryDay', 'EndDate', 'End'],
   durationDays: ['Duration', 'DurationDays', 'Length', 'Years'],
+  // Phase 3 (Gazette transfers): verified F1M24 columns StartDay/EndSeason.
+  startDay: ['StartDay'],
+  endSeason: ['EndSeason'],
 };
 
 const PERFORMANCE_CANDIDATES: Record<string, string[]> = {
@@ -72,6 +75,8 @@ export function getStaffDetail(db: SqlJsDatabase): RawStaffDetail {
             salary: readNum(row, colIndex(con.columns, cMap.salary)),
             endDay: readNum(row, colIndex(con.columns, cMap.endDay)),
             durationDays: readNum(row, colIndex(con.columns, cMap.durationDays)),
+            startDay: readNum(row, colIndex(con.columns, cMap.startDay)),
+            endSeason: readNum(row, colIndex(con.columns, cMap.endSeason)),
           },
         ];
       })

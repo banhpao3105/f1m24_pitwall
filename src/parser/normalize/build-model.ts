@@ -81,10 +81,25 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
     isSprint: r.weekendType !== 0, // WeekendType 0 = full weekend (verified F1M 24)
     laps: r.laps,
     weather:
-      r.temperatureRace !== 0 || r.rainRace !== 0
-        ? { raceTempC: r.temperatureRace, raceRain: r.rainRace === 1 }
+      r.temperatureRace !== 0 ||
+      r.rainRace !== 0 ||
+      r.rainPractice === 1 ||
+      r.rainQualifying === 1
+        ? {
+            raceTempC: r.temperatureRace,
+            raceRain: r.rainRace === 1,
+            practiceRain: r.rainPractice === 1,
+            qualifyingRain: r.rainQualifying === 1,
+          }
         : undefined,
     results: [],
+    /* Phase 3 — track facts for the Gazette preview + trivia. */
+    trackLengthKm: r.trackLengthKm,
+    trackType: r.trackType,
+    trackFirstRaceYear: r.trackFirstRaceYear,
+    trackFastestLapMs: r.trackFastestLapMs,
+    trackFastestLapDriverId: r.trackFastestLapDriverId,
+    trackFastestLapYear: r.trackFastestLapYear,
   }));
 
   const raceById = new Map(raceModels.map((r) => [r.raceId, r]));
@@ -102,6 +117,11 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
       dnf: res.dnf === 1,
       laps: res.laps,
       fastestLapMs: res.fastestLap,
+      /* Phase 3 — Gazette gap + aggregates (SC/VSC repeat per row). */
+      totalTimeMs: res.totalTimeMs,
+      overtakes: res.overtakes,
+      safetyCarDeployments: res.safetyCarDeployments,
+      vscDeployments: res.vscDeployments,
     });
   }
 
@@ -289,7 +309,7 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
     ),
     drivers: driversRaw.map((d) => ({
       staffId: d.staffId,
-      fullName: `${d.firstName} ${d.lastName}`.trim(),
+      fullName: `${cleanStaffName(d.firstName)} ${cleanStaffName(d.lastName)}`.trim(),
       code: d.code,
       teamId: d.contractTeamId,
     })),
@@ -334,6 +354,10 @@ function toGameVersion(v: string): GameVersionId {
  * readable name is embedded in the key — extracting it is faithful to the
  * save (the game localizes the very same string at runtime). Plain names
  * (real drivers, user input) pass through untouched.
+ *
+ * Oracle parity (names.js:9705 removeTrailingDigit): duplicate key names in
+ * the save carry a trailing digit ("Mini1") — the game displays it without
+ * the digit, so decoded keys are stripped too.
  */
 export function cleanStaffName(raw: string): string {
   const token = raw.trim();
@@ -342,8 +366,13 @@ export function cleanStaffName(raw: string): string {
   const key = m[1];
   const PREFIXES = ['StaffName_Forename_Male_', 'StaffName_Forename_Female_', 'StaffName_Surname_'];
   for (const p of PREFIXES) {
-    if (key.startsWith(p)) return key.slice(p.length);
+    if (key.startsWith(p)) return removeTrailingDigit(key.slice(p.length));
   }
   // Unknown key shape — keep the tail segment, still readable.
-  return key.split('_').pop() ?? token;
+  return removeTrailingDigit(key.split('_').pop() ?? token);
+}
+
+/** Oracle names.js:9705 — a single trailing digit is a key artifact. */
+export function removeTrailingDigit(str: string): string {
+  return /\d$/.test(str) ? str.slice(0, -1) : str;
 }

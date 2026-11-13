@@ -65,6 +65,10 @@ export interface Season {
 export interface WeatherInfo {
   raceTempC?: number;
   raceRain?: boolean;
+  /** Phase 3 (Gazette narrative, oracle weatherLine): Races.RainPractice. */
+  practiceRain?: boolean;
+  /** Phase 3: Races.RainQualifying. */
+  qualifyingRain?: boolean;
 }
 
 export interface RaceResult {
@@ -79,6 +83,18 @@ export interface RaceResult {
   laps?: number;
   /** Fastest lap time in ms. */
   fastestLapMs?: number;
+  /**
+   * Total race time in ms (Races_Results.Time, stored seconds — converted at
+   * the parser boundary). Phase 3: gap computation for the Gazette results
+   * table. Missing (old schemas) → gap column degrades.
+   */
+  totalTimeMs?: number;
+  /** SuccessfulOvertakes (Phase 3, Gazette aggregates). */
+  overtakes?: number;
+  /** SafetyCarDeployments — same value repeated on every row of the race. */
+  safetyCarDeployments?: number;
+  /** VirtualSafetyCarDeployments — same value repeated on every row. */
+  vscDeployments?: number;
 }
 
 export interface QualifyingResult {
@@ -126,6 +142,16 @@ export interface Race {
   qualifying?: QualifyingResult[];
   pitStops?: PitStop[];
   practice?: PracticeResult[];
+  /* ── Track facts (Races_Tracks, Phase 3 — Gazette preview + trivia) ── */
+  /** TrackLength in km (oracle: track.TrackLength). */
+  trackLengthKm?: number;
+  /** TypeOfTrack: 1 = downforce, 2 = power, else balanced (oracle odds). */
+  trackType?: number;
+  trackFirstRaceYear?: number;
+  /** All-time track lap record (Races_Tracks.FastestLap, ms). */
+  trackFastestLapMs?: number;
+  trackFastestLapDriverId?: number;
+  trackFastestLapYear?: number;
   sprintResults?: {
     driverId: number;
     teamId: number;
@@ -216,11 +242,15 @@ export interface FinanceTransactionRow {
 export interface StaffContractRow {
   staffId: number;
   teamId?: number;
-  /** 0 = driver contract (docs/01 §4.2). */
+  /** 0 = driver contract, 3 = future/pre-signed contract (oracle transfers). */
   contractType?: number;
   salary?: number;
   endDay?: number;
   durationDays?: number;
+  /** StartDay (OLE date) — Phase 3, Gazette transfer effective season. */
+  startDay?: number;
+  /** EndSeason — the season the future contract runs until. */
+  endSeason?: number;
 }
 
 export interface StaffPerformanceRow {
