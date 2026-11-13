@@ -1,0 +1,94 @@
+{
+  "app": {
+    "title": "F1 PIT WALL",
+    "tagline": "Trợ lý chiến thuật cho F1 Manager — đọc save, gợi ý hành động.",
+    "phaseBadge": "PHASE 0 — FOUNDATION",
+    "modeA": "RACE WEEKEND",
+    "modeB": "FACTORY / SEASON"
+  },
+  "upload": {
+    "title": "Nạp save F1 Manager",
+    "hint": "Kéo-thả file .sav vào đây, hoặc bấm để chọn file",
+    "accept": "Chỉ nhận file .sav (F1 Manager 23/24)",
+    "sizeLimit": "Giới hạn 500 MB",
+    "cta": "Chọn file .sav",
+    "parsing": "Đang phân tích save trên máy bạn…"
+  },
+  "progress": {
+    "title": "Đang parse save",
+    "cancel": "Huỷ",
+    "stages": {
+      "gvas": "Đang đọc cấu trúc GVAS…",
+      "inflate": "Đang giải nén database…",
+      "sqlite": "Đang mở SQLite…",
+      "normalize": "Đang chuẩn hoá dữ liệu…",
+      "done": "Hoàn tất"
+    }
+  },
+  "meta": {
+    "title": "Save đã nạp",
+    "team": "Đội",
+    "manager": "Team Principal",
+    "season": "Mùa giải",
+    "day": "Ngày game",
+    "gameVersion": "Phiên bản game",
+    "build": "Build",
+    "racesCompleted": "Chặng đã đua",
+    "totalRaces": "Tổng số chặng",
+    "tables": "Bảng dữ liệu",
+    "parsedAt": "Thời điểm parse",
+    "customTeam": "Đội tự tạo",
+    "saveId": "Hash save",
+    "warnings": {
+      "NO_COMPLETED_RACES": "Save chưa có chặng nào hoàn thành — các module race analytics sẽ rỗng, module factory/season vẫn dùng được."
+    },
+    "missingTables": "Thiếu bảng tùy chọn: {tables} — các module liên quan sẽ dùng fallback và ghi rõ confidence LOW.",
+    "nextPhase": "Pit Wall Home + khuyến nghị sẽ tới ở Phase 1."
+  },
+  "library": {
+    "title": "Thư viện save (trên máy này)",
+    "subtitle": "Lưu model đã parse trong IndexedDB — không lưu file .sav gốc.",
+    "empty": "Chưa có save nào được lưu trên trình duyệt này.",
+    "open": "Mở",
+    "delete": "Xoá",
+    "savedOn": "Lưu lúc",
+    "confirmDelete": "Xoá save này khỏi trình duyệt?"
+  },
+  "privacy": {
+    "localOnly": "Generated locally — no data leaves your device.",
+    "readonly": "Chỉ đọc .sav — ứng dụng không ghi hay sửa file save.",
+    "detail": "Toàn bộ parsing chạy trong Web Worker trên trình duyệt của bạn. Không upload, không server, không tracking. Xoá dữ liệu bất cứ lúc nào từ Thư viện."
+  },
+  "errors": {
+    "title": "Không đọc được save",
+    "retry": "Thử file khác",
+    "NOT_A_GVAS_SAVE": "File này không phải save Unreal/GVAS — hãy chọn đúng file .sav của F1 Manager.",
+    "UNSUPPORTED_SAVE_FORMAT": "Phiên bản save không được hỗ trợ. Hiện hỗ trợ F1 Manager 23 và 24 (build volta23/volta24).",
+    "MALFORMED_GVAS": "File save bị hỏng hoặc cắt cụt giữa chừng. Thử nạp lại từ game hoặc chọn bản sao khác.",
+    "NOT_A_SQLITE_DB": "Phần database bên trong save không hợp lệ — save có thể chưa hoàn tất khi game ghi.",
+    "DB_INFLATE_FAILED": "Không giải nén được database trong save — file có thể bị hỏng.",
+    "MISSING_CORE_TABLES": "Save thiếu bảng dữ liệu bắt buộc: {tables}. Có thể đây là save của chế độ/giai đoạn không được hỗ trợ.",
+    "DB_OPEN_FAILED": "Không mở được database SQLite trong save. Thử lại, hoặc báo lại build game cho developer.",
+    "NORMALIZE_FAILED": "Dữ liệu đọc được không chuẩn hoá được — schema lạ. Báo lại kèm build game.",
+    "FILE_TOO_LARGE": "File quá lớn (giới hạn 500 MB).",
+    "BAD_EXTENSION": "Chỉ nhận file .sav.",
+    "WORKER_ERROR": "Lỗi hệ thống khi parse (worker). Tải lại trang rồi thử lại.",
+    "FILE_READ_ERROR": "Không đọc được file từ ổ đĩa. Thử chọn lại file.",
+    "PARSE_FAILED": "Lỗi không xác định khi parse. Chi tiết: {message}"
+  },
+  "footer": {
+    "note": "F1 Pit Wall — công cụ phân tích save chạy hoàn toàn trên máy bạn. Không liên kết chính thức với Frontier Developments hay F1.",
+    "phase": "Phase 0 · Foundation"
+  },
+  "locale": {
+    "vi": "Tiếng Việt",
+    "en": "English",
+    "label": "Ngôn ngữ"
+  },
+  "common": {
+    "loading": "Đang tải…",
+    "close": "Đóng",
+    "yes": "Có",
+    "no": "Không"
+  }
+}

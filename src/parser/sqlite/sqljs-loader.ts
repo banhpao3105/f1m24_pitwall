@@ -26,7 +26,16 @@ export function loadSqlJs(options: SqlJsLoadOptions = {}): Promise<SqlJsStatic> 
   cached = initSqlJs({
     locateFile:
       options.locateFile ??
-      ((file: string) => `/sql-wasm/${file}`),
+      ((file: string) => {
+        // Absolute origin required: inside a Turbopack blob worker the
+        // document base is blob:…, so a leading-slash path would resolve
+        // against the blob URL and fail to fetch the WASM binary.
+        const origin =
+          typeof self !== 'undefined' && self.location?.origin
+            ? self.location.origin
+            : '';
+        return `${origin}/sql-wasm/${file}`;
+      }),
   });
   return cached;
 }

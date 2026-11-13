@@ -39,50 +39,81 @@ export function parseSaveFile(
   file: File,
   onProgress?: (p: ParseProgress) => void,
 ): Promise<ParsedSave> {
-  const worker = spawnParseWorker();
-  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  return createParseSession().start(file, onProgress);
+}
 
-  return new Promise<ParsedSave>((resolve, reject) => {
-    const cleanup = () => worker.terminate();
+/**
+ * Cancellable parse session: cancel() terminates the worker immediately.
+ * Parsing is side-effect-free, so cancellation is always safe.
+ */
+export interface ParseSession {
+  start: (file: File, onProgress?: (p: ParseProgress) => void) => Promise<ParsedSave>;
+  cancel: () => void;
+}
 
-    worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
-      const msg = event.data;
-      if (msg.id !== id) return;
-      switch (msg.type) {
-        case 'progress':
-          onProgress?.({ percent: msg.percent, stage: msg.stage });
-          break;
-        case 'done':
-          cleanup();
-          resolve({ model: msg.model, worker });
-          break;
-        case 'error':
+export function createParseSession(): ParseSession {
+  let worker: Worker | null = null;
+
+  return {
+    start(file, onProgress) {
+      worker = spawnParseWorker();
+      const activeWorker = worker;
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+      return new Promise<ParsedSave>((resolve, reject) => {
+        const cleanup = () => {
+          activeWorker.terminate();
+          if (worker === activeWorker) worker = null;
+        };
+
+        activeWorker.onmessage = (event: MessageEvent<WorkerResponse>) => {
+          const msg = event.data;
+          if (msg.id !== id) return;
+          switch (msg.type) {
+            case 'progress':
+              onProgress?.({ percent: msg.percent, stage: msg.stage });
+              break;
+            case 'done':
+              cleanup();
+              resolve({ model: msg.model, worker: activeWorker });
+              break;
+            case 'error':
+              cleanup();
+              reject(
+                Object.assign(new Error(msg.message), {
+                  code: msg.code,
+                  details: msg.details,
+                }),
+              );
+              break;
+          }
+        };
+
+        activeWorker.onerror = (event) => {
           cleanup();
           reject(
-            Object.assign(new Error(msg.message), {
-              code: msg.code,
-              details: msg.details,
+            Object.assign(new Error(event.message || 'Worker crashed'), {
+              code: 'WORKER_ERROR',
             }),
           );
-          break;
-      }
-    };
+        };
 
-    worker.onerror = (event) => {
-      cleanup();
-      reject(
-        Object.assign(new Error(event.message || 'Worker crashed'), {
-          code: 'WORKER_ERROR',
-        }),
-      );
-    };
-
-    file
-      .arrayBuffer()
-      .then((buf) => worker.postMessage({ id, file: buf, fileName: file.name }))
-      .catch((err) => {
-        cleanup();
-        reject(Object.assign(new Error(`Cannot read file: ${String(err)}`), { code: 'FILE_READ_ERROR' }));
+        file
+          .arrayBuffer()
+          .then((buf) => activeWorker.postMessage({ id, file: buf, fileName: file.name }))
+          .catch((err) => {
+            cleanup();
+            reject(
+              Object.assign(new Error(`Cannot read file: ${String(err)}`), {
+                code: 'FILE_READ_ERROR',
+              }),
+            );
+          });
       });
-  });
+    },
+    cancel() {
+      worker?.terminate();
+      worker = null;
+    },
+  };
 }

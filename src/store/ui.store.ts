@@ -1,0 +1,37 @@
+/**
+ * UI/session store — Phase 0 (docs/02-ARCHITECTURE.md §3.4).
+ * Locale + persisted preference. Keep this store free of save data.
+ * Default is VI at SSR/first paint; persisted value (or browser detection,
+ * docs/06-DECISIONS.md Q5) applies right after rehydration to avoid
+ * hydration mismatches.
+ */
+
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { detectLocale, type Locale } from '@/lib/i18n/config';
+
+interface UiState {
+  locale: Locale;
+  setLocale: (locale: Locale) => void;
+}
+
+const STORAGE_KEY = 'pitwall:ui';
+
+export const useUiStore = create<UiState>()(
+  persist(
+    (set) => ({
+      locale: 'vi',
+      setLocale: (locale) => set({ locale }),
+    }),
+    {
+      name: STORAGE_KEY,
+      storage: createJSONStorage(() => localStorage),
+      onRehydrateStorage: () => (state) => {
+        // No stored preference yet → follow the browser (Q5: default VI).
+        if (state && localStorage.getItem(STORAGE_KEY) === null) {
+          useUiStore.setState({ locale: detectLocale() });
+        }
+      },
+    },
+  ),
+);

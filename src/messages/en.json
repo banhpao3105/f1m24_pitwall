@@ -1,0 +1,94 @@
+{
+  "app": {
+    "title": "F1 PIT WALL",
+    "tagline": "Strategy assistant for F1 Manager — reads your save, suggests actions.",
+    "phaseBadge": "PHASE 0 — FOUNDATION",
+    "modeA": "RACE WEEKEND",
+    "modeB": "FACTORY / SEASON"
+  },
+  "upload": {
+    "title": "Load your F1 Manager save",
+    "hint": "Drag & drop a .sav file here, or click to browse",
+    "accept": "Accepts .sav files only (F1 Manager 23/24)",
+    "sizeLimit": "500 MB limit",
+    "cta": "Choose .sav file",
+    "parsing": "Parsing your save locally…"
+  },
+  "progress": {
+    "title": "Parsing save",
+    "cancel": "Cancel",
+    "stages": {
+      "gvas": "Reading GVAS structure…",
+      "inflate": "Inflating embedded database…",
+      "sqlite": "Opening SQLite…",
+      "normalize": "Normalizing data…",
+      "done": "Done"
+    }
+  },
+  "meta": {
+    "title": "Save loaded",
+    "team": "Team",
+    "manager": "Team Principal",
+    "season": "Season",
+    "day": "Game day",
+    "gameVersion": "Game version",
+    "build": "Build",
+    "racesCompleted": "Races completed",
+    "totalRaces": "Total races",
+    "tables": "Data tables",
+    "parsedAt": "Parsed at",
+    "customTeam": "Custom team",
+    "saveId": "Save hash",
+    "warnings": {
+      "NO_COMPLETED_RACES": "No completed races in this save — race analytics modules will be empty; factory/season modules still work."
+    },
+    "missingTables": "Missing optional tables: {tables} — related modules will use fallbacks and state confidence LOW.",
+    "nextPhase": "Pit Wall Home + recommendations arrive in Phase 1."
+  },
+  "library": {
+    "title": "Save library (this device)",
+    "subtitle": "Parsed models are stored in IndexedDB — the raw .sav is never stored.",
+    "empty": "No saves stored in this browser yet.",
+    "open": "Open",
+    "delete": "Delete",
+    "savedOn": "Saved at",
+    "confirmDelete": "Delete this save from the browser?"
+  },
+  "privacy": {
+    "localOnly": "Generated locally — no data leaves your device.",
+    "readonly": "Read-only — the app never writes to or modifies your save file.",
+    "detail": "All parsing runs in a Web Worker inside your browser. No upload, no server, no tracking. Delete your data anytime from the Library."
+  },
+  "errors": {
+    "title": "Cannot read this save",
+    "retry": "Try another file",
+    "NOT_A_GVAS_SAVE": "This is not an Unreal/GVAS save — pick the correct F1 Manager .sav file.",
+    "UNSUPPORTED_SAVE_FORMAT": "Save version not supported. Supported: F1 Manager 23 and 24 (volta23/volta24 builds).",
+    "MALFORMED_GVAS": "The save looks truncated or corrupted. Re-save from the game or try another copy.",
+    "NOT_A_SQLITE_DB": "The embedded database inside the save is invalid — the save may have been written mid-way.",
+    "DB_INFLATE_FAILED": "Could not decompress the embedded database — the file may be corrupted.",
+    "MISSING_CORE_TABLES": "Save is missing mandatory tables: {tables}. This may be an unsupported game mode or stage.",
+    "DB_OPEN_FAILED": "Could not open the SQLite database inside the save. Try again or report the game build.",
+    "NORMALIZE_FAILED": "Parsed rows failed normalization — unknown schema. Please report with the game build.",
+    "FILE_TOO_LARGE": "File too large (500 MB limit).",
+    "BAD_EXTENSION": "Only .sav files are accepted.",
+    "WORKER_ERROR": "System error while parsing (worker). Reload the page and try again.",
+    "FILE_READ_ERROR": "Could not read the file from disk. Pick the file again.",
+    "PARSE_FAILED": "Unknown parse failure. Details: {message}"
+  },
+  "footer": {
+    "note": "F1 Pit Wall — a save analysis tool that runs entirely on your machine. Not affiliated with Frontier Developments or F1.",
+    "phase": "Phase 0 · Foundation"
+  },
+  "locale": {
+    "vi": "Tiếng Việt",
+    "en": "English",
+    "label": "Language"
+  },
+  "common": {
+    "loading": "Loading…",
+    "close": "Close",
+    "yes": "Yes",
+    "no": "No"
+  }
+}
