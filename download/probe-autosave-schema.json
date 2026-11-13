@@ -1,0 +1,3394 @@
+{
+  "fixtureId": "probe-autosave",
+  "gameVersion": "F1M24",
+  "gameVersionWithBuild": "1.11.0.498643",
+  "saveGameVersion": 3,
+  "engineVersion": "5.1.1",
+  "saveGameClassName": "/Script/RaceGame.CareerSaveGame",
+  "sourceFileName": "autosave.sav",
+  "introspectedAt": "2026-11-13T14:55:30.329Z",
+  "totalTablesAndViews": 326,
+  "coreTables": [
+    {
+      "name": "Races",
+      "columns": [
+        "RaceID",
+        "SeasonID",
+        "Day",
+        "TrackID",
+        "State",
+        "RainPractice",
+        "TemperaturePractice",
+        "WeatherStatePractice",
+        "RainQualifying",
+        "TemperatureQualifying",
+        "WeatherStateQualifying",
+        "RainRace",
+        "TemperatureRace",
+        "WeatherStateRace",
+        "WeekendType"
+      ]
+    },
+    {
+      "name": "Races_Tracks",
+      "columns": [
+        "TrackID",
+        "Name",
+        "CountryID",
+        "Laps",
+        "FirstRace",
+        "ProfileText",
+        "TrackLength",
+        "TypeOfTrack",
+        "FastestLap",
+        "FastestLapDriverID",
+        "LastWinner",
+        "LastPolePosition",
+        "MostWins",
+        "FastestLapYear",
+        "SafetyCarChance",
+        "PitLaneTimeLoss",
+        "GreenFlagTimeLoss",
+        "SafetyCarTimeLoss",
+        "StartFinishLineOffset",
+        "SprintLaps",
+        "IsF2Race",
+        "IsF3Race"
+      ]
+    },
+    {
+      "name": "Races_Results",
+      "columns": [
+        "Season",
+        "RaceID",
+        "FinishingPos",
+        "DriverID",
+        "TeamID",
+        "Laps",
+        "Time",
+        "FastestLap",
+        "Points",
+        "DNF",
+        "SuccessfulOvertakes",
+        "FailedOvertakes",
+        "SuccessfulDefends",
+        "FailedDefends",
+        "SafetyCarDeployments",
+        "VirtualSafetyCarDeployments",
+        "StartingPos",
+        "FuelUsed",
+        "Performance"
+      ]
+    },
+    {
+      "name": "Teams",
+      "columns": [
+        "Formula",
+        "PredictedRanking",
+        "TeamID",
+        "TeamName",
+        "TeamNameLocKey",
+        "Location",
+        "ProfileText",
+        "SeasonsEnteredBeforeGameStart",
+        "FirstYearWithCurrentBranding",
+        "IsCustomTeam",
+        "CountryID"
+      ]
+    },
+    {
+      "name": "Staff_BasicData",
+      "columns": [
+        "StaffID",
+        "FirstName",
+        "LastName",
+        "CountryID",
+        "DOB",
+        "DOB_ISO",
+        "Gender",
+        "IsGeneratedStaff",
+        "PhotoDay",
+        "FaceType",
+        "FaceIndex",
+        "AgeType",
+        "IsGeneratedForCustomTeam"
+      ]
+    },
+    {
+      "name": "Player",
+      "columns": [
+        "FirstName",
+        "LastName",
+        "TeamID",
+        "UniqueSeed",
+        "FirstGameDay",
+        "TeamPrincipalRating",
+        "PreviousTeamPrincipalRating",
+        "CustomTeamEnabled",
+        "CustomTeamLogoBase64",
+        "CustomTeamCarLiveryBase64"
+      ]
+    },
+    {
+      "name": "Player_State",
+      "columns": [
+        "Day",
+        "CurrentSeason"
+      ]
+    }
+  ],
+  "optionalTables": [
+    {
+      "name": "Races_QualifyingResults",
+      "columns": [
+        "SeasonID",
+        "RaceID",
+        "QualifyingStage",
+        "SprintShootout",
+        "FinishingPos",
+        "DriverID",
+        "TeamID",
+        "FastestLap",
+        "DNF",
+        "LapCount",
+        "GridPenalty",
+        "RaceFormula",
+        "ChampionshipPoints"
+      ]
+    },
+    {
+      "name": "Races_SprintResults",
+      "columns": [
+        "SeasonID",
+        "RaceID",
+        "FinishingPos",
+        "DriverID",
+        "TeamID",
+        "FastestLap",
+        "DNF",
+        "LapCount",
+        "TimeDeltaFromLead",
+        "GridPenalty",
+        "AverageLap",
+        "RaceScore",
+        "RaceTime",
+        "IncidentSeverity",
+        "RaceFormula",
+        "ChampionshipPoints",
+        "Performance"
+      ]
+    },
+    {
+      "name": "Races_PitStopResults",
+      "columns": [
+        "SeasonID",
+        "RaceID",
+        "TeamID",
+        "FinishPosition",
+        "FastestPitStopID",
+        "FastestPitStopTime",
+        "DriverID",
+        "Points"
+      ]
+    },
+    {
+      "name": "Races_PitStopTimings",
+      "columns": [
+        "SeasonID",
+        "RaceID",
+        "TeamID",
+        "DriverID",
+        "PitStopID",
+        "PitStopStage",
+        "Duration",
+        "IncidentDelay",
+        "Lap"
+      ]
+    },
+    {
+      "name": "Races_PracticeResults",
+      "columns": [
+        "SeasonID",
+        "RaceID",
+        "PracticeSession",
+        "DriverID",
+        "TeamID",
+        "TimeOnTrack",
+        "SessionDuration",
+        "BestLapTime",
+        "BestLapTyre",
+        "LapCount",
+        "GridPenalty",
+        "RaceFormula"
+      ]
+    },
+    {
+      "name": "Races_DriverStandings",
+      "columns": [
+        "SeasonID",
+        "DriverID",
+        "Points",
+        "Position",
+        "LastPointsChange",
+        "LastPositionChange",
+        "RaceFormula"
+      ]
+    },
+    {
+      "name": "Races_TeamStandings",
+      "columns": [
+        "SeasonID",
+        "TeamID",
+        "Points",
+        "Position",
+        "LastPointsChange",
+        "LastPositionChange",
+        "RaceFormula"
+      ]
+    },
+    {
+      "name": "Save_CarTyreAllocation",
+      "columns": [
+        "CarID",
+        "TyreSetID",
+        "WeekendTyreType",
+        "FrontLeftWear",
+        "FrontRightWear",
+        "BackLeftWear",
+        "BackRightWear",
+        "AvailabilityState",
+        "EstimatedLapTime",
+        "EstimatedLapLifeRemaining",
+        "LapsCompleted",
+        "SessionLastUsedIn",
+        "LapsUsedForInSession"
+      ]
+    },
+    {
+      "name": "Staff_PerformanceStats",
+      "columns": [
+        "StaffID",
+        "StatID",
+        "Val",
+        "Max"
+      ]
+    },
+    {
+      "name": "Staff_DriverData",
+      "columns": [
+        "StaffID",
+        "Improvability",
+        "Aggression",
+        "DriverCode",
+        "WantsChampionDriverNumber",
+        "LastKnownDriverNumber",
+        "AssignedCarNumber",
+        "HasSuperLicense",
+        "HasWonF2",
+        "HasWonF3",
+        "HasRacedEnoughToJoinF1",
+        "PerformanceEvaluationDay",
+        "Marketability",
+        "TargetMarketability",
+        "MarketabilityProgress",
+        "FeederSeriesAssignedCarNumber"
+      ]
+    },
+    {
+      "name": "Staff_Contracts",
+      "columns": [
+        "StaffID",
+        "ContractType",
+        "TeamID",
+        "PosInTeam",
+        "StartDay",
+        "EndSeason",
+        "Salary",
+        "StartingBonus",
+        "RaceBonus",
+        "RaceBonusTargetPos",
+        "BreakoutClause",
+        "AffiliateDualRoleClause"
+      ]
+    },
+    {
+      "name": "Staff_ContractPatience",
+      "columns": [
+        "StaffID",
+        "TeamID",
+        "Patience",
+        "LastNegotiationDay",
+        "SuitabilityRating",
+        "TeamOpinionRating",
+        "OptimalAppealRangeMin",
+        "OptimalAppealRangeMax",
+        "PreviousAppealRangeMin",
+        "PreviousAppealRangeMax",
+        "ContractAcceptanceThreshold"
+      ]
+    },
+    {
+      "name": "Teams_Colours",
+      "columns": [
+        "ColourID",
+        "TeamID",
+        "Colour"
+      ]
+    },
+    {
+      "name": "Countries",
+      "columns": [
+        "CountryID",
+        "Name",
+        "NationalityWeight",
+        "StaffNameLocale",
+        "Population",
+        "EnumName",
+        "MarketAppetite"
+      ]
+    },
+    {
+      "name": "Parts_TeamExpertise",
+      "columns": [
+        "TeamID",
+        "PartType",
+        "PartStat",
+        "Expertise",
+        "NextSeasonExpertise",
+        "SeasonStartExpertise"
+      ]
+    },
+    {
+      "name": "Parts_Designs",
+      "columns": [
+        "DesignID",
+        "PartType",
+        "DesignWork",
+        "DesignWorkMax",
+        "DayCreated",
+        "DayCompleted",
+        "ChiefDesignerID",
+        "WindTunnelTime",
+        "CFD",
+        "DesignCost",
+        "BuildCost",
+        "BuildWorkMax",
+        "ValidFrom",
+        "DesignSpeed",
+        "PartKnowledge",
+        "ManufactureCount",
+        "DesignNumber",
+        "DesignType",
+        "TeamID",
+        "LastCompletedProjectManufactureCount"
+      ]
+    },
+    {
+      "name": "Parts_Items",
+      "columns": [
+        "ItemID",
+        "DesignID",
+        "BuildWork",
+        "Condition",
+        "ManufactureNumber",
+        "ProjectID",
+        "AssociatedCar",
+        "InspectionState",
+        "LastEquippedCar"
+      ]
+    },
+    {
+      "name": "Parts_CarLoadout",
+      "columns": [
+        "TeamID",
+        "LoadoutID",
+        "PartType",
+        "DesignID",
+        "ItemID"
+      ]
+    },
+    {
+      "name": "Regulations_Proposals",
+      "columns": [
+        "ProposalID",
+        "ChangeType",
+        "VoteDay",
+        "TargetSeason"
+      ]
+    },
+    {
+      "name": "Finance_Transactions",
+      "columns": [
+        "TeamID",
+        "Day",
+        "Value",
+        "TransactionType",
+        "Reference",
+        "AffectsCostCap"
+      ]
+    },
+    {
+      "name": "Finance_TeamBalance",
+      "columns": [
+        "TeamID",
+        "Balance"
+      ]
+    },
+    {
+      "name": "Seasons",
+      "columns": [
+        "SeasonID",
+        "PrizePool",
+        "EntryBaseFee",
+        "EntryPerPointFirst",
+        "EntryPerPointOther"
+      ]
+    },
+    {
+      "name": "Board_SeasonObjectives",
+      "columns": [
+        "TeamID",
+        "SeasonID",
+        "TargetPos",
+        "State"
+      ]
+    },
+    {
+      "name": "Board_Confidence",
+      "columns": [
+        "Season",
+        "Confidence"
+      ]
+    }
+  ],
+  "coreTableRowCounts": {
+    "Races": 106,
+    "Races_Tracks": 26,
+    "Races_Results": 798,
+    "Teams": 32,
+    "Staff_BasicData": 403,
+    "Player": 1,
+    "Player_State": 1
+  },
+  "missingOptional": [],
+  "allTableColumns": {
+    "Board_Confidence": [
+      "Season",
+      "Confidence"
+    ],
+    "Board_Confidence_FinanceHistory": [
+      "Day",
+      "Overdraft",
+      "Overspend"
+    ],
+    "Board_Confidence_RaceHistory": [
+      "Day",
+      "TrackID",
+      "Performance"
+    ],
+    "Board_Confidence_RaceMods": [
+      "MinPosDelta",
+      "MaxPosDelta",
+      "ConfidenceMod",
+      "BoardPerformance"
+    ],
+    "Board_Enum_BoardPerformance": [
+      "Value",
+      "Name"
+    ],
+    "Board_Enum_ConfidenceLevels": [
+      "Value",
+      "Name",
+      "UpperBound",
+      "ReviewBonus"
+    ],
+    "Board_Enum_ObjectiveStates": [
+      "Value",
+      "Name",
+      "ConfidenceModFromLongTermObj",
+      "BoardPerformanceFromLongTermObj",
+      "NumBoardPerformanceFromLongTermObj",
+      "ConfidenceModFromSeasonObj",
+      "BoardPerformanceFromSeasonObj",
+      "NumBoardPerformanceFromSeasonObj"
+    ],
+    "Board_Enum_ObjectiveTypes": [
+      "Value",
+      "Name",
+      "MinTeamRating",
+      "MaxTeamRating",
+      "ExpectedRank"
+    ],
+    "Board_Objectives": [
+      "TeamID",
+      "Type",
+      "StartYear",
+      "TargetEndYear",
+      "State",
+      "EndYear"
+    ],
+    "Board_Payments": [
+      "SeasonExpectation",
+      "Budget"
+    ],
+    "Board_SeasonObjectives": [
+      "TeamID",
+      "SeasonID",
+      "TargetPos",
+      "State"
+    ],
+    "Board_TeamRating": [
+      "TeamID",
+      "SeasonID",
+      "PtsFromConstructorResults",
+      "PtsFromDriverResults",
+      "PtsFromSeasonsEntered",
+      "PtsFromChampionshipsWon",
+      "PtsFromNewTeamHype"
+    ],
+    "Board_TeamRating_ChampionshipPosPts": [
+      "Pos",
+      "PtsFromConstructor",
+      "PtsFromBestDriver"
+    ],
+    "Board_TeamRating_RelevancyMultipliers": [
+      "NumSeasonsAgo",
+      "Multiplier"
+    ],
+    "Building_Enum_Effects": [
+      "Effect",
+      "Name",
+      "Sublabel"
+    ],
+    "Building_Enum_Groups": [
+      "Value",
+      "Name"
+    ],
+    "Building_Enum_States": [
+      "State",
+      "Name"
+    ],
+    "Building_Enum_Types": [
+      "Type",
+      "Name",
+      "BuildingGroup"
+    ],
+    "Building_Furbishment": [
+      "Value",
+      "Name",
+      "EffectivenessScalar",
+      "DegrationThreshold"
+    ],
+    "Buildings": [
+      "BuildingID",
+      "Type",
+      "Name",
+      "UpgradeLevel",
+      "UpkeepCost",
+      "UpkeepAffectsCostCap",
+      "ConstructionCost",
+      "ConstructionWork",
+      "RefurbishCost",
+      "RefurbishWork",
+      "RequiredType",
+      "RequiredLevel",
+      "DegradationSpeed"
+    ],
+    "Buildings_Effects": [
+      "BuildingID",
+      "EffectID",
+      "Value"
+    ],
+    "Buildings_Effects_Parts": [
+      "BuildingType",
+      "PartType",
+      "StatID",
+      "Weight"
+    ],
+    "Buildings_HQ": [
+      "BuildingID",
+      "BuildingType",
+      "TeamID",
+      "DegradationValue",
+      "BuildingState",
+      "WorkDone"
+    ],
+    "Buildings_HQ_History": [
+      "BuildingID",
+      "Type",
+      "TeamID",
+      "DayConstructed"
+    ],
+    "Calendar_LastActivityDates": [
+      "LastScoutDate",
+      "LastEngineerDate",
+      "LastDesignProjectDate",
+      "LastResearchProjectDate"
+    ],
+    "Countries": [
+      "CountryID",
+      "Name",
+      "NationalityWeight",
+      "StaffNameLocale",
+      "Population",
+      "EnumName",
+      "MarketAppetite"
+    ],
+    "Countries_RaceRecord": [
+      "CountryID",
+      "Formula",
+      "TotalRaces",
+      "TotalStarts",
+      "TotalPodiums",
+      "TotalWins",
+      "TotalChampionships"
+    ],
+    "Custom_Engine_Allocations": [
+      "teamId",
+      "engineId"
+    ],
+    "Custom_Engines_List": [
+      "engineId",
+      "name"
+    ],
+    "Custom_Engines_Stats": [
+      "engineId",
+      "designId",
+      "partStat",
+      "unitValue",
+      "Value"
+    ],
+    "Custom_S33_D1StatTargets": [
+      "TeamID",
+      "PartType",
+      "PartStat",
+      "TargetRaw",
+      "ExpertiseTarget"
+    ],
+    "Custom_S33_PlayableCalendar2027": [
+      "Seq",
+      "TrackID",
+      "RelDay",
+      "WeekendType",
+      "RainPractice",
+      "TemperaturePractice",
+      "WeatherStatePractice",
+      "RainQualifying",
+      "TemperatureQualifying",
+      "WeatherStateQualifying",
+      "RainRace",
+      "TemperatureRace",
+      "WeatherStateRace"
+    ],
+    "Custom_S33_TriggerState": [
+      "TriggerName",
+      "Fired"
+    ],
+    "Custom_Save_Config": [
+      "key",
+      "value"
+    ],
+    "Difficulty_Enum_Option": [
+      "Value",
+      "Name"
+    ],
+    "Difficulty_RaceSim": [
+      "AIPerformance"
+    ],
+    "Difficulty_TeamManagement": [
+      "AIDesignExpertiseGain"
+    ],
+    "Effects_ActiveEffects": [
+      "ActiveEffectID",
+      "Effect",
+      "EffectType",
+      "Source",
+      "Value",
+      "ReferenceID",
+      "SubReferenceID",
+      "EndDay"
+    ],
+    "Effects_Enum_Effect": [
+      "Value",
+      "Name"
+    ],
+    "Effects_Enum_EffectType": [
+      "Type",
+      "Name"
+    ],
+    "Effects_Enum_Source": [
+      "Value",
+      "Name"
+    ],
+    "EventLog_Enum_EntryType": [
+      "EntryType",
+      "Name"
+    ],
+    "EventLogs": [
+      "EventLogID",
+      "EntryType",
+      "ReferenceID",
+      "Day"
+    ],
+    "Fanfares": [
+      "FanfareType",
+      "ReferenceID",
+      "SubReferenceID"
+    ],
+    "Fanfares_Enum_Types": [
+      "Type",
+      "Name"
+    ],
+    "Finance_Constants": [
+      "StartingCashThreshold0",
+      "StartingCashThreshold1"
+    ],
+    "Finance_Enum_BudgetCategory": [
+      "Value",
+      "Name"
+    ],
+    "Finance_Enum_TransactionType": [
+      "TransactionType",
+      "Name"
+    ],
+    "Finance_TeamBalance": [
+      "TeamID",
+      "Balance"
+    ],
+    "Finance_TeamBudget": [
+      "TeamID",
+      "SeasonID",
+      "InitialBalance",
+      "FinalBalance",
+      "ProjectedIncome",
+      "ProjectedSpending",
+      "TotalIncome",
+      "TotalSpending",
+      "StrategyPresetID",
+      "LastRebalanceDay"
+    ],
+    "Finance_TeamBudget_SpendingBuckets": [
+      "TeamID",
+      "SeasonID",
+      "Category",
+      "IsReserved",
+      "EstimatedSpending",
+      "AllocatedAmount",
+      "RemainingAmount",
+      "Weight",
+      "UsedAmount"
+    ],
+    "Finance_Transactions": [
+      "TeamID",
+      "Day",
+      "Value",
+      "TransactionType",
+      "Reference",
+      "AffectsCostCap"
+    ],
+    "Mail_ChainSequences": [
+      "ChainType",
+      "ReferenceID",
+      "SubReferenceID",
+      "Position",
+      "MailID"
+    ],
+    "Mail_Chains": [
+      "ChainType",
+      "ReferenceID",
+      "SubReferenceID",
+      "LastTriggerDay",
+      "Cooldown",
+      "Completed"
+    ],
+    "Mail_Dilemmas_ResponseEffects": [
+      "MailID",
+      "ResponseNumber",
+      "EffectNumber",
+      "Label",
+      "Status",
+      "Icon",
+      "ReferenceID",
+      "SubReferenceID",
+      "Effect",
+      "EffectType",
+      "Value",
+      "Duration",
+      "Hidden"
+    ],
+    "Mail_Dilemmas_Responses": [
+      "MailID",
+      "ResponseNumber",
+      "Selected",
+      "Label",
+      "Icon"
+    ],
+    "Mail_Enum_Attachment_StatType": [
+      "Type",
+      "Name"
+    ],
+    "Mail_Enum_Attachment_Status": [
+      "Status",
+      "Name"
+    ],
+    "Mail_Enum_BlockType": [
+      "Type",
+      "Name"
+    ],
+    "Mail_Enum_ChainType": [
+      "Value",
+      "Name"
+    ],
+    "Mail_Enum_Event": [
+      "Value",
+      "Name"
+    ],
+    "Mail_Enum_Trigger": [
+      "Value",
+      "Name"
+    ],
+    "Mail_EventPool": [
+      "Event"
+    ],
+    "Mail_EventPool_Cooldown": [
+      "NextTriggerDay"
+    ],
+    "Mail_Inbox": [
+      "MailID",
+      "Day",
+      "Subject",
+      "Icon",
+      "ReferenceID",
+      "SenderName",
+      "SenderSubLabel",
+      "SenderIcon",
+      "StretchOddAttachments",
+      "Filters",
+      "Unread",
+      "BlockType",
+      "InitialBlockType",
+      "OnReadTrigger",
+      "Flagged"
+    ],
+    "Mail_Inbox_AttachmentStats": [
+      "AttachmentStatID",
+      "AttachmentID",
+      "Name",
+      "Type",
+      "Status",
+      "Icon",
+      "Modifiers"
+    ],
+    "Mail_Inbox_AttachmentStats_StringValues": [
+      "AttachmentStatID",
+      "Number",
+      "Value"
+    ],
+    "Mail_Inbox_AttachmentStats_Values": [
+      "AttachmentStatID",
+      "Number",
+      "Value",
+      "NumOfDecimals"
+    ],
+    "Mail_Inbox_Attachments": [
+      "AttachmentID",
+      "MailID",
+      "Name"
+    ],
+    "Mail_Inbox_Links": [
+      "MailID",
+      "Address",
+      "LinkNumber",
+      "Label",
+      "Icon"
+    ],
+    "Mail_Inbox_Sections": [
+      "MailID",
+      "Number",
+      "Title",
+      "Text",
+      "Image",
+      "ImageCaption"
+    ],
+    "Notifications_DisplayOptions": [
+      "PriorityBand",
+      "DisplayOptionID"
+    ],
+    "Notifications_Enum_DisplayOptions": [
+      "DisplayOption",
+      "Name"
+    ],
+    "Onboarding_Enum_HelpArticles": [
+      "HelpArticleID",
+      "Name"
+    ],
+    "Onboarding_Enum_PlayerStepTypes": [
+      "PlayerStepType",
+      "Name"
+    ],
+    "Onboarding_HelpArticleContents": [
+      "HelpContentID",
+      "HelpArticleID",
+      "Name"
+    ],
+    "Onboarding_Tutorial_Enum_IsActiveSettings": [
+      "IsActiveSetting",
+      "Name"
+    ],
+    "Onboarding_Tutorial_Enum_Objectives": [
+      "Objective",
+      "Name",
+      "State"
+    ],
+    "Onboarding_Tutorial_Enum_Sequences": [
+      "SequenceID",
+      "Name",
+      "State",
+      "CurrentStep",
+      "PlayerStepReferenceID",
+      "PlayerStepType",
+      "StaffID",
+      "UnlockDay"
+    ],
+    "Onboarding_Tutorial_Enum_States": [
+      "State",
+      "Name"
+    ],
+    "Onboarding_Tutorial_RestrictedActions": [
+      "TutorialIsActiveSetting",
+      "BlockDaysAdvancement"
+    ],
+    "Parts_CarLoadout": [
+      "TeamID",
+      "LoadoutID",
+      "PartType",
+      "DesignID",
+      "ItemID"
+    ],
+    "Parts_DamageEffects": [
+      "PartType",
+      "DamageState",
+      "EffectString",
+      "EffectStrength"
+    ],
+    "Parts_DesignFocusPresets": [
+      "Preset",
+      "PartType",
+      "PartStat",
+      "DesignFocus"
+    ],
+    "Parts_DesignHistoryData": [
+      "DesignID",
+      "RaceUsage",
+      "RaceWins",
+      "RacePodiums",
+      "NumPartsUsed"
+    ],
+    "Parts_Designs": [
+      "DesignID",
+      "PartType",
+      "DesignWork",
+      "DesignWorkMax",
+      "DayCreated",
+      "DayCompleted",
+      "ChiefDesignerID",
+      "WindTunnelTime",
+      "CFD",
+      "DesignCost",
+      "BuildCost",
+      "BuildWorkMax",
+      "ValidFrom",
+      "DesignSpeed",
+      "PartKnowledge",
+      "ManufactureCount",
+      "DesignNumber",
+      "DesignType",
+      "TeamID",
+      "LastCompletedProjectManufactureCount"
+    ],
+    "Parts_Designs_BuildingEffects": [
+      "DesignID",
+      "PartStat",
+      "BuildingType",
+      "Value"
+    ],
+    "Parts_Designs_StaffEffects": [
+      "DesignID",
+      "PartStat",
+      "StaffType",
+      "Value"
+    ],
+    "Parts_Designs_StatValues": [
+      "DesignID",
+      "PartStat",
+      "Value",
+      "UnitValue",
+      "DesignFocus",
+      "ExpertiseGain",
+      "ExpertiseEffect"
+    ],
+    "Parts_Designs_TeamData": [
+      "TeamID",
+      "PartType",
+      "NewDesignsThisSeason",
+      "NewDesignsNextSeason"
+    ],
+    "Parts_EnginePurchase_MonthlyPayments": [
+      "TeamID",
+      "EngineManufacturerID",
+      "MonthsLeft"
+    ],
+    "Parts_EngineerData": [
+      "EngineerNum",
+      "SpeedIncrease"
+    ],
+    "Parts_Enum_CarStats": [
+      "Value",
+      "Name"
+    ],
+    "Parts_Enum_DamageStates": [
+      "Value",
+      "Name"
+    ],
+    "Parts_Enum_DesignTypes": [
+      "Value",
+      "Name"
+    ],
+    "Parts_Enum_DevSpeeds": [
+      "Value",
+      "Name",
+      "SpeedMultiplier",
+      "CostMultiplier",
+      "ExpertisePerDay"
+    ],
+    "Parts_Enum_EffectStrength": [
+      "Value",
+      "Name"
+    ],
+    "Parts_Enum_EmphasisPresets": [
+      "Value",
+      "Name"
+    ],
+    "Parts_Enum_EngineManufacturers": [
+      "Value",
+      "Name",
+      "TeamID",
+      "EngineDesignID",
+      "ErsDesignID",
+      "GearboxDesignID",
+      "Cost",
+      "StartOfSeasonUpfrontCost",
+      "StartOfSeasonMonthlyCost",
+      "StartOfSeasonMonthlyCostNumMonths"
+    ],
+    "Parts_Enum_InspectionState": [
+      "Value",
+      "Name"
+    ],
+    "Parts_Enum_ProjectType": [
+      "Value",
+      "Name"
+    ],
+    "Parts_Enum_Stats": [
+      "Value",
+      "Name"
+    ],
+    "Parts_Enum_Type": [
+      "Value",
+      "Name",
+      "LocKey",
+      "BaseDesignCost",
+      "BaseManufactureCost",
+      "BaseDesignWork",
+      "BaseManufactureWork",
+      "PreSeasonDesignCostMultiplier",
+      "PreSeasonBuildCostMultiplier",
+      "PreSeasonQuantity",
+      "NegativeFocusMulOnSelf",
+      "NegativeFocusMulOnOthers",
+      "DamagePristineThreshold",
+      "DamageMinorThreshold",
+      "DamageMajorThreshold",
+      "DamageDestroyedThreshold"
+    ],
+    "Parts_InspectionResults": [
+      "ItemID",
+      "RaceID",
+      "DesignID",
+      "LoadoutID",
+      "ItemName",
+      "Result"
+    ],
+    "Parts_Items": [
+      "ItemID",
+      "DesignID",
+      "BuildWork",
+      "Condition",
+      "ManufactureNumber",
+      "ProjectID",
+      "AssociatedCar",
+      "InspectionState",
+      "LastEquippedCar"
+    ],
+    "Parts_Items_Faults": [
+      "ItemID",
+      "FaultType",
+      "FaultName",
+      "FaultSeverity"
+    ],
+    "Parts_NamingConventions": [
+      "TeamID",
+      "Prefix",
+      "SeasonOffset"
+    ],
+    "Parts_ParcFerme": [
+      "DesignID",
+      "LoadoutID",
+      "TeamID",
+      "PartType",
+      "Session",
+      "ItemID"
+    ],
+    "Parts_PowertrainRaceHistoryData": [
+      "TrackID",
+      "TeamID",
+      "AssociatedCar",
+      "EnginePartsUsed",
+      "ERSPartsUsed",
+      "GearboxPartsUsed"
+    ],
+    "Parts_Projects": [
+      "ProjectID",
+      "DesignID",
+      "AssignmentID",
+      "ManufactureSpeed",
+      "Quantity",
+      "Progress",
+      "NewDesign",
+      "StartDay"
+    ],
+    "Parts_RecommendedTrackStats": [
+      "TrackID",
+      "CarStat",
+      "IsCrucial"
+    ],
+    "Parts_Resources": [
+      "StandingPosition",
+      "WindTunnelBlocksRemaining",
+      "CfdBlocksRemaining"
+    ],
+    "Parts_StatDesignFocusModifiers": [
+      "PartType",
+      "SourceStat",
+      "ImpactStat",
+      "MinDesignFocusModifier",
+      "MaxDesignFocusModifier"
+    ],
+    "Parts_TeamExpertise": [
+      "TeamID",
+      "PartType",
+      "PartStat",
+      "Expertise",
+      "NextSeasonExpertise",
+      "SeasonStartExpertise"
+    ],
+    "Parts_TeamHistory": [
+      "SeasonID",
+      "TeamID",
+      "EngineManufacturer"
+    ],
+    "Player": [
+      "FirstName",
+      "LastName",
+      "TeamID",
+      "UniqueSeed",
+      "FirstGameDay",
+      "TeamPrincipalRating",
+      "PreviousTeamPrincipalRating",
+      "CustomTeamEnabled",
+      "CustomTeamLogoBase64",
+      "CustomTeamCarLiveryBase64"
+    ],
+    "Player_History": [
+      "TeamID",
+      "StartDay",
+      "EndDay"
+    ],
+    "Player_PreSeason": [
+      "SelectedEngineManufacturer"
+    ],
+    "Player_Record": [
+      "StartSeason",
+      "FirstRace",
+      "FirstRaceTrackID",
+      "FirstRaceTeamID",
+      "LastRace",
+      "LastRaceTrackID",
+      "LastRaceTeamID",
+      "FirstWin",
+      "FirstWinTrackID",
+      "FirstWinTeamID",
+      "LastWin",
+      "LastWinTrackID",
+      "LastWinTeamID",
+      "FirstPodium",
+      "FirstPodiumTrackID",
+      "FirstPodiumTeamID",
+      "FirstPoints",
+      "FirstPointsTrackID",
+      "FirstPointsTeamID",
+      "TotalDriverStarts",
+      "TotalDriverFinishes",
+      "BestQualifying",
+      "BestQualifyingYear",
+      "BestQualifyingTrackID",
+      "BestQualifyingTeamID",
+      "BestFinish",
+      "BestFinishYear",
+      "BestFinishTrackID",
+      "BestFinishTeamID",
+      "TotalDriverSprintWins",
+      "TotalDriverPoles",
+      "TotalDriverWins",
+      "TotalDriverPodiums",
+      "TotalDriverPointsScoringFinishes",
+      "TotalDriverPoints",
+      "TotalDriverFastestLaps",
+      "BestDriverChampionshipPlace",
+      "BestDriverChampionshipYear",
+      "BestDriverChampionshipTeamID",
+      "TotalDriverChampionshipWins",
+      "TotalDriverChampionshipPodiums",
+      "BestConstructorChampionshipPlace",
+      "BestConstructorChampionshipYear",
+      "BestConstructorChampionshipTeamID",
+      "TotalConstructorChampionshipWins",
+      "TotalConstructorChampionshipPodiums",
+      "TotalUniqueStarts",
+      "TotalUniqueFinishes",
+      "TotalUniquePodiums",
+      "BestSprintFinish",
+      "BestSprintFinishYear",
+      "BestSprintFinishTrackID",
+      "BestSprintFinishTeamID",
+      "HighestTeamRating",
+      "HighestTeamRatingYear",
+      "HighestTeamRatingTeamID",
+      "HighestAnnualIncome",
+      "HighestAnnualIncomeYear",
+      "HighestAnnualIncomeTeamID"
+    ],
+    "Player_State": [
+      "Day",
+      "CurrentSeason"
+    ],
+    "Races": [
+      "RaceID",
+      "SeasonID",
+      "Day",
+      "TrackID",
+      "State",
+      "RainPractice",
+      "TemperaturePractice",
+      "WeatherStatePractice",
+      "RainQualifying",
+      "TemperatureQualifying",
+      "WeatherStateQualifying",
+      "RainRace",
+      "TemperatureRace",
+      "WeatherStateRace",
+      "WeekendType"
+    ],
+    "Races_DriverStandings": [
+      "SeasonID",
+      "DriverID",
+      "Points",
+      "Position",
+      "LastPointsChange",
+      "LastPositionChange",
+      "RaceFormula"
+    ],
+    "Races_Enum_PenaltyType": [
+      "Type",
+      "Name",
+      "GridPenalty",
+      "FirstOffenceModifier"
+    ],
+    "Races_Enum_State": [
+      "State",
+      "Name"
+    ],
+    "Races_Enum_TrackType": [
+      "Value",
+      "Name"
+    ],
+    "Races_Enum_WeekendType": [
+      "Type",
+      "Name"
+    ],
+    "Races_FeatureRaceResults": [
+      "SeasonID",
+      "RaceID",
+      "FinishingPos",
+      "DriverID",
+      "TeamID",
+      "FastestLap",
+      "LapCount",
+      "TimeDeltaFromLead",
+      "AverageLap",
+      "RaceScore",
+      "RaceTime",
+      "IncidentSeverity",
+      "RaceFormula",
+      "PitStopTime",
+      "ChampionshipPoints",
+      "Performance"
+    ],
+    "Races_FeederSeries_RaceLength": [
+      "TrackID",
+      "RaceFormula",
+      "SprintLength",
+      "FeatureLength"
+    ],
+    "Races_GridPenalties": [
+      "PenaltyID",
+      "TeamID",
+      "CarID",
+      "ReasonForPenalty",
+      "SessionReceived",
+      "Served",
+      "PitLaneStart",
+      "ServeInRace",
+      "ServeInSprint"
+    ],
+    "Races_PitCrewStandings": [
+      "SeasonID",
+      "TeamID",
+      "Points",
+      "Position",
+      "LastPointsChange",
+      "LastPositionChange",
+      "RaceFormula"
+    ],
+    "Races_PitStopResults": [
+      "SeasonID",
+      "RaceID",
+      "TeamID",
+      "FinishPosition",
+      "FastestPitStopID",
+      "FastestPitStopTime",
+      "DriverID",
+      "Points"
+    ],
+    "Races_PitStopTimings": [
+      "SeasonID",
+      "RaceID",
+      "TeamID",
+      "DriverID",
+      "PitStopID",
+      "PitStopStage",
+      "Duration",
+      "IncidentDelay",
+      "Lap"
+    ],
+    "Races_PracticeResults": [
+      "SeasonID",
+      "RaceID",
+      "PracticeSession",
+      "DriverID",
+      "TeamID",
+      "TimeOnTrack",
+      "SessionDuration",
+      "BestLapTime",
+      "BestLapTyre",
+      "LapCount",
+      "GridPenalty",
+      "RaceFormula"
+    ],
+    "Races_QualifyingResults": [
+      "SeasonID",
+      "RaceID",
+      "QualifyingStage",
+      "SprintShootout",
+      "FinishingPos",
+      "DriverID",
+      "TeamID",
+      "FastestLap",
+      "DNF",
+      "LapCount",
+      "GridPenalty",
+      "RaceFormula",
+      "ChampionshipPoints"
+    ],
+    "Races_Results": [
+      "Season",
+      "RaceID",
+      "FinishingPos",
+      "DriverID",
+      "TeamID",
+      "Laps",
+      "Time",
+      "FastestLap",
+      "Points",
+      "DNF",
+      "SuccessfulOvertakes",
+      "FailedOvertakes",
+      "SuccessfulDefends",
+      "FailedDefends",
+      "SafetyCarDeployments",
+      "VirtualSafetyCarDeployments",
+      "StartingPos",
+      "FuelUsed",
+      "Performance"
+    ],
+    "Races_SprintResults": [
+      "SeasonID",
+      "RaceID",
+      "FinishingPos",
+      "DriverID",
+      "TeamID",
+      "FastestLap",
+      "DNF",
+      "LapCount",
+      "TimeDeltaFromLead",
+      "GridPenalty",
+      "AverageLap",
+      "RaceScore",
+      "RaceTime",
+      "IncidentSeverity",
+      "RaceFormula",
+      "ChampionshipPoints",
+      "Performance"
+    ],
+    "Races_Strategies": [
+      "StrategyID",
+      "DriverID",
+      "StintID",
+      "TrackID",
+      "SeasonID",
+      "StartingLap",
+      "EndingLap",
+      "TyreSet",
+      "PitLap",
+      "PitWindowStart",
+      "PitWindowOptimal",
+      "PitWindowEnd"
+    ],
+    "Races_TeamPerformance": [
+      "SeasonID",
+      "TeamID",
+      "TrackID",
+      "Straights",
+      "SlowCorners",
+      "MediumCorners",
+      "FastCorners"
+    ],
+    "Races_TeamStandings": [
+      "SeasonID",
+      "TeamID",
+      "Points",
+      "Position",
+      "LastPointsChange",
+      "LastPositionChange",
+      "RaceFormula"
+    ],
+    "Races_Templates": [
+      "TrackID",
+      "RainMin",
+      "RainMax",
+      "TemperatureMin",
+      "TemperatureMax",
+      "WeekOfYear",
+      "TemperatureSkew",
+      "WeekendType",
+      "StartingWeekDay",
+      "Disabled"
+    ],
+    "Races_Tracks": [
+      "TrackID",
+      "Name",
+      "CountryID",
+      "Laps",
+      "FirstRace",
+      "ProfileText",
+      "TrackLength",
+      "TypeOfTrack",
+      "FastestLap",
+      "FastestLapDriverID",
+      "LastWinner",
+      "LastPolePosition",
+      "MostWins",
+      "FastestLapYear",
+      "SafetyCarChance",
+      "PitLaneTimeLoss",
+      "GreenFlagTimeLoss",
+      "SafetyCarTimeLoss",
+      "StartFinishLineOffset",
+      "SprintLaps",
+      "IsF2Race",
+      "IsF3Race"
+    ],
+    "Regulations_ChangeGroups": [
+      "GroupID",
+      "ChangeType",
+      "LocKey"
+    ],
+    "Regulations_ChangeGroups_VotingPairs": [
+      "VotePairID",
+      "ChangeGroup1",
+      "ChangeGroup2",
+      "DescriptionLocKey"
+    ],
+    "Regulations_Enum_ChangeType": [
+      "Value",
+      "Name",
+      "LocKey",
+      "DescriptionLocKey",
+      "GroupSeasonDelay",
+      "SkipSeasonProbability"
+    ],
+    "Regulations_Enum_Changes": [
+      "ChangeID",
+      "Name",
+      "ChangeType",
+      "CurrentValue",
+      "PreviousValue",
+      "MinValue",
+      "MaxValue",
+      "LocKey",
+      "DescriptionLocKey"
+    ],
+    "Regulations_Enum_State": [
+      "Value",
+      "Name"
+    ],
+    "Regulations_EventCalendar": [
+      "Month",
+      "ChangeType",
+      "SeasonDelta"
+    ],
+    "Regulations_NonTechnical": [
+      "GroupID",
+      "Regulation",
+      "Value"
+    ],
+    "Regulations_NonTechnical_PartResources": [
+      "ResourcePackage",
+      "StandingPos",
+      "WindTunnelBlocks",
+      "CfdBlocks"
+    ],
+    "Regulations_NonTechnical_PointSchemes": [
+      "PointScheme",
+      "RacePos",
+      "Points"
+    ],
+    "Regulations_NonTechnical_PrizeShare": [
+      "DistributionSystem",
+      "FinishPosition",
+      "PrizeShare"
+    ],
+    "Regulations_Proposals": [
+      "ProposalID",
+      "ChangeType",
+      "VoteDay",
+      "TargetSeason"
+    ],
+    "Regulations_Proposals_ChangeGroups": [
+      "ProposalID",
+      "GroupID",
+      "State"
+    ],
+    "Regulations_TeamVotes": [
+      "ProposalID",
+      "TeamID",
+      "GroupID"
+    ],
+    "Regulations_Technical_StatReductions": [
+      "GroupID",
+      "PartStat",
+      "StatReduction"
+    ],
+    "Regulations_Technical_SweepingReductions": [
+      "GroupID",
+      "SweepingReduction"
+    ],
+    "Regulations_Technical_TypeReductions": [
+      "GroupID",
+      "PartType",
+      "TypeReduction"
+    ],
+    "Regulations_Technical_TypeStatComboReductions": [
+      "GroupID",
+      "PartType",
+      "PartStat",
+      "ComboReduction"
+    ],
+    "Save_CarAI": [
+      "CarIndex",
+      "RiskLevel",
+      "ControlType",
+      "Approach"
+    ],
+    "Save_CarAI_Practice": [
+      "CarID",
+      "State",
+      "NextRunTimeSelected",
+      "RunCount",
+      "CurrentRunTargetLaps",
+      "LapCountAtRunStart",
+      "FreshTyresToUse",
+      "NextRunTime",
+      "CurrentRunTargetTime",
+      "CurrentRunStartTime",
+      "AllowedTyreBitField"
+    ],
+    "Save_CarAI_Qualifying": [
+      "CarID",
+      "State",
+      "NextRunPrioritiseFreshTyres",
+      "LastRunAborted",
+      "WillSkipFinalRun",
+      "RunCount",
+      "FullRunDuration",
+      "LastRunCutOff",
+      "WorstConditionsLastRun",
+      "QualifyingCutoffSafetyThreshold",
+      "RunWeatherLookahead"
+    ],
+    "Save_CarAI_Race": [
+      "CarID",
+      "RedFlagActive",
+      "SafetyCarActive",
+      "VirtualSafetyCarActive",
+      "ChargingERS",
+      "BattleState",
+      "ConfidenceState",
+      "LastUpdatedPitstopStrategy",
+      "LastUpdatedFuelDelta",
+      "LastTriggeredLowFuelEvent",
+      "LastUpdatedCommands",
+      "LastUpdatedWeatherReport",
+      "WeatherReportMagnitudeDistortion"
+    ],
+    "Save_CarAI_Race_Stints": [
+      "CarID",
+      "TyreID",
+      "StartingLap"
+    ],
+    "Save_CarConfig": [
+      "LoadoutID",
+      "TeamID",
+      "DriverConfidence",
+      "CurrentSetupToe",
+      "CurrentSetupCamber",
+      "CurrentSetupAntiRollBars",
+      "CurrentSetupFrontWingAngle",
+      "CurrentSetupRearWingAngle",
+      "BestSetupToe",
+      "BestSetupCamber",
+      "BestSetupAntiRollBars",
+      "BestSetupFrontWingAngle",
+      "BestSetupRearWingAngle",
+      "PerfectSetupToe",
+      "PerfectSetupCamber",
+      "PerfectSetupAntiRollBars",
+      "PerfectSetupFrontWingAngle",
+      "PerfectSetupRearWingAngle",
+      "ActiveFeedbackEffect",
+      "SetupFeedbackOrder1",
+      "SetupFeedbackOrder2",
+      "SetupFeedbackOrder3",
+      "SetupFeedbackOrder4",
+      "SetupFeedbackOrder5",
+      "FeedbackRemainingThisRun",
+      "SessionSetupFuelLoad",
+      "SessionSetupTyreID",
+      "SessionSetupTyreType",
+      "TrackAcclimatisation",
+      "DriverDevelopment",
+      "RunPlanLaps",
+      "LeftGarageForTheFirstTime",
+      "ConfigTimeCarSetup",
+      "ConfigTimeComponent",
+      "ConfigTimeRunPlan",
+      "ConfigTimeTyres",
+      "ConfigTimeTotal",
+      "ConfigTimeGarageSetupEnd",
+      "ConfigTimeRemaining"
+    ],
+    "Save_CarConfig_Effects": [
+      "LoadoutID",
+      "TeamID",
+      "EffectID",
+      "AmountOfFeedback",
+      "RemainingTime",
+      "TimeModifier",
+      "FeedbackZoneMin",
+      "FeedbackZoneMax",
+      "PerfectSetup"
+    ],
+    "Save_CarConfig_GraphData": [
+      "ID",
+      "LoadoutID",
+      "EngineWear",
+      "GearboxWear",
+      "ErsWear",
+      "FuelLevel",
+      "TrackAcclimatisation",
+      "PartsKnowledge"
+    ],
+    "Save_CarConfig_ParcFerme": [
+      "LoadoutID",
+      "TeamID",
+      "SetupToe",
+      "SetupCamber",
+      "SetupAntiRollBars",
+      "SetupRearWingAngle"
+    ],
+    "Save_CarRaceEventSummary": [
+      "CarIndex",
+      "SuccessfulOvertakes",
+      "FailedOvertakes",
+      "SuccessfulDefends",
+      "FailedDefends",
+      "LapsDuringSafetyCar",
+      "LapsDuringVirtualSafetyCar"
+    ],
+    "Save_CarTyreAllocation": [
+      "CarID",
+      "TyreSetID",
+      "WeekendTyreType",
+      "FrontLeftWear",
+      "FrontRightWear",
+      "BackLeftWear",
+      "BackRightWear",
+      "AvailabilityState",
+      "EstimatedLapTime",
+      "EstimatedLapLifeRemaining",
+      "LapsCompleted",
+      "SessionLastUsedIn",
+      "LapsUsedForInSession"
+    ],
+    "Save_DriverCommands": [
+      "LoadoutID",
+      "LiftAndCoastStrategy",
+      "RacePaceStrategy",
+      "ERSStrategy",
+      "FastLapCount",
+      "IncludeCooldownLaps",
+      "AdditionalLapOfFuel"
+    ],
+    "Save_Events": [
+      "ID",
+      "Type",
+      "CarID",
+      "PriorityBand",
+      "RaceTime",
+      "Lap",
+      "Payload"
+    ],
+    "Save_PlayerStrategyStints": [
+      "LoadoutID",
+      "StrategyID",
+      "StintID",
+      "TyreDurability",
+      "TyreType",
+      "TyreSetID",
+      "PitWindowStart",
+      "AverageStartingLap",
+      "OptimalPitLap",
+      "PitWindowEnd",
+      "StintTyreStrategy",
+      "StintStartTyreWear",
+      "Selected",
+      "CurrentStint"
+    ],
+    "Save_RaceControl": [
+      "ID",
+      "SafetyCarReleasedSimTime",
+      "AdditionalSessionTime",
+      "RedFlagTimeToSkip",
+      "VscEnding",
+      "VscEndSimTime",
+      "SafetyCarUnlappingStartLap"
+    ],
+    "Save_RaceControl_Incidents": [
+      "CarID",
+      "ImpactSpeed",
+      "StartSimTime",
+      "RecoveryStartSimTime",
+      "RecoveryDuration",
+      "TrackCleanupDuration",
+      "MarshalCheckpointIndex",
+      "Location",
+      "Severity",
+      "State",
+      "Response"
+    ],
+    "Save_RaceControl_Investigations": [
+      "InvestigationIndex",
+      "ResponsibleCarID",
+      "IncidentSimTime",
+      "IncidentRevealTime",
+      "UnderInvestigationEventSent",
+      "CurrentState",
+      "PenaltyOutcomeCalculated",
+      "PenaltyType"
+    ],
+    "Save_RaceControl_Investigations_InvolvedCars": [
+      "InvestigationIndex",
+      "CarID",
+      "Position",
+      "DeltaToLeader",
+      "MinorDamagePartCount",
+      "MajorDamagePartCount",
+      "DestroyedPartCount"
+    ],
+    "Save_RaceSimCar_MechancialIssues": [
+      "CarIndex",
+      "FaultType",
+      "FaultName",
+      "FaultDevelopedTime",
+      "NextEscalationCheckTime",
+      "NextDeescalationCheckTime"
+    ],
+    "Save_RaceSimCars": [
+      "CarIndex",
+      "Active",
+      "AngularVel",
+      "AngularAcc",
+      "Fuel",
+      "EngineTemperature",
+      "BrakeTemperature",
+      "AccelEaseInModifier",
+      "CollisionEnabled",
+      "RacePosition",
+      "TotalRaceTime",
+      "RaceCompleteStateChangeSimTime",
+      "LapCountAtRaceEnd",
+      "LapsLappedByLeader",
+      "RaceCompleteState",
+      "BestLapTyreType",
+      "LastTimingCheckpointRaceTime",
+      "LastTimingCheckpointIndex",
+      "PositionAtFirstChange",
+      "TimeOfLastPositionChange",
+      "CarIDOfLastPositionChange",
+      "DRSState",
+      "DRSZone",
+      "DRSActiveLap",
+      "CurrentActiveTyreID",
+      "LapType",
+      "TransitionLap",
+      "PracticeRunStartTime",
+      "Slipstream",
+      "DirtyAir",
+      "UpdateTransformMode",
+      "WaitingForSafetyCarToPit",
+      "SafetyCarLaunchTime",
+      "SafetyCarRestartLap",
+      "AvoidingCar",
+      "LappingCar",
+      "YieldDirection",
+      "IsFinalLapOfRace",
+      "LapCount",
+      "BlueFlagImmunityDistance",
+      "SafetyCarUnlappingState",
+      "UnlappingLapCount",
+      "LapAccuracy",
+      "CornerAccuracy",
+      "RaceLineAccuracyOffset",
+      "LastAccuracyRollTrackNode",
+      "HasLeadEveryLap"
+    ],
+    "Save_RaceSimCars_Incident": [
+      "CarIndex",
+      "WantedRacingIncident",
+      "ActiveRacingIncident",
+      "RacingIncidentNodeID",
+      "IncidentStartDirectionWS_X",
+      "IncidentStartDirectionWS_Y",
+      "IncidentStartDirectionWS_Z",
+      "RecoveryTargetPosition_X",
+      "RecoveryTargetPosition_Y",
+      "RecoveryTargetPosition_Z",
+      "IncidentStartTime",
+      "ImpactSpeed",
+      "RecoveryState",
+      "RecoveryStateSimTime",
+      "HasLeftTrack"
+    ],
+    "Save_RaceSimCars_Misc": [
+      "CarIndex",
+      "TyreWarmupStartSimTime",
+      "TyreWarmupDuration",
+      "TyreWarmupWarmingOffset",
+      "TyreWarmupCooldown",
+      "TyreWarmupProgress",
+      "QualifyingRunFastLapCount",
+      "QualifyingRunIncludeCooldownLaps",
+      "QualifyingRunAdditionalLapsOfFuel",
+      "QualifyingRunAutomaticMode",
+      "QualifyingRunRunComplete",
+      "QualifyingRunStartLap",
+      "ErsState",
+      "ErsBatteryCharge",
+      "ErsLastLap",
+      "ErsChargeAmountCurrentLap",
+      "ErsDeployAmountCurrentLap",
+      "ErsDeploySavedCurrentLap"
+    ],
+    "Save_RaceSimCars_Overtake": [
+      "CarIndex",
+      "RaceLineState",
+      "OvertakeActive",
+      "OvertakeSuccessRoll",
+      "TimeOfLastOvertakeAttempt",
+      "DefenderCar",
+      "DefenceType",
+      "AttackerInitialLine",
+      "CanSwitchback",
+      "SwitchbackActive",
+      "SwitchbackAttemptsRemaining",
+      "OvertakeStartTime",
+      "TargetOTDirection",
+      "TargetOTCornerNodeID",
+      "TargetOTRaceDistance",
+      "TimeOfLastOvertakenEvent",
+      "HasSentAttemptOvertakeEvent",
+      "CornerClaimIndex",
+      "DefenderIDOfLastOvertakeAttempt",
+      "OvertakeAttemptsOnCurrentDefender",
+      "FirstOvertakeAttemptTimeOnCurrentDriver",
+      "OvertakeEventCooldownStartTime",
+      "CarsOnSameLap",
+      "LastDecisionTime",
+      "AttackerCorneringMultiplier",
+      "DefenderCorneringMultiplier",
+      "AllowSqueeze"
+    ],
+    "Save_RaceSimCars_Parts": [
+      "CarIndex",
+      "Tyre1SurfaceTemperature",
+      "Tyre1CarcassTemperature",
+      "Tyre1Condition",
+      "Tyre2SurfaceTemperature",
+      "Tyre2CarcassTemperature",
+      "Tyre2Condition",
+      "Tyre3SurfaceTemperature",
+      "Tyre3CarcassTemperature",
+      "Tyre3Condition",
+      "Tyre4SurfaceTemperature",
+      "Tyre4CarcassTemperature",
+      "Tyre4Condition",
+      "BodyDamageLevel",
+      "FrontWingDamageLevel",
+      "RearWingDamageLevel",
+      "SidePodsDamageLevel",
+      "FloorDamageLevel",
+      "SuspensionDamageLevel"
+    ],
+    "Save_RaceSimCars_PitStop": [
+      "CarIndex",
+      "PitStopState",
+      "PitLaneReason",
+      "PitStopStartTime",
+      "PitStopJackUpEndTime",
+      "PitStopTyresEndTime",
+      "PitStopWingEndTime",
+      "PitStopReleaseEndTime",
+      "PitLaneEntranceTime",
+      "PitStopOptions",
+      "NewTyreSetID",
+      "PitStopsHadNum",
+      "QueueFrontWingReplace",
+      "DelayPitByOneLap",
+      "GarageSetupEndTime",
+      "MistakeStage",
+      "MistakeSeverity",
+      "MistakeLocation",
+      "MistakeDelay",
+      "PitStopRaiseCarTime",
+      "PitStopLoosenTyreTime",
+      "PitStopRemoveTyresTime",
+      "PitStopReplaceTyresTime",
+      "PitStopTightenTyresTime",
+      "PitStopLowerCarTime",
+      "PitStopReleaseCarTime",
+      "PitStopWingAdjustmentTime",
+      "PitStopWingReplacementTime",
+      "PreviousPitStopLap"
+    ],
+    "Save_RaceSimCars_Strategy": [
+      "CarIndex",
+      "LiftAndCoastStrategy",
+      "TyreWearStrategy",
+      "ErsStrategy",
+      "OvertakeStrategy",
+      "DefenceStrategy",
+      "AvoidDirtyAir",
+      "AvoidKerbs",
+      "AllowTeamMatePast",
+      "ErsOvertakeAssist",
+      "TimePenalty1",
+      "TimePenalty2",
+      "TimePenalty3",
+      "TimePenalty4"
+    ],
+    "Save_RaceSimManager": [
+      "ID",
+      "SimTime",
+      "RaceEventFlags",
+      "DRSTimeLastDetected1",
+      "DRSTimeLastDetected2",
+      "DRSTimeLastDetected3",
+      "SafetyCarState",
+      "ShownCarLeaving"
+    ],
+    "Save_RaceSim_CornerClaim": [
+      "ClaimIndex",
+      "ClaimState",
+      "ClaimIncident",
+      "CarIndex1",
+      "CarIndex2",
+      "CarIndex3",
+      "LeadCarIndex",
+      "MaxCarsInClaim",
+      "IncidentRolled",
+      "IncidentTriggered",
+      "IncidentOffset"
+    ],
+    "Save_SafetyCarDeploymentsSummary": [
+      "ID",
+      "SafetyCarDeployments",
+      "VirtualSafetyCarDeployments"
+    ],
+    "Save_SimpleSimCars": [
+      "CarIndex",
+      "OffRaceLineDistance",
+      "OffRaceLineTarget",
+      "FacingDirection",
+      "OffRaceLineVelocity",
+      "SplineT",
+      "SplineDistance",
+      "Speed",
+      "CurrentAccel",
+      "TimeSpentEmergencyStopped",
+      "VelocityX",
+      "VelocityY",
+      "VelocityZ",
+      "FowardVecX",
+      "FowardVecY",
+      "FowardVecZ",
+      "SplineLUTID",
+      "NextTrackNode",
+      "AccelerationState",
+      "AccelerationRate",
+      "BrakingZoneActive",
+      "BrakingZoneMinDistUntilBrake",
+      "BrakingZoneTargetNode",
+      "OffRaceLineUrgency",
+      "BrakingZoneTargetSpeed",
+      "CurrentBrakeDecel",
+      "OffRaceLineUrgencyTarget"
+    ],
+    "Save_Strategist": [
+      "TeamID",
+      "LoadoutID",
+      "CurrentStintIndex",
+      "LapsOnTyres",
+      "StartOfLapWear",
+      "EnforcedPitLap",
+      "CustomRunLength",
+      "CustomRunFuel",
+      "ActiveRun",
+      "CarRunIndex",
+      "RunStartTime",
+      "RunEndTime",
+      "PitstopRequestActive"
+    ],
+    "Save_Strategist_LapHistory": [
+      "CarIndex",
+      "Lap",
+      "RaceTime",
+      "FuelLoadLaps",
+      "ERSCharge",
+      "ERSDamageState",
+      "ERSWear",
+      "GearboxDamageState",
+      "GearboxWear",
+      "EngineTemp",
+      "EngineDamageState",
+      "EngineWear",
+      "TyreTemp",
+      "TyreWear",
+      "TyreSetID",
+      "LapType",
+      "LapState",
+      "RacePosition",
+      "LapEventFlag",
+      "TimeDeltaFromLead",
+      "DriverInFrontID",
+      "DriverInFrontGap",
+      "DriverBehindID",
+      "DriverBehindGap",
+      "IsValid",
+      "EngineFaultState",
+      "GearboxFaultState",
+      "ERSFaultState",
+      "EngineFaultType",
+      "GearboxFaultType",
+      "ERSFaultType"
+    ],
+    "Save_Strategist_Practice": [
+      "TeamID",
+      "LoadoutID",
+      "CurrentCarState",
+      "TotalSessionLaps",
+      "CurrentRunLaps"
+    ],
+    "Save_Strategist_QualificationRun": [
+      "TeamID",
+      "LoadoutID",
+      "RunStartTime",
+      "RunEstimatedEndTime",
+      "TyreSetID",
+      "FastLapCount",
+      "CurrentState",
+      "IncludeCooldownLaps",
+      "AdditionalLapsOfFuel",
+      "CurrentRun"
+    ],
+    "Save_TimingManager_Checkpoints": [
+      "ID",
+      "RaceDistance",
+      "TimeFirstPassed",
+      "FirstPassedCarId"
+    ],
+    "Save_TimingManager_Laps": [
+      "CarIndex",
+      "Lap",
+      "LapTimeMS",
+      "RaceTime",
+      "LapState"
+    ],
+    "Save_TimingManager_Sectors": [
+      "CarIndex",
+      "Lap",
+      "Sector",
+      "RaceTime",
+      "DeltaFromPreviousMS",
+      "State"
+    ],
+    "Save_TimingManager_TrackCheckpoints": [
+      "CarIndex",
+      "Checkpoint",
+      "RaceTime"
+    ],
+    "Save_WeatherHistory": [
+      "Time",
+      "Rain",
+      "WaterOnTrack",
+      "AmbientTemperature",
+      "TrackTemperature",
+      "WeatherState",
+      "TimeUntilTrackDry",
+      "RubberOnTrack"
+    ],
+    "Save_Weekend": [
+      "ID",
+      "RaceID",
+      "WeekendStage",
+      "CurrentGuiScreen",
+      "ActiveStepID",
+      "CurrentStageInnerStep",
+      "PreviousStageInnerStep",
+      "TrackRubber",
+      "SimulatedP1",
+      "SimulatedP2",
+      "SimulatedP3",
+      "SimulatedQ1",
+      "SimulatedQ2",
+      "SimulatedQ3",
+      "MidSessionSave",
+      "TimeRemaining",
+      "CurrentLap",
+      "LapCount",
+      "SessionSkippedTime",
+      "SessionDelayTime",
+      "SimulatedSQ1",
+      "SimulatedSQ2",
+      "SimulatedSQ3",
+      "SimulatedSprint",
+      "SimulatedRace"
+    ],
+    "Scenario_Config": [
+      "ScenarioID",
+      "ScenarioType",
+      "ScenarioDLCID",
+      "ScenarioCategory",
+      "DifficultyRating"
+    ],
+    "Scenario_Objectives": [
+      "ID",
+      "Title",
+      "Blurb",
+      "ObjectiveType",
+      "ObjectiveTarget",
+      "ObjectiveValue"
+    ],
+    "Scenario_RealFinishPositions": [
+      "CarID",
+      "FinishPosition",
+      "Points",
+      "Pitstops",
+      "IsDNF",
+      "HasFastestLap"
+    ],
+    "Scenario_SeasonData": [
+      "TeamID",
+      "Wins",
+      "Podiums",
+      "FastestLaps",
+      "PolePositions",
+      "RacesFinished",
+      "RacesTotal"
+    ],
+    "Scenario_WeatherOverride": [
+      "Day",
+      "AmbientTempHigh",
+      "AmbientTempLow",
+      "AmbientTempSkew",
+      "TrackTempHigh",
+      "TrackTempLow",
+      "TrackTempSkew"
+    ],
+    "Scenario_WeatherOverride_States": [
+      "StateIndex",
+      "StateType",
+      "Rain"
+    ],
+    "Scouting": [
+      "TeamID",
+      "StaffID",
+      "AssignmentID",
+      "ScoutType",
+      "StartDay",
+      "WorkLeft",
+      "Accuracy",
+      "LastScoutedType",
+      "LastScoutedEndDay",
+      "LastScoutedAccuracy",
+      "LastScoutedDaysUtilExpired"
+    ],
+    "Scouting_Enum_ScoutType": [
+      "Value",
+      "Name",
+      "Cost",
+      "ScoutLength",
+      "ScoutingAccuracy"
+    ],
+    "Scouting_Staff_Bonuses": [
+      "StaffID",
+      "TeamID",
+      "DayScouted",
+      "StartingBonus",
+      "RaceBonus",
+      "RaceBonusTargetPos"
+    ],
+    "Scouting_Staff_Bookmark": [
+      "TeamID",
+      "StaffID"
+    ],
+    "Scouting_Staff_CommonData": [
+      "StaffID",
+      "AnnualSalary",
+      "TeamID",
+      "DayScouted",
+      "Mentality",
+      "TeamSuitability",
+      "TeamOpinion"
+    ],
+    "Scouting_Staff_DriverRivalryEventLogs": [
+      "DriverID",
+      "RivalryEventType",
+      "RivalID",
+      "RivalryPoints",
+      "TeamID",
+      "DayScouted"
+    ],
+    "Scouting_Staff_PerformanceStats": [
+      "StaffID",
+      "StatID",
+      "Val",
+      "Max",
+      "TeamID",
+      "DayScouted",
+      "AccuracyOffset"
+    ],
+    "Scouting_Staff_RaceEngineerDriverAssignments": [
+      "RaceEngineerID",
+      "DriverID",
+      "RelationshipLevel",
+      "TeamID",
+      "DayScouted"
+    ],
+    "Scouting_Staff_Traits": [
+      "StaffID",
+      "TraitID",
+      "TeamID",
+      "DayScouted"
+    ],
+    "Seasons": [
+      "SeasonID",
+      "PrizePool",
+      "EntryBaseFee",
+      "EntryPerPointFirst",
+      "EntryPerPointOther"
+    ],
+    "Seasons_Deadlines": [
+      "SeasonID",
+      "DeadlineType",
+      "Day"
+    ],
+    "Seasons_Enum_DeadlineType": [
+      "DeadlineType",
+      "Name"
+    ],
+    "Seasons_FormulaHistory": [
+      "Formula",
+      "FirstSeason",
+      "TotalRaces"
+    ],
+    "Seasons_PreSeasonTesting": [
+      "PeriodID",
+      "TrackID",
+      "WeeksBeforeFirstRace",
+      "FirstDayOfWeek",
+      "Length"
+    ],
+    "Sponsorship_ActivePackages": [
+      "TeamID",
+      "SponsorID",
+      "SponsorType",
+      "Engagement",
+      "Slot"
+    ],
+    "Sponsorship_ActivePackages_SecondaryBonuses": [
+      "TeamID",
+      "SponsorID",
+      "ActiveEffectID",
+      "AffiliateID"
+    ],
+    "Sponsorship_AffiliateEngagementActivities": [
+      "EngagementActivityInstanceID",
+      "StaffID"
+    ],
+    "Sponsorship_AvailablePackages": [
+      "TeamID",
+      "SponsorID",
+      "SponsorType"
+    ],
+    "Sponsorship_EngagementActivities": [
+      "EngagementActivityInstanceID",
+      "TeamID",
+      "EngagementActivityID",
+      "Period",
+      "EngagementGained",
+      "SponsorID"
+    ],
+    "Sponsorship_EngagementActivities_Choices": [
+      "TeamID",
+      "EngagementActivityID",
+      "AffiliateID"
+    ],
+    "Sponsorship_EngagementActivities_Effects": [
+      "EngagementActivityInstanceID",
+      "ActiveEffectID"
+    ],
+    "Sponsorship_EngagementActivities_Locks": [
+      "TeamID"
+    ],
+    "Sponsorship_Enum_RaceBonusDifficulty": [
+      "Value",
+      "Name"
+    ],
+    "Sponsorship_RaceBonuses": [
+      "DriverID",
+      "RaceID",
+      "Difficulty",
+      "Position",
+      "Selected",
+      "Achieved"
+    ],
+    "Staff_BasicData": [
+      "StaffID",
+      "FirstName",
+      "LastName",
+      "CountryID",
+      "DOB",
+      "DOB_ISO",
+      "Gender",
+      "IsGeneratedStaff",
+      "PhotoDay",
+      "FaceType",
+      "FaceIndex",
+      "AgeType",
+      "IsGeneratedForCustomTeam"
+    ],
+    "Staff_CareerHistory": [
+      "StaffID",
+      "TeamID",
+      "StartDay",
+      "EndDay",
+      "PosInTeam"
+    ],
+    "Staff_ContractOffers": [
+      "StaffID",
+      "OfferType",
+      "ContractState",
+      "OfferDay",
+      "PatienceWhenOffered",
+      "TeamID",
+      "PosInTeam",
+      "PosInTeamOpinionScore",
+      "PosInTeamOpinion",
+      "PosInTeamOpinionStr",
+      "StartDay",
+      "EndSeason",
+      "LengthOpinionScore",
+      "LengthOpinion",
+      "LengthOpinionStr",
+      "Salary",
+      "SalaryOpinionScore",
+      "SalaryOpinion",
+      "SalaryOpinionStr",
+      "StartingBonus",
+      "StartingBonusOpinionScore",
+      "StartingBonusOpinion",
+      "StartingBonusOpinionStr",
+      "RaceBonus",
+      "RaceBonusOpinionScore",
+      "RaceBonusOpinion",
+      "RaceBonusOpinionStr",
+      "RaceBonusTargetPos",
+      "RaceBonusTargetPosOpinionScore",
+      "RaceBonusTargetPosOpinion",
+      "RaceBonusTargetPosOpinionStr",
+      "BreakoutClause",
+      "BreakoutClauseOpinionScore",
+      "BreakoutClauseOpinion",
+      "BreakoutClauseOpinionStr",
+      "StartDateType",
+      "StartDateTypeOpinionScore",
+      "StartDateTypeOpinion",
+      "StartDateTypeOpinionStr",
+      "AffiliateAgeOpinionScore",
+      "AffiliateAgeOpinion",
+      "AffiliateAgeOpinionStr",
+      "AffiliateCountOpinionScore",
+      "AffiliateCountOpinion",
+      "AffiliateCountOpinionStr",
+      "AffiliatePendingF1RacePosOpinionScore",
+      "AffiliatePendingF1RacePosOpinion",
+      "AffiliatePendingF1RacePosOpinionStr",
+      "AffiliateDualRoleClause",
+      "AffiliateDualRoleClauseOpinionScore",
+      "AffiliateDualRoleClauseOpinion",
+      "AffiliateDualRoleClauseOpinionStr",
+      "ExpirationDay",
+      "OfferDeadlineOpinionScore",
+      "OfferDeadlineOpinion",
+      "OfferDeadlineOpinionStr",
+      "EstimatedResponseDay",
+      "SatisfactionScore"
+    ],
+    "Staff_ContractPatience": [
+      "StaffID",
+      "TeamID",
+      "Patience",
+      "LastNegotiationDay",
+      "SuitabilityRating",
+      "TeamOpinionRating",
+      "OptimalAppealRangeMin",
+      "OptimalAppealRangeMax",
+      "PreviousAppealRangeMin",
+      "PreviousAppealRangeMax",
+      "ContractAcceptanceThreshold"
+    ],
+    "Staff_Contracts": [
+      "StaffID",
+      "ContractType",
+      "TeamID",
+      "PosInTeam",
+      "StartDay",
+      "EndSeason",
+      "Salary",
+      "StartingBonus",
+      "RaceBonus",
+      "RaceBonusTargetPos",
+      "BreakoutClause",
+      "AffiliateDualRoleClause"
+    ],
+    "Staff_Contracts_View": [
+      "TeamName",
+      "Formula",
+      "FirstName",
+      "LastName",
+      "StaffID",
+      "ContractType",
+      "TeamID",
+      "PosInTeam",
+      "StartDay",
+      "EndSeason",
+      "Salary",
+      "StartingBonus",
+      "RaceBonus",
+      "RaceBonusTargetPos",
+      "BreakoutClause",
+      "AffiliateDualRoleClause"
+    ],
+    "Staff_DriverData": [
+      "StaffID",
+      "Improvability",
+      "Aggression",
+      "DriverCode",
+      "WantsChampionDriverNumber",
+      "LastKnownDriverNumber",
+      "AssignedCarNumber",
+      "HasSuperLicense",
+      "HasWonF2",
+      "HasWonF3",
+      "HasRacedEnoughToJoinF1",
+      "PerformanceEvaluationDay",
+      "Marketability",
+      "TargetMarketability",
+      "MarketabilityProgress",
+      "FeederSeriesAssignedCarNumber"
+    ],
+    "Staff_DriverData_View": [
+      "FirstName",
+      "LastName",
+      "StaffID",
+      "Improvability",
+      "Aggression",
+      "DriverCode",
+      "WantsChampionDriverNumber",
+      "LastKnownDriverNumber",
+      "AssignedCarNumber",
+      "HasSuperLicense",
+      "HasWonF2",
+      "HasWonF3",
+      "HasRacedEnoughToJoinF1",
+      "PerformanceEvaluationDay",
+      "Marketability",
+      "TargetMarketability",
+      "MarketabilityProgress",
+      "FeederSeriesAssignedCarNumber"
+    ],
+    "Staff_DriverFocus": [
+      "StaffID",
+      "CurrentFocusType",
+      "SelectedFocusType",
+      "Intensity",
+      "ReferenceID"
+    ],
+    "Staff_DriverNumbers": [
+      "Number",
+      "CurrentHolder"
+    ],
+    "Staff_DriverPerformanceEvaluations": [
+      "StaffID",
+      "Result",
+      "Day",
+      "ExpectedPosition",
+      "ActualPosition"
+    ],
+    "Staff_DriverPerformanceEvaluations_Stats": [
+      "StaffID",
+      "Stat",
+      "PristineValue",
+      "DeterioratedValue"
+    ],
+    "Staff_DriverRivalries_Constants": [
+      "WeeklyDecrease",
+      "RacePosDeltaNeededToOutshine",
+      "MaxChampionshipPtsDeltaForRivalry",
+      "MaxRaceTimeDeltaForRivalry",
+      "PtsMultiplier_PreExistingRivalry",
+      "PtsMultiplier_Teammates",
+      "PtsMultiplier_RepeatEvent",
+      "PtsMultiplier_EarlyInSeason",
+      "PtsMultiplier_YoungerRival",
+      "PtsMultiplier_LessSkilledRival",
+      "PtsMultiplier_SubordinateTeammate",
+      "PtsMultiplier_BothNearTopOfStandings",
+      "CloseOnStandingPts_MaxDelta",
+      "PtsMultiplier_CloseOnStandingPts_AtZeroDelta",
+      "PtsMultiplier_CloseOnStandingPts_AtMaxDelta",
+      "FarOnStandingPts_MinDelta",
+      "FarOnStandingPts_MaxDelta",
+      "PtsMultiplier_FarOnStandingPts_AtMinDelta",
+      "PtsMultiplier_FarOnStandingPts_AtMaxDelta",
+      "SmallRacePosGap_MaxDelta",
+      "PtsMultiplier_SmallRacePosGap_AtZeroDelta",
+      "PtsMultiplier_SmallRacePosGap_AtMaxDelta",
+      "LargeRacePosGap_MinDelta",
+      "LargeRacePosGap_MaxDelta",
+      "PtsMultiplier_LargeRacePosGap_AtMinDelta",
+      "PtsMultiplier_LargeRacePosGap_AtMaxDelta"
+    ],
+    "Staff_DriverRivalryEventLogs": [
+      "DriverID",
+      "RivalryEventType",
+      "RivalID",
+      "RivalryPoints"
+    ],
+    "Staff_DriverSuperLicensePoints": [
+      "DriverID",
+      "SeasonID",
+      "SuperLicensePoints"
+    ],
+    "Staff_Driver_Achievements": [
+      "StaffID",
+      "Award",
+      "TrackRecord"
+    ],
+    "Staff_Driver_RaceRecordBeforeGameStart": [
+      "StaffID",
+      "Formula",
+      "FirstRace",
+      "FirstRaceTrackID",
+      "LastRace",
+      "LastRaceTrackID",
+      "FirstWin",
+      "FirstWinTrackID",
+      "LastWin",
+      "LastWinTrackID",
+      "FirstPodium",
+      "FirstPodiumTrackID",
+      "FirstPoints",
+      "FirstPointsTrackID",
+      "TotalStarts",
+      "TotalFinishes",
+      "BestQualifying",
+      "BestQualifyingYear",
+      "BestQualifyingTrackID",
+      "BestFinish",
+      "BestFinishYear",
+      "BestFinishTrackID",
+      "TotalSprintWins",
+      "TotalPoles",
+      "TotalWins",
+      "TotalPodiums",
+      "TotalPointsScoringFinishes",
+      "TotalPointsScored",
+      "TotalFastestLaps",
+      "BestChampionPlace",
+      "BestChampionshipYear",
+      "TotalChampionshipWins",
+      "TotalChampionshipPodiums",
+      "BestSprintFinish",
+      "BestSprintFinishYear",
+      "BestSprintFinishTrackID"
+    ],
+    "Staff_Driver_RaceRecordPerSeason": [
+      "StaffID",
+      "SeasonID",
+      "TeamID",
+      "FirstRace",
+      "FirstRaceTrackID",
+      "LastRace",
+      "LastRaceTrackID",
+      "FirstWin",
+      "FirstWinTrackID",
+      "LastWin",
+      "LastWinTrackID",
+      "FirstPodium",
+      "FirstPodiumTrackID",
+      "FirstPoints",
+      "FirstPointsTrackID",
+      "TotalStarts",
+      "TotalFinishes",
+      "BestQualifying",
+      "BestQualifyingYear",
+      "BestQualifyingTrackID",
+      "BestFinish",
+      "BestFinishYear",
+      "BestFinishTrackID",
+      "TotalSprintWins",
+      "TotalPoles",
+      "TotalWins",
+      "TotalPodiums",
+      "TotalPointsScoringFinishes",
+      "TotalPointsScored",
+      "TotalFastestLaps",
+      "BestChampionPlace",
+      "BestChampionshipYear",
+      "TotalChampionshipWins",
+      "TotalChampionshipPodiums",
+      "BestSprintFinish",
+      "BestSprintFinishYear",
+      "BestSprintFinishTrackID"
+    ],
+    "Staff_Driver_RaceRecordSinceGameStart": [
+      "StaffID",
+      "Formula",
+      "FirstRace",
+      "FirstRaceTrackID",
+      "LastRace",
+      "LastRaceTrackID",
+      "FirstWin",
+      "FirstWinTrackID",
+      "LastWin",
+      "LastWinTrackID",
+      "FirstPodium",
+      "FirstPodiumTrackID",
+      "FirstPoints",
+      "FirstPointsTrackID",
+      "TotalStarts",
+      "TotalFinishes",
+      "BestQualifying",
+      "BestQualifyingYear",
+      "BestQualifyingTrackID",
+      "BestFinish",
+      "BestFinishYear",
+      "BestFinishTrackID",
+      "TotalSprintWins",
+      "TotalPoles",
+      "TotalWins",
+      "TotalPodiums",
+      "TotalPointsScoringFinishes",
+      "TotalPointsScored",
+      "TotalFastestLaps",
+      "BestChampionPlace",
+      "BestChampionshipYear",
+      "TotalChampionshipWins",
+      "TotalChampionshipPodiums",
+      "BestSprintFinish",
+      "BestSprintFinishYear",
+      "BestSprintFinishTrackID"
+    ],
+    "Staff_Enum_ContractOfferType": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_ContractPatienceLevel": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_ContractStartDateType": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_ContractState": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_ContractType": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_DevelopmentPlans": [
+      "Value",
+      "StaffType",
+      "Name"
+    ],
+    "Staff_Enum_DriverSessionPerformance": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_Fatigue": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_Gender": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_Mentality": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_MentalityCategory": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_MentalityEvent": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_MentalityStatus": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_NameLocales": [
+      "Value",
+      "Name",
+      "FT0Chance",
+      "FT1Chance",
+      "FT2Chance",
+      "FT3Chance",
+      "FT4Chance"
+    ],
+    "Staff_Enum_NarrativeGenSource": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_Opinions": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_PerformanceStatTypes": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_PitCrewTrainingFocus": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_PitCrewTrainingGlobalFocus": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_PitCrewTrainingPreset": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_PitCrewTrainingType": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_PitStopStage": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_RivalryEventTypes": [
+      "Value",
+      "Name",
+      "DefaultRivalryScore"
+    ],
+    "Staff_Enum_StaffType": [
+      "StaffType",
+      "Name",
+      "MinStartingAge",
+      "MaxStartingAge",
+      "MinRetirementAge",
+      "MaxRetirementAge",
+      "ProportionMale",
+      "BaseSalary",
+      "MaxNumPermaTraits",
+      "FirstAbilityPtThreshold",
+      "LastAbilityPtThreshold",
+      "AbilityPtCurve",
+      "MaxIdealSalary"
+    ],
+    "Staff_Enum_TeamSuitability": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_TrainingSession": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_TraitCauseSpawnTypes": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_TraitCauses": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_TraitConditions": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_TraitSolutions": [
+      "Value",
+      "Name"
+    ],
+    "Staff_Enum_TraitTargets": [
+      "Value",
+      "Name"
+    ],
+    "Staff_ForenamePool": [
+      "LocKey",
+      "Locale",
+      "Gender",
+      "FT0",
+      "FT1",
+      "FT2",
+      "FT3",
+      "FT4"
+    ],
+    "Staff_GameData": [
+      "StaffID",
+      "StaffType",
+      "RetirementAge",
+      "Retired",
+      "PermaTraitSpawnBoost",
+      "BestTeamFormula",
+      "BestF1PosInTeamSinceGameStart",
+      "DevelopmentPlan",
+      "ExpectedRankForTeam",
+      "AchievementScore",
+      "ExpectedQualityScore",
+      "ExpectedTimeScore"
+    ],
+    "Staff_Mentality_AreaOpinions": [
+      "StaffID",
+      "Category",
+      "Opinion"
+    ],
+    "Staff_Mentality_Events": [
+      "EventID",
+      "StaffID",
+      "Event",
+      "Opinion",
+      "Value",
+      "DecayDay",
+      "ReferenceID"
+    ],
+    "Staff_Mentality_Statuses": [
+      "StaffID",
+      "Status",
+      "Opinion",
+      "Value"
+    ],
+    "Staff_NarrativeData": [
+      "StaffID",
+      "GenSource",
+      "JobTitle",
+      "TeamID",
+      "IsActive"
+    ],
+    "Staff_PerformanceStats": [
+      "StaffID",
+      "StatID",
+      "Val",
+      "Max"
+    ],
+    "Staff_PerformanceStats_StartOfMonth": [
+      "StaffID",
+      "StatID",
+      "Val"
+    ],
+    "Staff_PitCrew_DevelopmentPlan": [
+      "TeamID",
+      "Day",
+      "TrainingSession",
+      "TrainingType",
+      "TrainingFocus"
+    ],
+    "Staff_PitCrew_DevelopmentPlanGlobalData": [
+      "TeamID",
+      "TrainingInProgress",
+      "TrainingCost",
+      "TrainingPreset",
+      "TrainingFocus",
+      "IsDirty"
+    ],
+    "Staff_PitCrew_PerformanceStats": [
+      "TeamID",
+      "StatID",
+      "Val",
+      "MonthStartVal"
+    ],
+    "Staff_PitCrew_RaceWeekendFatigue": [
+      "TeamID",
+      "Day",
+      "Val"
+    ],
+    "Staff_PitCrew_Statics": [
+      "PitCrewDevelopmentLocked"
+    ],
+    "Staff_RaceEngineerDriverAssignments": [
+      "RaceEngineerID",
+      "DriverID",
+      "DaysTogether",
+      "RelationshipLevel",
+      "IsCurrentAssignment"
+    ],
+    "Staff_RaceRecord": [
+      "StaffID",
+      "Formula",
+      "TotalStarts",
+      "TotalPodiums",
+      "TotalWins",
+      "TotalConstructorChampionships"
+    ],
+    "Staff_StaffTypePerformanceStatsTemplate": [
+      "StaffType",
+      "PerformanceStatType",
+      "SeededValMin",
+      "SeededValMax"
+    ],
+    "Staff_State": [
+      "StaffID",
+      "UnspentXP",
+      "XPGainedLastRace",
+      "XPGainedLastWeek",
+      "Mentality",
+      "MentalityOpinion"
+    ],
+    "Staff_SurnamePool": [
+      "LocKey",
+      "Locale",
+      "DriverCodeLocKey",
+      "FT0",
+      "FT1",
+      "FT2",
+      "FT3",
+      "FT4"
+    ],
+    "Staff_Team_CAS": [
+      "StaffID",
+      "TeamID",
+      "PosInTeam"
+    ],
+    "Staff_Traits": [
+      "StaffID",
+      "TraitID",
+      "DayAdded"
+    ],
+    "Staff_Traits_Constants": [
+      "MinNumStartingTraits",
+      "MaxNumStartingTraits",
+      "PermaTraitSpawnProbability"
+    ],
+    "Staff_Traits_Definitions": [
+      "TraitID",
+      "LocKey",
+      "Icon",
+      "Cause",
+      "CauseSpawnType",
+      "CauseSpawnParam",
+      "Solution",
+      "Condition",
+      "ConditionParam",
+      "DurationInDays"
+    ],
+    "Staff_Traits_Effects": [
+      "TraitID",
+      "Effect",
+      "IsPercentage",
+      "Target",
+      "TargetPerformanceStat"
+    ],
+    "Staff_Traits_Incompatibility": [
+      "TraitID1",
+      "TraitID2"
+    ],
+    "Staff_Traits_Seeding": [
+      "TraitID",
+      "StaffType",
+      "StartingTraitProbability"
+    ],
+    "SubTeam_Assignments": [
+      "AssignmentID",
+      "TeamID",
+      "SubTeamType",
+      "ActiveStaff",
+      "AssignmentName"
+    ],
+    "SubTeam_Enum_Types": [
+      "Type",
+      "Name",
+      "HireCost",
+      "MonthlyRunCost",
+      "ModifierIncrease"
+    ],
+    "SubTeam_Ownership": [
+      "TeamID",
+      "SubTeamType",
+      "TotalStaff"
+    ],
+    "Teams": [
+      "Formula",
+      "PredictedRanking",
+      "TeamID",
+      "TeamName",
+      "TeamNameLocKey",
+      "Location",
+      "ProfileText",
+      "SeasonsEnteredBeforeGameStart",
+      "FirstYearWithCurrentBranding",
+      "IsCustomTeam",
+      "CountryID"
+    ],
+    "Teams_AI_Records": [
+      "TeamID",
+      "SeasonID",
+      "PoachingAttempts",
+      "SuccessfulPoachingAttempts",
+      "SponsorSelectionDay",
+      "LastDecisionEvaluationDay",
+      "TotalDesignProjectsThisPeriod",
+      "TotalResearchProjectsThisPeriod",
+      "TotalIntenseDesignsThisPeriod",
+      "TotalIntenseDesigns",
+      "HasCastRegulationVote"
+    ],
+    "Teams_Colours": [
+      "ColourID",
+      "TeamID",
+      "Colour"
+    ],
+    "Teams_Custom_Livery": [
+      "LiveryType",
+      "DecalMaskIndex",
+      "MaskRColorColour1",
+      "MaskRColorColour2",
+      "MaskRColorGradientRangeClampX",
+      "MaskRColorGradientRangeClampY",
+      "MaskRColorGradient",
+      "MaskRColorMaterial",
+      "MaskGColorColour1",
+      "MaskGColorColour2",
+      "MaskGColorGradientRangeClampX",
+      "MaskGColorGradientRangeClampY",
+      "MaskGColorGradient",
+      "MaskGColorMaterial",
+      "MaskBColorColour1",
+      "MaskBColorColour2",
+      "MaskBColorGradientRangeClampX",
+      "MaskBColorGradientRangeClampY",
+      "MaskBColorGradient",
+      "MaskBColorMaterial",
+      "DecalLayout"
+    ],
+    "Teams_Custom_LiveryDecals": [
+      "LiveryType",
+      "SlotSponsorType",
+      "Key",
+      "AdjustmentPositionX",
+      "AdjustmentPositionY",
+      "AdjustmentRotation",
+      "AdjustmentScale",
+      "DecalType",
+      "TeamLogoIndex",
+      "SponsorID",
+      "SlotSponsorLogoType",
+      "TintColour",
+      "Visible"
+    ],
+    "Teams_Custom_LogoElements": [
+      "ElementID",
+      "PartHash",
+      "Colour",
+      "PositionX",
+      "PositionY",
+      "Rotation",
+      "ScaleX",
+      "ScaleY"
+    ],
+    "Teams_MiscRecord": [
+      "TeamID",
+      "HighestAnnualIncome",
+      "HighestAnnualIncomeYear",
+      "HighestTeamRating",
+      "HighestTeamRatingYear"
+    ],
+    "Teams_PitCrewRecordBeforeGameStart": [
+      "TeamID",
+      "CompetitionWins",
+      "FastestPitStopsTotal",
+      "FastestPitStopTime",
+      "TotalPointsScored",
+      "DriverID"
+    ],
+    "Teams_PitCrewRecordPerSeason": [
+      "TeamID",
+      "SeasonID",
+      "CompetitionWins",
+      "FastestPitStopsTotal",
+      "FastestPitStopTime",
+      "TotalPointsScored",
+      "DriverID"
+    ],
+    "Teams_PitCrewRecordSinceGameStart": [
+      "TeamID",
+      "CompetitionWins",
+      "FastestPitStopsTotal",
+      "FastestPitStopTime",
+      "TotalPointsScored",
+      "DriverID"
+    ],
+    "Teams_PriorityList": [
+      "Value",
+      "FeatureTypes",
+      "NodeExecutionBehaviour",
+      "DevelopCarPartSettingsID",
+      "DevelopBuildingSettingsID",
+      "DevelopStaffSettingsID"
+    ],
+    "Teams_PriorityList_Enum_FeatureTypes": [
+      "Value",
+      "Name"
+    ],
+    "Teams_PriorityList_Enum_OnExecutionBehaviour": [
+      "Value",
+      "Name"
+    ],
+    "Teams_PriorityList_Setting_DevelopBuildingData": [
+      "Value",
+      "BuildingType",
+      "Level",
+      "DegrationThreshold"
+    ],
+    "Teams_PriorityList_Setting_DevelopCarPartData": [
+      "Value",
+      "AverageValue",
+      "Speed"
+    ],
+    "Teams_PriorityList_Setting_DevelopStaffData": [
+      "Value",
+      "StaffType",
+      "MinAverage"
+    ],
+    "Teams_RaceRecordBeforeGameStart": [
+      "TeamID",
+      "FirstRace",
+      "FirstRaceTrackID",
+      "LastRace",
+      "LastRaceTrackID",
+      "FirstWin",
+      "FirstWinTrackID",
+      "LastWin",
+      "LastWinTrackID",
+      "FirstPodium",
+      "FirstPodiumTrackID",
+      "FirstPoints",
+      "FirstPointsTrackID",
+      "TotalDriverStarts",
+      "TotalDriverFinishes",
+      "TotalDriverQualifying",
+      "BestQualifyingYear",
+      "BestQualifying",
+      "BestQualifyingTrackID",
+      "BestFinish",
+      "BestFinishYear",
+      "BestFinishTrackID",
+      "TotalDriverSprintWins",
+      "TotalDriverPoles",
+      "TotalDriverWins",
+      "TotalDriverPodiums",
+      "TotalDriverPointsScoringFinishes",
+      "TotalDriverPoints",
+      "TotalDriverFastestLaps",
+      "BestDriverFinishes",
+      "BestDriverChampionshipPlace",
+      "BestDriverChampionshipYear",
+      "TotalDriverChampionshipWins",
+      "TotalDriverChampionshipPodiums",
+      "BestConstructorChampionshipPlace",
+      "BestConstructorChampionshipYear",
+      "TotalConstructorChampionshipWins",
+      "TotalConstructorChampionshipPodiums",
+      "TotalUniqueStarts",
+      "TotalUniqueFinishes",
+      "TotalUniquePodiums",
+      "BestSprintFinish",
+      "BestSprintFinishYear",
+      "BestSprintFinishTrackID"
+    ],
+    "Teams_RaceRecordPerSeason": [
+      "TeamID",
+      "SeasonID",
+      "FirstRace",
+      "FirstRaceTrackID",
+      "LastRace",
+      "LastRaceTrackID",
+      "FirstWin",
+      "FirstWinTrackID",
+      "LastWin",
+      "LastWinTrackID",
+      "FirstPodium",
+      "FirstPodiumTrackID",
+      "FirstPoints",
+      "FirstPointsTrackID",
+      "TotalDriverStarts",
+      "TotalDriverFinishes",
+      "TotalDriverQualifying",
+      "BestQualifyingYear",
+      "BestQualifying",
+      "BestQualifyingTrackID",
+      "BestFinish",
+      "BestFinishYear",
+      "BestFinishTrackID",
+      "TotalDriverSprintWins",
+      "TotalDriverPoles",
+      "TotalDriverWins",
+      "TotalDriverPodiums",
+      "TotalDriverPointsScoringFinishes",
+      "TotalDriverPoints",
+      "TotalDriverFastestLaps",
+      "BestDriverFinishes",
+      "BestDriverChampionshipPlace",
+      "BestDriverChampionshipYear",
+      "TotalDriverChampionshipWins",
+      "TotalDriverChampionshipPodiums",
+      "BestConstructorChampionshipPlace",
+      "BestConstructorChampionshipYear",
+      "TotalConstructorChampionshipWins",
+      "TotalConstructorChampionshipPodiums",
+      "TotalUniqueStarts",
+      "TotalUniqueFinishes",
+      "TotalUniquePodiums",
+      "BestSprintFinish",
+      "BestSprintFinishYear",
+      "BestSprintFinishTrackID"
+    ],
+    "Teams_RaceRecordSinceGameStart": [
+      "TeamID",
+      "FirstRace",
+      "FirstRaceTrackID",
+      "LastRace",
+      "LastRaceTrackID",
+      "FirstWin",
+      "FirstWinTrackID",
+      "LastWin",
+      "LastWinTrackID",
+      "FirstPodium",
+      "FirstPodiumTrackID",
+      "FirstPoints",
+      "FirstPointsTrackID",
+      "TotalDriverStarts",
+      "TotalDriverFinishes",
+      "TotalDriverQualifying",
+      "BestQualifyingYear",
+      "BestQualifying",
+      "BestQualifyingTrackID",
+      "BestFinish",
+      "BestFinishYear",
+      "BestFinishTrackID",
+      "TotalDriverSprintWins",
+      "TotalDriverPoles",
+      "TotalDriverWins",
+      "TotalDriverPodiums",
+      "TotalDriverPointsScoringFinishes",
+      "TotalDriverPoints",
+      "TotalDriverFastestLaps",
+      "BestDriverFinishes",
+      "BestDriverChampionshipPlace",
+      "BestDriverChampionshipYear",
+      "TotalDriverChampionshipWins",
+      "TotalDriverChampionshipPodiums",
+      "BestConstructorChampionshipPlace",
+      "BestConstructorChampionshipYear",
+      "TotalConstructorChampionshipWins",
+      "TotalConstructorChampionshipPodiums",
+      "TotalUniqueStarts",
+      "TotalUniqueFinishes",
+      "TotalUniquePodiums",
+      "BestSprintFinish",
+      "BestSprintFinishYear",
+      "BestSprintFinishTrackID"
+    ],
+    "sqlite_sequence": [
+      "name",
+      "seq"
+    ]
+  }
+}

@@ -1,0 +1,828 @@
+     1→/**
+     2→ * Tyre Engine v1 — Phase 1 flagship (docs/03-ANALYTICS-ENGINES.md §5.3).
+     3→ *
+     4→ * Question: "Chặng tới chạy lốp nào, mấy pit, pit vòng nào?"
+     5→ *
+     6→ * Baseline: faithful port of the Gazette v2.2 strategy engine (evidence:
+     7→ * constants extracted from the bundled source, A1 §A1.4-§A1.5):
+     8→ *   MODEL_STINT_FRACTION  = 0.28                (expected stops ≈ 0.28 × dist)
+     9→ *   PHYSICAL_LIFE_FALLBACK = 0.75               (envelope × race distance)
+    10→ *   FALLBACK_LIFE_SHAPE   = { S 0.68, M 1.0, H 1.22 }  (vs medium)
+    11→ *   FALLBACK_PACE_DELTA   = { S 0, M 0.55, H 1.05 } s/lap vs Soft
+    12→ *   FALLBACK_PIT_LANE_LOSS = 18.5 s + 2.2 s stationary
+    13→ *   TYRE_DURABILITY       = { S 0.43, M 0.65, H 1.00 } (game ratios)
+    14→ *   DEG_FINAL             = { S 3.0, M 2.0, H 1.8 } s/lap at end of life
+    15→ *   DEG_EXP = 2 (quadratic wear); MIN_STINT_LAPS = 4; MIN_PACE_SAMPLE = 3
+    16→ *
+    17→ * Pure functions only: input is the Normalized SaveModel — no React, no DB,
+    18→ * no fetch (docs/02 import rules). Output is an EngineResult with
+    19→ * confidence + evidence + assumptions; every number is traceable.
+    20→ */
+    21→
+    22→import type { Confidence, Evidence, Assumption, Recommendation } from '../domain/provenance';
+    23→import type { EngineResult } from '../domain/types';
+    24→import type { SaveModel, Race } from '../domain/types';
+    25→
+    26→/* ── oracle constants (do not change without a changelog entry) ─────────── */
+    27→
+    28→export const MODEL_STINT_FRACTION = 0.28;
+    29→export const PHYSICAL_LIFE_FALLBACK = 0.75;
+    30→export const FALLBACK_LIFE_SHAPE = { S: 0.68, M: 1.0, H: 1.22 } as const;
+    31→export const FALLBACK_PACE_DELTA = { S: 0.0, M: 0.55, H: 1.05 } as const;
+    32→export const FALLBACK_PIT_LANE_LOSS = 18.5;
+    33→export const PIT_STATIONARY_ESTIMATE = 2.2;
+    34→export const MIN_STINT_LAPS = 4;
+    35→export const MIN_PACE_SAMPLE = 3;
+    36→export const TYRE_DURABILITY = { S: 0.43, M: 0.65, H: 1.0 } as const;
+    37→export const DEG_FINAL = { S: 3.0, M: 2.0, H: 1.8 } as const;
+    38→export const DEG_EXP = 2.0;
+    39→
+    40→export type Compound = 'S' | 'M' | 'H';
+    41→export const DRY: Compound[] = ['S', 'M', 'H'];
+    42→
+    43→/** Allocation WeekendTyreType → compound (oracle-verified encoding). */
+    44→export const ALLOC_TYRE: Record<number, Compound | 'I' | 'W'> = {
+    45→  2: 'S', 3: 'M', 4: 'H', 1: 'I', 0: 'W',
+    46→};
+    47→
+    48→/** Practice BestLapTyre encoding (oracle-verified): 0=H, 1=M, 2=S. */
+    49→export const PRACTICE_TYRE: Record<number, Compound> = { 0: 'H', 1: 'M', 2: 'S' };
+    50→
+    51→/* ── math helpers ────────────────────────────────────────────────────────── */
+    52→
+    53→export function clamp(x: number, lo: number, hi: number): number {
+    54→  return Math.max(lo, Math.min(hi, x));
+    55→}
+    56→
+    57→export function median(values: number[]): number | null {
+    58→  if (values.length === 0) return null;
+    59→  const sorted = [...values].sort((a, b) => a - b);
+    60→  const mid = Math.floor(sorted.length / 2);
+    61→  return sorted.length % 2 === 1
+    62→    ? sorted[mid]
+    63→    : (sorted[mid - 1] + sorted[mid]) / 2;
+    64→}
+    65→
+    66→/** Closed form of DEG_FINAL × (laps/life)^EXP summed over a stint (oracle). */
+    67→export function stintDegPenalty(
+    68→  compound: Compound,
+    69→  stintLaps: number,
+    70→  life: number,
+    71→): number {
+    72→  if (!life || life <= 0 || stintLaps <= 0) return 0;
+    73→  const frac = Math.min(1, stintLaps / life);
+    74→  return DEG_FINAL[compound] * (stintLaps / (DEG_EXP + 1)) * Math.pow(frac, DEG_EXP);
+    75→}
+    76→
+    77→/* ── data extraction from the normalized model ──────────────────────────── */
+    78→
+    79→export interface StintFactor {
+    80→  factor: number;
+    81→  source: 'track' | 'meta' | 'model';
+    82→  samples: number;
+    83→}
+    84→
+    85→/**
+    86→ * Stint fraction (stint laps / race laps) observed from completed races.
+    87→ * ratio = 1 / (avgStopsPerDriver + 1) — oracle formula. Track-specific
+    88→ * median wins; then save-wide median ("meta"); then the model constant.
+    89→ */
+    90→export function getStintFactor(model: SaveModel, trackId: number): StintFactor {
+    91→  const byTrack: Record<number, number[]> = {};
+    92→  const all: number[] = [];
+    93→  for (const race of model.races) {
+    94→    if (race.state !== 2 || race.results.length === 0) continue;
+    95→    const stops = race.pitStops?.length ?? 0;
+    96→    if (stops === 0) continue;
+    97→    const field = race.results.length;
+    98→    const avg = stops / field;
+    99→    if (avg <= 0) continue;
+   100→    const ratio = 1 / (avg + 1);
+   101→    (byTrack[race.trackId] ??= []).push(ratio);
+   102→    all.push(ratio);
+   103→  }
+   104→  const trackRatios = byTrack[trackId] ?? [];
+   105→  if (trackRatios.length > 0) {
+   106→    return {
+   107→      factor: median(trackRatios) ?? MODEL_STINT_FRACTION,
+   108→      source: 'track',
+   109→      samples: trackRatios.length,
+   110→    };
+   111→  }
+   112→  if (all.length > 0) {
+   113→    return { factor: median(all) ?? MODEL_STINT_FRACTION, source: 'meta', samples: all.length };
+   114→  }
+   115→  return { factor: MODEL_STINT_FRACTION, source: 'model', samples: 0 };
+   116→}
+   117→
+   118→export interface ObservedStops {
+   119→  avgStopsPerDriver: number;
+   120→  samples: number; // driver×race observations
+   121→}
+   122→
+   123→/** Average stops per driver at this track across completed races. */
+   124→export function getObservedStops(model: SaveModel, trackId: number): ObservedStops | null {
+   125→  let totalStops = 0;
+   126→  let driverRaces = 0;
+   127→  for (const race of model.races) {
+   128→    if (race.trackId !== trackId || race.state !== 2) continue;
+   129→    const pitStops = race.pitStops ?? [];
+   130→    if (pitStops.length === 0 || race.results.length === 0) continue;
+   131→    totalStops += pitStops.length;
+   132→    driverRaces += race.results.length;
+   133→  }
+   134→  if (driverRaces === 0) return null;
+   135→  return { avgStopsPerDriver: totalStops / driverRaces, samples: driverRaces };
+   136→}
+   137→
+   138→export interface PracticePace {
+   139→  /** Seconds per lap vs Soft. */
+   140→  deltas: { S: 0; M: number | null; H: number | null };
+   141→  sessions: number;
+   142→}
+   143→
+   144→/**
+   145→ * Compound pace deltas from practice best laps at this track (oracle logic):
+   146→ * per session, best per compound with ≥ MIN_PACE_SAMPLE drivers; gaps in
+   147→ * seconds; median across sessions; sanity-clamped and monotonic.
+   148→ */
+   149→export function getPracticePace(model: SaveModel, trackId: number): PracticePace | null {
+   150→  const bySession = new Map<string, Partial<Record<Compound, number>>>();
+   151→  for (const race of model.races) {
+   152→    if (race.trackId !== trackId) continue;
+   153→    const perSession = new Map<number, Map<Compound, { best: number; drivers: Set<number> }>>();
+   154→    for (const p of race.practice ?? []) {
+   155→      const compound = PRACTICE_TYRE[p.bestLapTyre];
+   156→      if (!compound) continue;
+   157→      const laps = p.bestLapMs / 1000; // model ms → seconds
+   158→      if (!(laps > 0)) continue;
+   159→      const m = perSession.get(p.session) ?? new Map<Compound, { best: number; drivers: Set<number> }>();
+   160→      const entry = m.get(compound) ?? { best: Infinity, drivers: new Set<number>() };
+   161→      // One best-lap row per driver: keep the fastest.
+   162→      if (laps < entry.best) entry.best = laps;
+   163→      entry.drivers.add(p.driverId);
+   164→      m.set(compound, entry);
+   165→      perSession.set(p.session, m);
+   166→    }
+   167→    for (const [session, m] of perSession) {
+   168→      const slot: Partial<Record<Compound, number>> = {};
+   169→      for (const c of DRY) {
+   170→        const e = m.get(c);
+   171→        if (e && e.drivers.size >= MIN_PACE_SAMPLE && e.best < Infinity) {
+   172→          slot[c] = e.best;
+   173→        }
+   174→      }
+   175→      if (slot.S != null || slot.M != null || slot.H != null) {
+   176→        bySession.set(`${race.raceId}:${session}`, slot);
+   177→      }
+   178→    }
+   179→  }
+   180→  if (bySession.size === 0) return null;
+   181→
+   182→  const gapsSM: number[] = [];
+   183→  const gapsMH: number[] = [];
+   184→  const gapsSH: number[] = [];
+   185→  let sessionCount = 0;
+   186→  for (const s of bySession.values()) {
+   187→    let contributed = false;
+   188→    if (s.S != null && s.M != null) { gapsSM.push(s.M - s.S); contributed = true; }
+   189→    if (s.M != null && s.H != null) { gapsMH.push(s.H - s.M); contributed = true; }
+   190→    if (s.S != null && s.H != null) { gapsSH.push(s.H - s.S); contributed = true; }
+   191→    if (contributed) sessionCount++;
+   192→  }
+   193→  if (sessionCount === 0) return null;
+   194→
+   195→  const mSM = median(gapsSM);
+   196→  const mMH = median(gapsMH);
+   197→  const mSH = median(gapsSH);
+   198→  const deltas: { S: 0; M: number | null; H: number | null } = { S: 0, M: null, H: null };
+   199→  if (mSM != null) deltas.M = mSM;
+   200→  else if (mSH != null && mMH != null) deltas.M = mSH - mMH;
+   201→  if (mSH != null && (gapsSH.length >= 2 || mSM == null)) deltas.H = mSH;
+   202→  else if (mSM != null && mMH != null) deltas.H = mSM + mMH;
+   203→  else if (mSH != null) deltas.H = mSH;
+   204→  if (deltas.M == null && deltas.H == null) return null;
+   205→  // Sanity: positive, bounded, monotonic (oracle clamps).
+   206→  if (deltas.M != null) deltas.M = clamp(deltas.M, 0.05, 2.5);
+   207→  if (deltas.H != null) {
+   208→    deltas.H = clamp(deltas.H, 0.1, 3.5);
+   209→    if (deltas.M != null && deltas.H <= deltas.M) deltas.H = deltas.M + 0.15;
+   210→  }
+   211→  return { deltas, sessions: sessionCount };
+   212→}
+   213→
+   214→export interface TrackHistory {
+   215→  races: number;
+   216→  rainRatio: number | null;
+   217→  avgTempC: number | null;
+   218→}
+   219→
+   220→export function getTrackHistory(model: SaveModel, trackId: number): TrackHistory {
+   221→  const races = model.races.filter((r) => r.trackId === trackId && r.state === 2);
+   222→  const rainRaces = races.filter((r) => r.weather?.raceRain === true).length;
+   223→  return {
+   224→    races: races.length,
+   225→    rainRatio: races.length > 0 ? rainRaces / races.length : null,
+   226→    avgTempC:
+   227→      races.length > 0
+   228→        ? races.reduce((s, r) => s + (r.weather?.raceTempC ?? 0), 0) / races.length
+   229→        : null,
+   230→  };
+   231→}
+   232→
+   233→/**
+   234→ * Compound life caps from Save_CarTyreAllocation fresh sets (oracle):
+   235→ * soft median = the game's own life estimate; M/H anchored on S via
+   236→ * durability ratios, capped by raw medians, physical order enforced.
+   237→ * Returns null without a sane soft anchor (allocation may be empty
+   238→ * between weekends — verified on a real save).
+   239→ */
+   240→export function getCompoundCaps(model: SaveModel): Record<Compound, number> | null {
+   241→  const byType: Record<number, number[]> = {};
+   242→  for (const set of model.tyres) {
+   243→    if (set.frontLeftWear >= 0.99 && set.estimatedLapLifeRemaining != null) {
+   244→      (byType[set.weekendTyreType] ??= []).push(set.estimatedLapLifeRemaining);
+   245→    }
+   246→  }
+   247→  const raw: Partial<Record<Compound, number>> = {};
+   248→  for (const [type, c] of [[2, 'S'], [3, 'M'], [4, 'H']] as const) {
+   249→    const m = median(byType[type] ?? []);
+   250→    if (m != null) raw[c as Compound] = Math.round(m);
+   251→  }
+   252→  if (raw.S == null) return null;
+   253→  const derived = (c: Compound) =>
+   254→    Math.round(raw.S! * (TYRE_DURABILITY[c] / TYRE_DURABILITY.S));
+   255→  const caps: Record<Compound, number> = { S: raw.S, M: derived('M'), H: derived('H') };
+   256→  if (raw.M != null) caps.M = Math.min(raw.M, caps.M);
+   257→  if (raw.H != null) caps.H = Math.min(raw.H, caps.H);
+   258→  caps.M = Math.max(caps.M, caps.S);
+   259→  caps.H = Math.max(caps.H, caps.M);
+   260→  return caps;
+   261→}
+   262→
+   263→/* ── strategy optimizer (oracle port) ───────────────────────────────────── */
+   264→
+   265→export interface PlannedStint {
+   266→  compound: Compound;
+   267→  laps: number;
+   268→  fromLap: number;
+   269→  toLap: number;
+   270→  /** Fresh-pace delta s/lap vs Soft. */
+   271→  deltaS: number;
+   272→  /** Total wear-induced seconds lost across the stint. */
+   273→  degS: number;
+   274→}
+   275→
+   276→export interface StrategyResult {
+   277→  order: Compound[];
+   278→  stops: number;
+   279→  /** Modelled total time in seconds (pace + wear + pit costs). */
+   280→  timeS: number;
+   281→  stints: PlannedStint[];
+   282→  pitLaps: number[];
+   283→  /** Seconds slower than the best plan in the candidate set. */
+   284→  vsBestS: number | null;
+   285→}
+   286→
+   287→/**
+   288→ * Brute-force lap splitter minimising (delta × laps) + wear + pits × cost.
+   289→ * Two distinct dry compounds required (dry rule); stint length is a HARD
+   290→ * ceiling at tyre life — the game's tyre graph kills a set at its life
+   291→ * estimate even at full conserve (user-verified, oracle comment).
+   292→ */
+   293→export function evaluateStrategy(
+   294→  stintCompounds: Compound[],
+   295→  laps: number,
+   296→  maxStint: Record<Compound, number>,
+   297→  deltas: Record<Compound, number>,
+   298→  pitCostS: number,
+   299→): { timeS: number; stints: PlannedStint[] } | null {
+   300→  const n = stintCompounds.length;
+   301→  if (n < 1) return null;
+   302→  if (new Set(stintCompounds).size < 2) return null; // dry rule
+   303→  let best: { timeS: number; stints: PlannedStint[] } | null = null;
+   304→
+   305→  const rec = (from: number, soFar: PlannedStint[]): void => {
+   306→    const remaining = n - soFar.length;
+   307→    if (remaining === 0) {
+   308→      if (from !== laps) return;
+   309→      const time =
+   310→        soFar.reduce((s, st) => s + st.deltaS * st.laps + st.degS, 0) + (n - 1) * pitCostS;
+   311→      if (!best || time < best.timeS) best = { timeS: time, stints: soFar.map((s) => ({ ...s })) };
+   312→      return;
+   313→    }
+   314→    for (
+   315→      let l = MIN_STINT_LAPS;
+   316→      l <= laps - from - MIN_STINT_LAPS * (remaining - 1);
+   317→      l++
+   318→    ) {
+   319→      const c = stintCompounds[soFar.length];
+   320→      const life = maxStint[c];
+   321→      if (l > life) break;
+   322→      soFar.push({
+   323→        compound: c,
+   324→        laps: l,
+   325→        fromLap: 0,
+   326→        toLap: 0,
+   327→        deltaS: deltas[c],
+   328→        degS: stintDegPenalty(c, l, life),
+   329→      });
+   330→      rec(from + l, soFar);
+   331→      soFar.pop();
+   332→    }
+   333→  };
+   334→  rec(0, []);
+   335→  return best;
+   336→}
+   337→
+   338→/* ── what-if (Phase 2, docs/03 §5.3: slider pit sớm/muộn + toggle mưa) ──── */
+   339→
+   340→export interface WhatIfPitShiftResult {
+   341→  baseline: StrategyResult;
+   342→  shifted: StrategyResult | null;
+   343→  /** shifted.timeS − baseline.timeS (positive = slower). */
+   344→  deltaS: number | null;
+   345→  /** True when a boundary had to be clamped to stint limits / tyre life. */
+   346→  clamped: boolean;
+   347→}
+   348→
+   349→/**
+   350→ * Shifts every pit lap of a plan by `shift` laps, clamps each stint to
+   351→ * [MIN_STINT_LAPS, tyre life] (the game kills a set at its life estimate),
+   352→ * lets the final stint absorb the remainder, and recomputes deg + time
+   353→ * with the same deltas/pit cost. Returns null when no feasible split
+   354→ * exists for the requested shift.
+   355→ */
+   356→export function whatIfPitShift(
+   357→  best: StrategyResult,
+   358→  laps: number,
+   359→  maxStint: Record<Compound, number>,
+   360→  deltas: Record<Compound, number>,
+   361→  pitCostS: number,
+   362→  shift: number,
+   363→): WhatIfPitShiftResult {
+   364→  const n = best.stints.length;
+   365→  if (n === 0 || shift === 0) {
+   366→    return { baseline: best, shifted: best, deltaS: 0, clamped: false };
+   367→  }
+   368→
+   369→  /* rebuild boundaries */
+   370→  const boundaries = best.pitLaps.map((lap) => lap + shift);
+   371→  let clamped = false;
+   372→  let lo = MIN_STINT_LAPS;
+   373→  for (let i = 0; i < boundaries.length; i++) {
+   374→    const hi = laps - MIN_STINT_LAPS * (boundaries.length - 1 - i);
+   375→    const lifeCap =
+   376→      i === 0
+   377→        ? laps
+   378→        : Math.min(laps, best.stints.slice(0, i + 1).reduce((s, st) => s + maxStint[st.compound], 0));
+   379→    const min = Math.max(lo + 1, MIN_STINT_LAPS);
+   380→    const max = Math.min(hi, lifeCap);
+   381→    if (max < min) return { baseline: best, shifted: null, deltaS: null, clamped: true };
+   382→    if (boundaries[i] < min) {
+   383→      boundaries[i] = min;
+   384→      clamped = true;
+   385→    } else if (boundaries[i] > max) {
+   386→      boundaries[i] = max;
+   387→      clamped = true;
+   388→    }
+   389→    lo = boundaries[i];
+   390→  }
+   391→
+   392→  /* stints from boundaries; hard life ceiling per compound */
+   393→  const stints: PlannedStint[] = [];
+   394→  let from = 0;
+   395→  for (let i = 0; i < n; i++) {
+   396→    const compound = best.stints[i].compound;
+   397→    const life = maxStint[compound];
+   398→    let stintLaps =
+   399→      (i < n - 1 ? boundaries[i] : laps) - from;
+   400→    if (stintLaps > life) {
+   401→      stintLaps = life;
+   402→      clamped = true;
+   403→    }
+   404→    if (stintLaps < MIN_STINT_LAPS) {
+   405→      return { baseline: best, shifted: null, deltaS: null, clamped: true };
+   406→    }
+   407→    stints.push({
+   408→      compound,
+   409→      laps: stintLaps,
+   410→      fromLap: from + 1,
+   411→      toLap: from + stintLaps,
+   412→      deltaS: deltas[compound],
+   413→      degS: stintDegPenalty(compound, stintLaps, life),
+   414→    });
+   415→    from += stintLaps;
+   416→  }
+   417→  if (from !== laps) {
+   418→    // life clamp shortened the plan — extend the last stint if legal
+   419→    const last = stints[stints.length - 1];
+   420→    const life = maxStint[last.compound];
+   421→    const extra = laps - from;
+   422→    if (extra > 0) {
+   423→      if (last.laps + extra > life) {
+   424→        return { baseline: best, shifted: null, deltaS: null, clamped: true };
+   425→      }
+   426→      last.laps += extra;
+   427→      last.toLap = laps;
+   428→      last.degS = stintDegPenalty(last.compound, last.laps, life);
+   429→      clamped = true;
+   430→    }
+   431→  }
+   432→
+   433→  const stops = n - 1;
+   434→  const timeS =
+   435→    stints.reduce((s, st) => s + st.deltaS * st.laps + st.degS, 0) + stops * pitCostS;
+   436→  const shifted: StrategyResult = {
+   437→    order: best.order,
+   438→    stops,
+   439→    timeS: Math.round(timeS * 10) / 10,
+   440→    stints,
+   441→    pitLaps: stints.slice(0, -1).map((st) => st.toLap),
+   442→    vsBestS: null,
+   443→  };
+   444→  return {
+   445→    baseline: best,
+   446→    shifted,
+   447→    deltaS: Math.round((shifted.timeS - best.timeS) * 10) / 10,
+   448→    clamped,
+   449→  };
+   450→}
+   451→
+   452→export interface WetPlanStint {
+   453→  compound: 'I' | 'W';
+   454→  laps: number;
+   455→}
+   456→
+   457→export interface WetPlanResult {
+   458→  stints: WetPlanStint[];
+   459→  pitLaps: number[];
+   460→  lives: { I: number | null; W: number | null };
+   461→  source: 'allocation' | 'none';
+   462→  note?: string;
+   463→}
+   464→
+   465→/**
+   466→ * Wet plan built ONLY from fresh-set allocation lives (no invented wet
+   467→ * constants): start Intermediate, switch to Wet when the track floods if
+   468→ * both lives are known. Returns null when the save has no wet allocation —
+   469→ * the UI then shows the explicit "thiếu dữ liệu" state.
+   470→ */
+   471→export function buildWetPlan(model: SaveModel, laps: number): WetPlanResult | null {
+   472→  const freshLife = (type: number): number | null => {
+   473→    const values = model.tyres
+   474→      .filter((t) => t.weekendTyreType === type && t.frontLeftWear >= 0.99 && t.estimatedLapLifeRemaining != null)
+   475→      .map((t) => t.estimatedLapLifeRemaining as number);
+   476→    const m = median(values);
+   477→    return m != null ? Math.max(MIN_STINT_LAPS, Math.round(m)) : null;
+   478→  };
+   479→  const iLife = freshLife(1);
+   480→  const wLife = freshLife(0);
+   481→  if (iLife == null && wLife == null) {
+   482→    return null;
+   483→  }
+   484→  const stints: WetPlanStint[] = [];
+   485→  let remaining = laps;
+   486→  if (iLife != null && (wLife == null || iLife < laps)) {
+   487→    const iLaps = Math.min(iLife, laps);
+   488→    stints.push({ compound: 'I', laps: iLaps });
+   489→    remaining = laps - iLaps;
+   490→  }
+   491→  if (remaining > 0) {
+   492→    if (wLife != null) {
+   493→      stints.push({ compound: 'W', laps: remaining });
+   494→    } else {
+   495→      stints.push({ compound: 'I', laps: remaining });
+   496→    }
+   497→  }
+   498→  return {
+   499→    stints,
+   500→    pitLaps: stints.length > 1 ? [stints[0].laps] : [],
+   501→    lives: { I: iLife, W: wLife },
+   502→    source: iLife != null || wLife != null ? 'allocation' : 'none',
+   503→    note:
+   504→      iLife != null && wLife == null
+   505→        ? 'Không có wet-set life trong allocation — phần cuối giả định chạy tiếp Inter, theo dõi điều kiện đường.'
+   506→        : undefined,
+   507→  };
+   508→}
+   509→
+   510→/* ── the engine ──────────────────────────────────────────────────────────── */
+   511→
+   512→export interface TyreLab {
+   513→  raceId: number;
+   514→  trackName: string;
+   515→  laps: number;
+   516→  pitLaneLossS: number;
+   517→  pitCostS: number;
+   518→  lives: Record<Compound, number>;
+   519→  lifeSource: Record<Compound, 'allocation' | 'track' | 'model'>;
+   520→  deltas: Record<Compound, number>;
+   521→  paceSource: Record<Compound, 'practice' | 'model' | 'baseline'>;
+   522→  expectedStops: number | null;
+   523→  expectedSource: 'track' | 'meta' | 'model' | null;
+   524→  /** Ranked candidate plans (top 6, oracle behaviour). */
+   525→  strategies: StrategyResult[];
+   526→  best: StrategyResult | null;
+   527→  wet: {
+   528→    rainLikely: boolean;
+   529→    intersLifeLaps: number | null;
+   530→    wetLifeLaps: number | null;
+   531→    source: 'allocation' | 'model';
+   532→  } | null;
+   533→  trackHistory: TrackHistory;
+   534→  observedStops: ObservedStops | null;
+   535→  practiceSessions: number;
+   536→  gamePlan: {
+   537→    compounds: Compound[];
+   538→    stintLaps: number[];
+   539→    pitLaps: number[];
+   540→  } | null;
+   541→}
+   542→
+   543→export interface TyreLabOptions {
+   544→  /** Exclude one race from history (backtesting); default none. */
+   545→  excludeRaceId?: number;
+   546→}
+   547→
+   548→export function buildTyreLab(
+   549→  model: SaveModel,
+   550→  raceId: number,
+   551→  options: TyreLabOptions = {},
+   552→): EngineResult<TyreLab> {
+   553→  const race = model.races.find((r) => r.raceId === raceId) ?? null;
+   554→  if (!race) {
+   555→    return {
+   556→      data: null as unknown as TyreLab,
+   557→      confidence: 'LOW',
+   558→      evidence: [],
+   559→      assumptions: [],
+   560→      recommendations: [],
+   561→      warnings: [`RACE_NOT_FOUND:${raceId}`],
+   562→    };
+   563→  }
+   564→
+   565→  const laps = race.laps ?? 50;
+   566→  const exclude = options.excludeRaceId;
+   567→  const trackRaces = (state: number): Race[] =>
+   568→    model.races.filter(
+   569→      (r) => r.trackId === race.trackId && r.state === state && r.raceId !== exclude,
+   570→    );
+   571→
+   572→  const pitLaneLossS = FALLBACK_PIT_LANE_LOSS; // v1: track PitLaneTimeLoss lives in Races_Tracks (P1 data task)
+   573→  const pitCostS = pitLaneLossS + PIT_STATIONARY_ESTIMATE;
+   574→
+   575→  /* life ceilings — evidence priority: allocation > track > model (oracle) */
+   576→  const stintFactor = getStintFactor(model, race.trackId);
+   577→  const caps = getCompoundCaps(model);
+   578→  const allocationFresh = caps != null && model.tyres.length > 0;
+   579→  // Only the active weekend's allocation describes THESE tyres — approximate
+   580→  // "active weekend" as the race being planned (state !== 2) in v1.
+   581→  const useAllocation = allocationFresh && race.state !== 2;
+   582→
+   583→  const lives: Record<Compound, number> = { S: 0, M: 0, H: 0 };
+   584→  const lifeSource: Record<Compound, 'allocation' | 'track' | 'model'> = {
+   585→    S: 'model', M: 'model', H: 'model',
+   586→  };
+   587→  for (const c of DRY) {
+   588→    const shaped = Math.max(4, Math.round(laps * stintFactor.factor * FALLBACK_LIFE_SHAPE[c]));
+   589→    let life: number;
+   590→    let src: 'allocation' | 'track' | 'model';
+   591→    if (caps && useAllocation && stintFactor.source !== 'track') {
+   592→      life = Math.max(4, caps[c]);
+   593→      src = 'allocation';
+   594→    } else if (caps && useAllocation) {
+   595→      life = Math.min(shaped, Math.max(4, caps[c]));
+   596→      src = 'track';
+   597→    } else if (stintFactor.source === 'track') {
+   598→      life = shaped;
+   599→      src = 'track';
+   600→    } else {
+   601→      life = Math.max(4, Math.round(laps * FALLBACK_LIFE_SHAPE[c] * PHYSICAL_LIFE_FALLBACK));
+   602→      src = 'model';
+   603→    }
+   604→    // Durability clamp (oracle): allocation's fresh S median caps all paths.
+   605→    if (caps && !useAllocation && caps[c] != null) {
+   606→      life = Math.min(life, Math.max(4, caps[c]));
+   607→    }
+   608→    lives[c] = life;
+   609→    lifeSource[c] = src;
+   610→  }
+   611→  // Physical order S ≤ M ≤ H.
+   612→  lives.M = Math.max(lives.M, lives.S);
+   613→  lives.H = Math.max(lives.H, lives.M);
+   614→
+   615→  /* expected field stops */
+   616→  const observed = getObservedStops(model, race.trackId);
+   617→  let expectedStops: number | null = null;
+   618→  let expectedSource: 'track' | 'meta' | 'model' | null = null;
+   619→  if (observed && observed.avgStopsPerDriver > 0.4) {
+   620→    expectedStops = Math.max(1, Math.round(observed.avgStopsPerDriver));
+   621→    expectedSource = 'track';
+   622→  } else if (stintFactor.source !== 'model') {
+   623→    expectedStops = Math.max(1, Math.round(1 / stintFactor.factor - 1));
+   624→    expectedSource = stintFactor.source;
+   625→  }
+   626→
+   627→  /* pace deltas per lap (vs soft) */
+   628→  const practicePace = getPracticePace(model, race.trackId);
+   629→  const deltas: Record<Compound, number> = { S: 0, M: FALLBACK_PACE_DELTA.M, H: FALLBACK_PACE_DELTA.H };
+   630→  const paceSource: Record<Compound, 'practice' | 'model' | 'baseline'> = {
+   631→    S: 'baseline', M: 'model', H: 'model',
+   632→  };
+   633→  if (practicePace) {
+   634→    if (practicePace.deltas.M != null) {
+   635→      deltas.M = Math.round(practicePace.deltas.M * 100) / 100;
+   636→      paceSource.M = 'practice';
+   637→    }
+   638→    if (practicePace.deltas.H != null) {
+   639→      deltas.H = Math.round(practicePace.deltas.H * 100) / 100;
+   640→      paceSource.H = 'practice';
+   641→    }
+   642→  }
+   643→
+   644→  /* candidate strategies (oracle enumeration) */
+   645→  const maxStint: Record<Compound, number> = { ...lives };
+   646→  const strategies: (StrategyResult & { timeS: number })[] = [];
+   647→  const runOrders = (orders: Compound[][], stops: number): void => {
+   648→    for (const order of orders) {
+   649→      const r = evaluateStrategy(order, laps, maxStint, deltas, pitCostS);
+   650→      if (r) {
+   651→        strategies.push({ order, stops, timeS: r.timeS, stints: r.stints, pitLaps: [], vsBestS: null });
+   652→      }
+   653→    }
+   654→  };
+   655→  const oneStop: Compound[][] = [];
+   656→  for (const a of DRY) for (const b of DRY) if (a !== b) oneStop.push([a, b]);
+   657→  const multiStop = (n: 2 | 3 | 4): Compound[][] => {
+   658→    const orders: Compound[][] = [];
+   659→    for (const a of DRY) for (const b of DRY) for (const c of DRY) {
+   660→      if (new Set([a, b, c]).size >= 2) {
+   661→        if (n === 2) orders.push([a, b, c]);
+   662→        if (n === 3) orders.push([a, b, c, a]);
+   663→        if (n === 4) orders.push([a, b, c, a, b]);
+   664→      }
+   665→    }
+   666→    return orders;
+   667→  };
+   668→  runOrders(oneStop, 1);
+   669→  runOrders(multiStop(2), 2);
+   670→  runOrders(multiStop(3), 3);
+   671→  if (strategies.length === 0) runOrders(multiStop(4), 4);
+   672→
+   673→  /* rank, sanity-filter throwaway stints, mark vsBest (oracle) */
+   674→  strategies.sort((a, b) => a.timeS - b.timeS || a.stops - b.stops);
+   675→  const minStintLaps = Math.max(MIN_STINT_LAPS + 1, Math.round(laps / 12));
+   676→  const sane = strategies.filter((s) => s.stints.every((st) => st.laps >= minStintLaps));
+   677→  const ranked = sane.length > 0 ? sane : strategies;
+   678→  const bestTime = ranked.length > 0 ? ranked[0].timeS : null;
+   679→  for (const s of ranked) {
+   680→    s.vsBestS = bestTime != null ? Math.round((s.timeS - bestTime) * 10) / 10 : null;
+   681→  }
+   682→  for (const s of ranked) {
+   683→    let lap = 0;
+   684→    for (const st of s.stints) {
+   685→      st.fromLap = lap + 1;
+   686→      lap += st.laps;
+   687→      st.toLap = lap;
+   688→    }
+   689→    s.pitLaps = s.stints.slice(0, -1).map((st) => st.toLap);
+   690→  }
+   691→  const top = ranked.slice(0, 6);
+   692→  const best = top[0] ?? null;
+   693→
+   694→  /* wet plan */
+   695→  const history = getTrackHistory(model, race.trackId);
+   696→  const forecastRain = race.state !== 2 && race.weather?.raceRain === true;
+   697→  const rainLikely = forecastRain || (history.rainRatio != null && history.rainRatio >= 0.35);
+   698→  let wet: TyreLab['wet'] = null;
+   699→  if (rainLikely) {
+   700→    const inters = model.tyres
+   701→      .filter((t) => t.weekendTyreType === 1 && t.frontLeftWear >= 0.99 && t.estimatedLapLifeRemaining != null)
+   702→      .map((t) => t.estimatedLapLifeRemaining as number);
+   703→    const wets = model.tyres
+   704→      .filter((t) => t.weekendTyreType === 0 && t.frontLeftWear >= 0.99 && t.estimatedLapLifeRemaining != null)
+   705→      .map((t) => t.estimatedLapLifeRemaining as number);
+   706→    wet = {
+   707→      rainLikely,
+   708→      intersLifeLaps: inters.length > 0 ? Math.round(median(inters) ?? 0) || null : null,
+   709→      wetLifeLaps: wets.length > 0 ? Math.round(median(wets) ?? 0) || null : null,
+   710→      source: inters.length > 0 || wets.length > 0 ? 'allocation' : 'model',
+   711→    };
+   712→  }
+   713→
+   714→  /* in-game strategist plan (Save_PlayerStrategyStints ≈ model.tyres v1 note:
+   715→     game plan table not yet normalized — Phase 1 backlog; reported as null) */
+   716→  const gamePlan: TyreLab['gamePlan'] = null;
+   717→
+   718→  /* confidence: HIGH needs save-measured lives AND pace; MEDIUM for partial
+   719→     save evidence; LOW for pure model constants (docs/00 §1.6 semantics) */
+   720→  const lifeEvidence = lifeSource.S !== 'model' || lifeSource.M !== 'model';
+   721→  const paceEvidence = paceSource.M === 'practice' || paceSource.H === 'practice';
+   722→  const stopsEvidence = expectedSource === 'track';
+   723→  const evidenceCount = [lifeEvidence, paceEvidence, stopsEvidence].filter(Boolean).length;
+   724→  const confidence: Confidence =
+   725→    evidenceCount >= 2 && lifeEvidence ? 'HIGH' : evidenceCount >= 1 ? 'MEDIUM' : 'LOW';
+   726→
+   727→  /* evidence + assumptions (traceability contract) */
+   728→  const evidence: Evidence[] = [];
+   729→  evidence.push({
+   730→    source: 'Races/tyre model',
+   731→    label: `Tyre life S/M/H = ${lives.S}/${lives.M}/${lives.H} vòng (nguồn: ${lifeSource.S === lifeSource.M && lifeSource.M === lifeSource.H ? lifeSource.S : 'mix'})`,
+   732→    detail: `stint factor ${(stintFactor.factor * 100).toFixed(0)}% (${stintFactor.source}, ${stintFactor.samples} mẫu)`,
+   733→  });
+   734→  if (practicePace) {
+   735→    evidence.push({
+   736→      source: 'Races_PracticeResults',
+   737→      label: `Practice deltas vs Soft: M +${deltas.M.toFixed(2)}s, H +${deltas.H?.toFixed(2) ?? 'n/a'}s (${practicePace.sessions} session tại ${race.trackName})`,
+   738→    });
+   739→  }
+   740→  if (observed) {
+   741→    evidence.push({
+   742→      source: 'Races_PitStopTimings',
+   743→      label: `Pit stops quan sát được tại ${race.trackName}: ~${observed.avgStopsPerDriver.toFixed(2)}/driver (${observed.samples} driver×chặng)`,
+   744→    });
+   745→  }
+   746→  evidence.push({
+   747→    source: 'Races_Tracks + model constant',
+   748→    label: `Pit cost ≈ ${pitCostS.toFixed(1)}s (lane ${pitLaneLossS}s + stationary ${PIT_STATIONARY_ESTIMATE}s)`,
+   749→  });
+   750→
+   751→  const assumptions: Assumption[] = [];
+   752→  if (lifeSource.S === 'model') {
+   753→    assumptions.push({
+   754→      text: 'Thiếu allocation fresh-set trong save — dùng envelope mô hình (S ≈ 0.51×, M ≈ 0.75×, H ≈ 0.92× quãng đường)',
+   755→      fallbackValue: `${lives.S}/${lives.M}/${lives.H} vòng`,
+   756→    });
+   757→  }
+   758→  if (paceSource.M === 'model') {
+   759→    assumptions.push({
+   760→      text: 'Không đủ practice sample (≥3 driver/compound/session) — dùng pace delta hằng số mô hình',
+   761→      fallbackValue: `M +${FALLBACK_PACE_DELTA.M}s, H +${FALLBACK_PACE_DELTA.H}s vs Soft`,
+   762→    });
+   763→  }
+   764→  assumptions.push({ text: 'Giả định thời tiết khô toàn chặng, không Safety Car' });
+   765→  assumptions.push({
+   766→    text: 'Chưa tính đặc thù tay đua (smoothness/adaptability) — sẽ bổ sung khi normalize Staff stats',
+   767→  });
+   768→
+   769→  /* recommendations — 6-field standard (docs/03 §5.11) */
+   770→  const recommendations: Recommendation[] = [];
+   771→  if (best) {
+   772→    const alt = top[1];
+   773→    const pitWindow = (pitLap: number, life: number): string => {
+   774→      const lo = Math.max(minStintLaps, pitLap - 2, 2);
+   775→      const hi = Math.min(laps - 2, pitLap + 2, Math.max(life, pitLap));
+   776→      return hi > lo ? `${lo}–${hi}` : `${pitLap}`;
+   777→    };
+   778→    const first = best.stints[0];
+   779→    const action = best.stops === 0
+   780→      ? `Không pit — chạy ${best.order.join('→')} toàn chặng`
+   781→      : `Pit ở vòng ${pitWindow(best.pitLaps[0], lives[first.compound])} — chuyển sang ${best.stints[1]?.compound ?? ''}`;
+   782→    recommendations.push({
+   783→      id: `tyre-plan-${race.raceId}`,
+   784→      title: `Chiến thuật đề xuất: ${best.stints.map((s) => `${s.compound}(${s.laps})`).join(' → ')} — ${best.stops} pit`,
+   785→      action,
+   786→      why: `Tổng thời gian mô hình thấp nhất (${best.timeS.toFixed(1)}s: pace delta + deg + ${best.stops}×pit ${pitCostS.toFixed(1)}s). Lốp ${first.compound} sống ${lives[first.compound]} vòng (nguồn: ${lifeSource[first.compound]})${alt ? `; kế hoạch kế tiếp (${alt.stints.map((s) => s.compound).join('→')}) chậm hơn ${alt.vsBestS?.toFixed(1) ?? '?'}s` : ''}.`,
+   787→      confidence,
+   788→      evidence,
+   789→      assumptions,
+   790→      riskIfIgnored: best.stops > 0
+   791→        ? `Ở lại ngoài ${lives[first.compound]} vòng: deg cuối đời ${DEG_FINAL[first.compound]}s/vòng + risk undercut từ đối thủ trực tiếp`
+   792→        : undefined,
+   793→      expectedGain: alt ? `${Math.abs(alt.vsBestS ?? 0).toFixed(1)}s vs ${alt.order.join('→')} (ước lượng mô hình)` : undefined,
+   794→    });
+   795→  }
+   796→
+   797→  const warnings: string[] = [];
+   798→  if (race.state === 2) warnings.push('RACE_ALREADY_COMPLETED');
+   799→
+   800→  return {
+   801→    data: {
+   802→      raceId: race.raceId,
+   803→      trackName: race.trackName,
+   804→      laps,
+   805→      pitLaneLossS,
+   806→      pitCostS,
+   807→      lives,
+   808→      lifeSource,
+   809→      deltas,
+   810→      paceSource,
+   811→      expectedStops,
+   812→      expectedSource,
+   813→      strategies: top,
+   814→      best,
+   815→      wet,
+   816→      trackHistory: history,
+   817→      observedStops: observed,
+   818→      practiceSessions: practicePace?.sessions ?? 0,
+   819→      gamePlan,
+   820→    },
+   821→    confidence,
+   822→    evidence,
+   823→    assumptions,
+   824→    recommendations,
+   825→    warnings,
+   826→  };
+   827→}
+   828→
