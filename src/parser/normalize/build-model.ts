@@ -16,6 +16,11 @@ import { getPlayer, getPlayerState } from '../repositories/player.repo';
 import { getTeams } from '../repositories/teams.repo';
 import { getStaffCount } from '../repositories/staff.repo';
 import { getRaces, getRaceResults } from '../repositories/races.repo';
+import { getDrivers } from '../repositories/drivers.repo';
+import { getPracticeResults } from '../repositories/practice.repo';
+import { getPitTimings } from '../repositories/pitstops.repo';
+import { getTyreAllocations } from '../repositories/tyres.repo';
+import { computeStandings } from './compute-standings';
 import { SaveParseError, ParseErrorCode } from '../errors';
 
 export interface BuildModelInput {
@@ -77,7 +82,7 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
     if (!race) continue;
     race.results.push({
       driverId: res.driverId,
-      driverName: `Driver ${res.driverId}`, // joined in Phase 1 (staff join)
+      driverName: '', // filled after drivers are loaded
       teamId: res.teamId,
       teamName: teamById.get(res.teamId)?.teamName ?? `Team ${res.teamId}`,
       finishingPos: res.finishingPos,
@@ -86,6 +91,76 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
       dnf: res.dnf === 1,
       laps: res.laps,
       fastestLapMs: res.fastestLap,
+    });
+  }
+
+  // Drivers (Staff join) — names replace placeholders in race results.
+  const driversRaw = getDrivers(db);
+  const driverById = new Map(driversRaw.map((d) => [d.staffId, d]));
+  const driverName = (id: number): string => {
+    const d = driverById.get(id);
+    const name = d ? `${d.firstName} ${d.lastName}`.trim() : '';
+    return name.length > 0 ? name : `Driver ${id}`;
+  };
+  for (const race of raceModels) {
+    for (const res of race.results) {
+      res.driverName = driverName(res.driverId);
+    }
+  }
+
+  // Pit stops — group timing rows per physical stop (oracle: MIN lap,
+  // SUM duration across rows of the same PitStopID).
+  const pitTimings = getPitTimings(db);
+  const stopKey = (raceId: number, driverId: number, pitStopId: number) =>
+    `${raceId}:${driverId}:${pitStopId}`;
+  const stopsAgg = new Map<
+    string,
+    { raceId: number; driverId: number; teamId: number; lap: number; durationMs: number; pitStopId: number }
+  >();
+  for (const t of pitTimings) {
+    const key = stopKey(t.raceId, t.driverId, t.pitStopId);
+    const agg = stopsAgg.get(key);
+    if (agg) {
+      agg.lap = Math.min(agg.lap, t.lap);
+      agg.durationMs += t.durationMs;
+    } else {
+      stopsAgg.set(key, {
+        raceId: t.raceId,
+        driverId: t.driverId,
+        teamId: t.teamId,
+        lap: t.lap,
+        durationMs: t.durationMs,
+        pitStopId: t.pitStopId,
+      });
+    }
+  }
+  for (const stop of stopsAgg.values()) {
+    const race = raceById.get(stop.raceId);
+    if (!race) continue;
+    race.pitStops ??= [];
+    race.pitStops.push({
+      driverId: stop.driverId,
+      teamId: stop.teamId,
+      lap: stop.lap,
+      durationMs: stop.durationMs,
+      pitStopId: stop.pitStopId,
+    });
+  }
+  for (const race of raceModels) {
+    if (race.pitStops) race.pitStops.sort((a, b) => a.lap - b.lap);
+  }
+
+  // Practice — flattened rows per race (engine aggregates per compound).
+  for (const p of getPracticeResults(db)) {
+    const race = raceById.get(p.raceId);
+    if (!race) continue;
+    race.practice ??= [];
+    race.practice.push({
+      driverId: p.driverId,
+      teamId: p.teamId,
+      session: p.session,
+      bestLapMs: p.bestLapMs,
+      bestLapTyre: p.bestLapTyre,
     });
   }
 
@@ -109,6 +184,14 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
 
   const staffCount = getStaffCount(db);
 
+  // Standings computed from results (formula verified 0-mismatch on a real
+  // F1M24 save vs Races_DriverStandings — see compute-standings.ts).
+  const standings = computeStandings(raceModels, currentSeason);
+
+  // Tyre allocation — may be empty between weekends (verified: real save
+  // has 0 rows post-race); engines must fall back to the model envelope.
+  const tyreSets = getTyreAllocations(db);
+
   return {
     meta,
     player: {
@@ -126,14 +209,25 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
         formula: t.formula,
       }),
     ),
-    drivers: [],
+    drivers: driversRaw.map((d) => ({
+      staffId: d.staffId,
+      fullName: `${d.firstName} ${d.lastName}`.trim(),
+      code: d.code,
+      teamId: d.contractTeamId,
+    })),
     staff: [],
     seasons: [
       ...new Set(races.map((r) => r.seasonId)),
     ].map((seasonId) => ({ seasonId })),
     races: raceModels,
-    standings: { drivers: [], teams: [] },
-    tyres: [],
+    standings,
+    tyres: tyreSets.map((t) => ({
+      carId: t.carId,
+      tyreSetId: t.tyreSetId,
+      weekendTyreType: t.weekendTyreType,
+      availabilityState: t.availabilityState,
+      estimatedLapLifeRemaining: t.estimatedLapLifeRemaining,
+    })),
     parts: [],
     regulations: [],
     finance: {},
@@ -143,8 +237,7 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
     })),
   };
 
-  // staffCount is informational for Phase 0 metadata; keep referenced to
-  // avoid dead-code lint while drivers/staff remain placeholder arrays.
+  // staffCount is informational; keep referenced to avoid dead-code lint.
   void staffCount;
 }
 

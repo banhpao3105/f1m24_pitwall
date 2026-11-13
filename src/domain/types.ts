@@ -44,8 +44,10 @@ export interface Team {
 export interface Driver {
   staffId: number;
   fullName: string;
+  /** 3-letter code from Staff_DriverData.DriverCode, if present. */
+  code?: string;
+  /** Team from the most recent driver contract (ContractType=0). */
   teamId?: number;
-  countryId?: number;
 }
 
 export interface StaffMember {
@@ -91,10 +93,21 @@ export interface QualifyingResult {
 export interface PitStop {
   driverId: number;
   teamId: number;
+  /** First lap the stop spans (oracle: MIN(Lap) per PitStopID). */
   lap: number;
   /** Total stop duration in ms. */
   durationMs: number;
-  pitStopStage?: number;
+  pitStopId?: number;
+}
+
+export interface PracticeResult {
+  driverId: number;
+  teamId: number;
+  session: number;
+  /** Best lap in ms. */
+  bestLapMs: number;
+  /** 0=H, 1=M, 2=S (oracle practice encoding). */
+  bestLapTyre: number;
 }
 
 export interface Race {
@@ -111,6 +124,13 @@ export interface Race {
   results: RaceResult[];
   qualifying?: QualifyingResult[];
   pitStops?: PitStop[];
+  practice?: PracticeResult[];
+  sprintResults?: {
+    driverId: number;
+    teamId: number;
+    finishingPos: number;
+    points: number;
+  }[];
 }
 
 export interface StandingRow {

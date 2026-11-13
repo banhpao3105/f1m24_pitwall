@@ -33,6 +33,27 @@ describe('runParsePipeline', () => {
     expect(completed?.results).toHaveLength(2);
     expect(completed?.results[0]?.points).toBe(25);
     expect(completed?.results[0]?.teamName).toBe('Test Racing');
+    // Driver names joined from Staff_BasicData (Phase 1).
+    expect(completed?.results[0]?.driverName).toBe('Test Driver');
+
+    // Pit stop aggregation: two timing rows -> one stop, MIN lap, SUM ms.
+    expect(completed?.pitStops).toHaveLength(1);
+    expect(completed?.pitStops?.[0]?.lap).toBe(12);
+    expect(completed?.pitStops?.[0]?.durationMs).toBe(23400);
+
+    // Practice rows attached with oracle tyre encoding.
+    expect(completed?.practice).toHaveLength(2);
+    expect(completed?.practice?.find((p) => p.driverId === 101)?.bestLapTyre).toBe(2);
+
+    // Drivers with codes and contract teams.
+    expect(model.drivers.find((d) => d.staffId === 101)?.code).toBe('TST');
+    expect(model.drivers.find((d) => d.staffId === 101)?.teamId).toBe(1);
+
+    // Standings computed from results must match the save's own table.
+    expect(model.standings.drivers[0]?.id).toBe(101);
+    expect(model.standings.drivers[0]?.points).toBe(25);
+    expect(model.standings.drivers[0]?.position).toBe(1);
+    expect(model.standings.drivers[1]?.points).toBe(18);
 
     const upcoming = model.races.find((r) => r.raceId === 2);
     expect(upcoming?.state).toBe(0);
@@ -44,7 +65,7 @@ describe('runParsePipeline', () => {
 
   it('warns instead of crashing when no race is completed', async () => {
     const sql = FIXTURE_SCHEMA_SQL.map((s) =>
-      s.replace("INSERT INTO Races VALUES (1, 1, 10, 5, 2,", "INSERT INTO Races VALUES (1, 1, 10, 5, 0,"),
+      s.replace("INSERT INTO Races VALUES (1, 2023, 10, 5, 2,", "INSERT INTO Races VALUES (1, 2023, 10, 5, 0,"),
     );
     const { bytes } = await buildGvasSave({ sql });
     const { model } = await runParsePipeline(bytes, {
