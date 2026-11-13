@@ -33,6 +33,7 @@ export function TyreLabView({
 }) {
   const t = useTranslations('tyres');
   const tWhat = useTranslations('whatif');
+  const tSec = useTranslations('sec');
   const locale = useLocale() as 'vi' | 'en';
   const tyre = useTyreLab(raceId);
 
@@ -134,7 +135,8 @@ export function TyreLabView({
           {/* degradation curves — engine constants visualised (v0.5.0 step 2) */}
           <section aria-label={t('degTitle')} className="rounded-lg border border-line bg-panel p-4">
             <header className="mb-3 flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-semibold text-ink">{t('degTitle')}</h3>
+              <span className="font-mono text-[11px] uppercase tracking-wider text-teal">{tSec('deg')}</span>
+              <h3 className="text-[15px] font-semibold text-ink">{t('degTitle')}</h3>
               <span className="rounded bg-raised px-1.5 py-0.5 font-mono text-[9px] uppercase text-ink-faint">
                 {t(`source.${tyre.data.lifeSource.S}`)}
               </span>
@@ -154,7 +156,8 @@ export function TyreLabView({
           <section aria-label={tWhat('title')} className="rounded-lg border border-line bg-panel p-4" data-testid="tyre-whatif">
             <header className="mb-3 flex flex-wrap items-center gap-2">
               <SlidersHorizontal className="h-4 w-4 text-teal" aria-hidden="true" />
-              <h3 className="text-sm font-semibold text-ink">{tWhat('title')}</h3>
+              <span className="font-mono text-[11px] uppercase tracking-wider text-teal">{tSec('whatif')}</span>
+              <h3 className="text-[15px] font-semibold text-ink">{tWhat('title')}</h3>
             </header>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
@@ -252,7 +255,10 @@ export function TyreLabView({
 
           {/* alternatives */}
           <section aria-label={t('alternatives')} className="rounded-lg border border-line bg-panel p-4">
-            <h3 className="mb-3 text-sm font-semibold text-ink">{t('alternatives')}</h3>
+            <h3 className="mb-3 text-[15px] font-semibold text-ink">
+              <span className="mr-2 font-mono text-[11px] uppercase tracking-wider text-teal">{tSec('alternatives')}</span>
+              {t('alternatives')}
+            </h3>
             <ul className="space-y-2.5">
               {tyre.data.strategies.slice(0, 5).map((s: StrategyResult, i) => (
                 <li
@@ -287,7 +293,10 @@ export function TyreLabView({
 
           {/* compound lives */}
           <section aria-label={t('lives')} className="rounded-lg border border-line bg-panel p-4">
-            <h3 className="mb-3 text-sm font-semibold text-ink">{t('lives')}</h3>
+            <h3 className="mb-3 text-[15px] font-semibold text-ink">
+              <span className="mr-2 font-mono text-[11px] uppercase tracking-wider text-teal">{tSec('lives')}</span>
+              {t('lives')}
+            </h3>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {(['S', 'M', 'H'] as CompoundKey[]).map((c) => (
                 <div key={c} className="flex items-center gap-2 rounded bg-surface px-3 py-2">

@@ -21,6 +21,8 @@ import { AlertBanner } from './AlertBanner';
 import { NumberTween } from './NumberTween';
 import { RecentRaceCard, QuickStandingsCard } from './HomeCards';
 import { TrackSchematic } from './TrackSchematic';
+import { SectionTitle } from './SectionTitle';
+import { cn } from '@/lib/utils';
 
 export function WallHomeView({ model }: { model: SaveModel }) {
   const t = useTranslations('wall');
@@ -53,13 +55,42 @@ export function WallHomeView({ model }: { model: SaveModel }) {
   const rivalRow = pace?.data.rivalRef ?? null;
   const carLeagueRow = carLab?.data.league.rows.find((r) => r.isPlayer) ?? null;
 
-  const kpis: { icon: React.ReactNode; label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: 'good' | 'bad' | 'neutral' }[] = [
+  // v0.5.0 step 4 — honest position delta: standings now vs standings
+  // recomputed WITHOUT the last completed race (both from stored data).
+  const lastCompleted =
+    seasonRaces.filter((r) => r.state === 2).sort((a, b) => a.day - b.day).at(-1) ?? null;
+  let positionDelta: { before: number; after: number; track: string } | null = null;
+  if (playerTeamRow && lastCompleted) {
+    const lastPointsByTeam = new Map<number, number>();
+    for (const res of lastCompleted.results) {
+      lastPointsByTeam.set(res.teamId, (lastPointsByTeam.get(res.teamId) ?? 0) + res.points);
+    }
+    const before = [...model.standings.teams]
+      .map((row) => ({ id: row.id, points: row.points - (lastPointsByTeam.get(row.id) ?? 0) }))
+      .sort((a, b) => b.points - a.points)
+      .findIndex((row) => row.id === model.player.teamId) + 1;
+    positionDelta = { before, after: playerTeamRow.position, track: trackDisplay(lastCompleted.trackName, locale) };
+  }
+
+  const kpis: { icon: React.ReactNode; label: string; value: React.ReactNode; sub?: React.ReactNode; delta?: React.ReactNode }[] = [
     {
       icon: <Trophy className="h-3.5 w-3.5" />,
       label: t('kpi.standings'),
       value: playerTeamRow ? `P${playerTeamRow.position}` : '—',
       sub: playerTeamRow ? (
         <NumberTween value={playerTeamRow.points} format={(n) => `${Math.round(n)} pts`} />
+      ) : undefined,
+      delta: positionDelta ? (
+        <span
+          className={cn(
+            positionDelta.after < positionDelta.before ? 'text-good' : positionDelta.after > positionDelta.before ? 'text-danger' : 'text-ink-faint',
+          )}
+          data-testid="kpi-position-delta"
+        >
+          {positionDelta.before === positionDelta.after
+            ? t('kpi.heldPos', { pos: positionDelta.after })
+            : `${t('kpi.posBefore', { pos: positionDelta.before, track: positionDelta.track })} → P${positionDelta.after}`}
+        </span>
       ) : undefined,
     },
     {
@@ -99,7 +130,8 @@ export function WallHomeView({ model }: { model: SaveModel }) {
     <div className="space-y-6" data-testid="wall-home">
       <AlertBanner model={model} />
 
-      {/* KPI strip — bento full-width (docs §7.3.1) */}
+      {/* KPI strip — bento full-width (docs §7.3.1); v0.5.0: 32px tabular
+          numerals + honest position delta under the first tile */}
       <section aria-label={t('kpi.label')} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {kpis.map((kpi, i) => (
           <motion.div
@@ -109,14 +141,15 @@ export function WallHomeView({ model }: { model: SaveModel }) {
             transition={{ duration: 0.2, delay: i * 0.04 }}
             className="rounded-lg border border-line bg-panel p-4"
           >
-            <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-ink-faint">
+            <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-ink-faint">
               <span className="text-ink-faint" aria-hidden="true">{kpi.icon}</span>
               {kpi.label}
             </p>
-            <p className="mt-1 truncate font-mono text-lg font-bold text-ink" title={typeof kpi.value === 'string' ? kpi.value : undefined}>
+            <p className="mt-1 truncate font-mono text-[32px] font-bold leading-none tabular-nums text-ink" title={typeof kpi.value === 'string' ? kpi.value : undefined}>
               {kpi.value}
             </p>
-            {kpi.sub ? <p className="truncate text-[11px] text-ink-soft">{kpi.sub}</p> : null}
+            {kpi.sub ? <p className="mt-1.5 truncate text-[13px] text-ink-soft">{kpi.sub}</p> : null}
+            {kpi.delta ? <p className="mt-0.5 truncate font-mono text-[10px]">{kpi.delta}</p> : null}
           </motion.div>
         ))}
       </section>
@@ -126,8 +159,12 @@ export function WallHomeView({ model }: { model: SaveModel }) {
         <div className="space-y-4 lg:col-span-7">
           {nextRace ? (
             <section aria-label={t('nextRace.label')} className="rounded-lg border border-line bg-panel p-4">
-              <header className="mb-3 flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-ink">{t('nextRace.label')}</h2>
+              <header className="mb-3 flex flex-wrap items-center gap-2">
+                <span className="font-mono text-[11px] uppercase tracking-wider text-teal">{t('sec.nextRace')}</span>
+                {/* v0.5.0: live pulse on the upcoming-race card (reduced-motion
+                    flattens it via the global rule) */}
+                <span aria-hidden="true" className="live-pulse-dot h-1.5 w-1.5 rounded-full bg-teal" data-testid="next-race-pulse" />
+                <h2 className="text-[15px] font-semibold text-ink">{t('nextRace.label')}</h2>
                 {nextRace.state === 1 ? (
                   <span
                     className="inline-flex items-center gap-1.5 rounded bg-danger/10 px-1.5 py-0.5 font-mono text-[10px] uppercase text-danger"
@@ -183,7 +220,10 @@ export function WallHomeView({ model }: { model: SaveModel }) {
 
         {/* what to do next — 5/12 (v0.5.0 row 2) */}
         <section aria-label={t('todo.label')} className="space-y-3 lg:col-span-5">
-          <h2 className="text-sm font-semibold text-ink">{t('todo.label')}</h2>
+          <header className="flex items-center gap-2">
+            <span className="font-mono text-[11px] uppercase tracking-wider text-amber">{t('sec.todo')}</span>
+            <h2 className="text-[15px] font-semibold text-ink">{t('todo.label')}</h2>
+          </header>
           {topRecs.length > 0 ? (
             topRecs.map((rec, i) => (
               <RecommendationCard key={rec.id} recommendation={rec} testId={`home-rec-${i}`} />
@@ -214,7 +254,8 @@ export function WallHomeView({ model }: { model: SaveModel }) {
           className="rounded-lg border border-line bg-panel p-4 lg:col-span-12"
         >
           <header className="mb-3 flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-ink">{t('pace.label')}</h2>
+            <span className="font-mono text-[11px] uppercase tracking-wider text-teal">{t('sec.pace')}</span>
+            <h2 className="text-[15px] font-semibold text-ink">{t('pace.label')}</h2>
             {pace ? <ConfidenceBadge confidence={pace.confidence} /> : null}
           </header>
           {pace && pace.data.rows.length > 0 ? (

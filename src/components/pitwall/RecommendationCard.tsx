@@ -55,7 +55,11 @@ export function RecommendationCard({
         {recommendation.action}
       </p>
 
-      <p className="mt-2 text-xs leading-relaxed text-ink-soft">{recommendation.why}</p>
+      {/* v0.5.0 step 4: why capped at two lines — full text stays on hover
+          and in the evidence drawer. */}
+      <p className="mt-2 line-clamp-2 text-[13px] leading-relaxed text-ink-soft" title={recommendation.why}>
+        {recommendation.why}
+      </p>
 
       {recommendation.expectedGain ? (
         <p className="mt-2 inline-block rounded bg-raised px-2 py-1 font-mono text-[11px] text-good">
@@ -70,39 +74,40 @@ export function RecommendationCard({
         </p>
       ) : null}
 
-      <footer className="mt-3 flex flex-wrap items-center gap-2">
-        {/* local-only feedback loop (docs/03 §5.11) — icon + text, never colour-only */}
+      <footer className="mt-3 flex flex-wrap items-center gap-1.5">
+        {/* v0.5.0 step 4: compact icon-only feedback row (labels kept for
+            screen readers + tooltips). Local-only loop (docs/03 §5.11). */}
         <button
           type="button"
           onClick={() => toggleVote(recommendation.id, 'up')}
           aria-pressed={vote === 'up'}
           aria-label={t('feedbackUp')}
+          title={t('feedbackUp')}
           data-testid={`fb-up-${recommendation.id}`}
           className={cn(
-            'inline-flex cursor-pointer items-center gap-1 rounded border px-2 py-1 text-[11px] transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring',
+            'inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded border transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring',
             vote === 'up'
               ? 'border-good/50 bg-good/10 text-good'
-              : 'border-line bg-surface text-ink-soft hover:border-good/40 hover:text-good',
+              : 'border-line bg-surface text-ink-faint hover:border-good/40 hover:text-good',
           )}
         >
-          <ThumbsUp className="h-3 w-3" aria-hidden="true" />
-          {t('feedbackUp')}
+          <ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
         <button
           type="button"
           onClick={() => toggleVote(recommendation.id, 'down')}
           aria-pressed={vote === 'down'}
           aria-label={t('feedbackDown')}
+          title={t('feedbackDown')}
           data-testid={`fb-down-${recommendation.id}`}
           className={cn(
-            'inline-flex cursor-pointer items-center gap-1 rounded border px-2 py-1 text-[11px] transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring',
+            'inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded border transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring',
             vote === 'down'
               ? 'border-danger/50 bg-danger/10 text-danger'
-              : 'border-line bg-surface text-ink-soft hover:border-danger/40 hover:text-danger',
+              : 'border-line bg-surface text-ink-faint hover:border-danger/40 hover:text-danger',
           )}
         >
-          <ThumbsDown className="h-3 w-3" aria-hidden="true" />
-          {t('feedbackDown')}
+          <ThumbsDown className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
         {vote ? (
           <span className="text-[10px] text-ink-faint">{t('feedbackSaved')}</span>

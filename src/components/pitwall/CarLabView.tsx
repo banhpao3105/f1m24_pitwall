@@ -51,6 +51,7 @@ function ConditionBar({ value }: { value: number | null }) {
 
 export function CarLabView({ model }: { model: SaveModel }) {
   const t = useTranslations('cars');
+  const tSec = useTranslations('sec');
   const lab = useCarLab();
   if (!lab) return null;
 
@@ -77,7 +78,8 @@ export function CarLabView({ model }: { model: SaveModel }) {
       {/* league table */}
       <section aria-label={t('league')} className="rounded-lg border border-line bg-panel p-4">
         <header className="mb-3 flex flex-wrap items-center gap-2">
-          <h3 className="text-sm font-semibold text-ink">{t('league')}</h3>
+          <span className="font-mono text-[11px] uppercase tracking-wider text-amber">{tSec('league')}</span>
+          <h3 className="text-[15px] font-semibold text-ink">{t('league')}</h3>
           <span className="rounded bg-raised px-1.5 py-0.5 font-mono text-[9px] uppercase text-ink-faint">
             {league.source === 'designs' ? t('leagueByDesigns') : t('leagueByPace')}
           </span>
@@ -112,7 +114,10 @@ export function CarLabView({ model }: { model: SaveModel }) {
       {/* part grid + durability */}
       {lab.data.parts.length > 0 ? (
         <section aria-label={t('durability')} className="rounded-lg border border-line bg-panel p-4">
-          <h3 className="mb-3 text-sm font-semibold text-ink">{t('durability')}</h3>
+          <h3 className="mb-3 text-[15px] font-semibold text-ink">
+            <span className="mr-2 font-mono text-[11px] uppercase tracking-wider text-amber">{tSec('durability')}</span>
+            {t('durability')}
+          </h3>
           <div className="mb-4">
             <PartConditionChart rows={lab.data.parts} />
           </div>
@@ -150,7 +155,8 @@ export function CarLabView({ model }: { model: SaveModel }) {
       {lab.data.devQueue.length > 0 ? (
         <section aria-label={t('devQueue')} className="rounded-lg border border-line bg-panel p-4">
           <header className="mb-3 flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-semibold text-ink">{t('devQueue')}</h3>
+            <span className="font-mono text-[11px] uppercase tracking-wider text-amber">{tSec('queue')}</span>
+            <h3 className="text-[15px] font-semibold text-ink">{t('devQueue')}</h3>
             <span className="font-mono text-[10px] text-ink-faint">{t('devQueueHint')}</span>
           </header>
           <ul className="space-y-1.5">

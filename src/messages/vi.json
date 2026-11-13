@@ -128,6 +128,31 @@
       "yourPoints": "+{points} pts đội"
     }
   },
+  "sec": {
+    "plan": "PLAN",
+    "pace": "PACE",
+    "tower": "TOWER",
+    "deg": "DEGRADATION",
+    "whatif": "WHAT-IF",
+    "alternatives": "ALTERNATIVES",
+    "lives": "COMPOUND LIFE",
+    "league": "LEAGUE",
+    "durability": "DURABILITY",
+    "queue": "DEV QUEUE",
+    "calendar": "CALENDAR",
+    "standings": "STANDINGS",
+    "data": "RACE DATA"
+  },
+  "pitbar": {
+    "optimalLabel": "Pit tối ưu: vòng {lap} (cửa sổ {lo}–{hi})",
+    "early": "Pit sớm",
+    "optimal": "Cửa sổ pit tối ưu",
+    "late": "Pit muộn — rủi ro",
+    "beyondCap": "Ngoài trần đời lốp — kế hoạch không thực thi được",
+    "earlyLate": "Sớm / muộn",
+    "lifeCap": "Trần đời lốp: vòng {cap} — vượt trần là không thực thi được",
+    "legend": "Chú giải cửa sổ pit"
+  },
   "confidence": {
     "HIGH": "Độ tin cậy CAO — đo trực tiếp từ save",
     "MEDIUM": "Độ tin cậy TRUNG BÌNH — suy ra từ dữ liệu lịch sử trong save",
@@ -167,7 +192,14 @@
       "tyreRec": "Khuyến nghị lốp",
       "carRank": "Xếp hạng xe",
       "carByDesigns": "theo design points",
-      "carByPace": "theo pace"
+      "carByPace": "theo pace",
+      "heldPos": "giữ P{pos}",
+      "posBefore": "P{pos} trước {track}"
+    },
+    "sec": {
+      "nextRace": "NEXT RACE",
+      "pace": "PACE",
+      "todo": "ACTIONS"
     },
     "nextRace": {
       "label": "Chặng tới",

@@ -35,6 +35,7 @@ function exportCsv(filename: string, header: string[], rows: (string | number)[]
 export function SeasonView({ model }: { model: SaveModel }) {
   const t = useTranslations('season');
   const tChart = useTranslations('charts.season');
+  const tSec = useTranslations('sec');
   const locale = useLocale() as 'vi' | 'en';
   const seasonId = model.meta.seasonId;
   const races = model.races
@@ -102,7 +103,10 @@ export function SeasonView({ model }: { model: SaveModel }) {
 
       {/* calendar */}
       <section aria-label={t('calendar')} className="rounded-lg border border-line bg-panel p-4">
-        <h3 className="mb-3 text-sm font-semibold text-ink">{t('calendar')}</h3>
+        <h3 className="mb-3 text-[15px] font-semibold text-ink">
+          <span className="mr-2 font-mono text-[11px] uppercase tracking-wider text-info">{tSec('calendar')}</span>
+          {t('calendar')}
+        </h3>
         <ol className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
           {races.map((r, i) => (
             <motion.li
@@ -170,7 +174,10 @@ export function SeasonView({ model }: { model: SaveModel }) {
       {/* standings — list + points bars side by side (v0.5.0 step 2) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section aria-label={t('standingsDrivers')} className="rounded-lg border border-line bg-panel p-4">
-          <h3 className="mb-3 text-sm font-semibold text-ink">{t('standingsDrivers')}</h3>
+          <h3 className="mb-3 text-[15px] font-semibold text-ink">
+            <span className="mr-2 font-mono text-[11px] uppercase tracking-wider text-info">{tSec('standings')}</span>
+            {t('standingsDrivers')}
+          </h3>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <ul className="space-y-1">
               {model.standings.drivers.map((row) => {
@@ -209,7 +216,10 @@ export function SeasonView({ model }: { model: SaveModel }) {
           </div>
         </section>
         <section aria-label={t('standingsTeams')} className="rounded-lg border border-line bg-panel p-4">
-          <h3 className="mb-3 text-sm font-semibold text-ink">{t('standingsTeams')}</h3>
+          <h3 className="mb-3 text-[15px] font-semibold text-ink">
+            <span className="mr-2 font-mono text-[11px] uppercase tracking-wider text-info">{tSec('standings')}</span>
+            {t('standingsTeams')}
+          </h3>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <ul className="space-y-1">
               {model.standings.teams.map((row) => (
@@ -246,7 +256,10 @@ export function SeasonView({ model }: { model: SaveModel }) {
 
       {/* race data table */}
       <section aria-label={t('raceData')} className="rounded-lg border border-line bg-panel p-4">
-        <h3 className="mb-3 text-sm font-semibold text-ink">{t('raceData')}</h3>
+        <h3 className="mb-3 text-[15px] font-semibold text-ink">
+          <span className="mr-2 font-mono text-[11px] uppercase tracking-wider text-info">{tSec('data')}</span>
+          {t('raceData')}
+        </h3>
         <div className="max-h-96 overflow-y-auto" data-testid="race-data-table">
           <table className="w-full min-w-[560px] text-left text-xs">
             <thead className="sticky top-0 bg-panel">

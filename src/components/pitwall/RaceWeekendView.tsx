@@ -32,6 +32,7 @@ export function RaceWeekendView({
 }) {
   const t = useTranslations('race');
   const tSim = useTranslations('sim');
+  const tSec = useTranslations('sec');
   const locale = useLocale() as 'vi' | 'en';
   const [tab, setTab] = useState<'overview' | 'sim'>('overview');
   const seasonRaces = model.races.filter((r) => r.seasonId === model.meta.seasonId);
@@ -133,7 +134,8 @@ export function RaceWeekendView({
           {fastest ? (
             <section aria-label={t('plan')} className="rounded-lg border border-line bg-panel p-4">
               <header className="mb-3 flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-semibold text-ink">{t('plan')}</h3>
+                <span className="font-mono text-[11px] uppercase tracking-wider text-teal">{tSec('plan')}</span>
+                <h3 className="text-[15px] font-semibold text-ink">{t('plan')}</h3>
                 <span className="font-mono text-xs text-teal">
                   {fastest.stints.map((s) => `${s.compound}(${s.laps})`).join(' → ')}
                 </span>
@@ -157,7 +159,8 @@ export function RaceWeekendView({
           {pace && pace.data.rows.length > 0 ? (
             <section aria-label={t('pace')} className="rounded-lg border border-line bg-panel p-4">
               <header className="mb-2 flex items-center gap-2">
-                <h3 className="text-sm font-semibold text-ink">{t('pace')}</h3>
+                <span className="font-mono text-[11px] uppercase tracking-wider text-teal">{tSec('pace')}</span>
+                <h3 className="text-[15px] font-semibold text-ink">{t('pace')}</h3>
                 <ConfidenceBadge confidence={pace.confidence} />
               </header>
               <PaceBarChart rows={pace.data.rows} model={model} testId="race-pace-chart" />

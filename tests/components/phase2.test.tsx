@@ -123,13 +123,14 @@ describe('RecommendationCard — local feedback', () => {
     expect(screen.queryByText('Đã lưu trên máy')).not.toBeInTheDocument();
   });
 
-  it('👍 and 👎 are mutually exclusive with icon + text labels', () => {
+  it('👍 and 👎 are mutually exclusive with accessible labels (v0.5.0: icon-only)', () => {
     render(withI18n(<RecommendationCard recommendation={sampleRec} />));
     fireEvent.click(screen.getByTestId('fb-down-rec-p2'));
     expect(screen.getByTestId('fb-down-rec-p2')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('fb-up-rec-p2')).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByText('Hữu ích')).toBeInTheDocument();
-    expect(screen.getByText('Không hữu ích')).toBeInTheDocument();
+    // compact icon-only buttons keep their accessible names (i18n'd)
+    expect(screen.getByTestId('fb-up-rec-p2')).toHaveAttribute('aria-label', 'Hữu ích');
+    expect(screen.getByTestId('fb-down-rec-p2')).toHaveAttribute('aria-label', 'Không hữu ích');
   });
 });
 

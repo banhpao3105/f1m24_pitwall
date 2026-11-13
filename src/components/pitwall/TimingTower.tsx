@@ -10,7 +10,6 @@
  */
 
 import { useTranslations, useLocale } from 'next-intl';
-import { Maximize2 } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
 import { teamPair } from '@/lib/team-colours';
@@ -18,6 +17,7 @@ import { cn } from '@/lib/utils';
 
 export function TimingTower({ model, raceId }: { model: SaveModel; raceId?: number | null }) {
   const t = useTranslations('race.tower');
+  const tSec = useTranslations('sec');
   const locale = useLocale() as 'vi' | 'en';
 
   const seasonRaces = model.races.filter((r) => r.seasonId === model.meta.seasonId);
@@ -46,8 +46,8 @@ export function TimingTower({ model, raceId }: { model: SaveModel; raceId?: numb
   return (
     <section aria-label={t('title')} className="rounded-lg border border-line bg-panel p-4" data-testid="timing-tower">
       <header className="mb-3 flex flex-wrap items-center gap-2">
-        <Maximize2 className="h-4 w-4 text-teal" aria-hidden="true" />
-        <h3 className="text-sm font-semibold text-ink">{t('title')}</h3>
+        <span className="font-mono text-[11px] uppercase tracking-wider text-teal">{tSec('tower')}</span>
+        <h3 className="text-[15px] font-semibold text-ink">{t('title')}</h3>
         <span className="font-mono text-[11px] text-teal">{trackDisplay(source.trackName, locale)}</span>
         {isReference ? (
           <span className="rounded bg-raised px-2 py-0.5 font-mono text-[10px] text-amber">

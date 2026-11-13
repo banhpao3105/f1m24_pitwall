@@ -128,6 +128,31 @@
       "yourPoints": "+{points} team pts"
     }
   },
+  "sec": {
+    "plan": "PLAN",
+    "pace": "PACE",
+    "tower": "TOWER",
+    "deg": "DEGRADATION",
+    "whatif": "WHAT-IF",
+    "alternatives": "ALTERNATIVES",
+    "lives": "COMPOUND LIFE",
+    "league": "LEAGUE",
+    "durability": "DURABILITY",
+    "queue": "DEV QUEUE",
+    "calendar": "CALENDAR",
+    "standings": "STANDINGS",
+    "data": "RACE DATA"
+  },
+  "pitbar": {
+    "optimalLabel": "Optimal pit: lap {lap} (window {lo}–{hi})",
+    "early": "Pit early",
+    "optimal": "Optimal pit window",
+    "late": "Pit late — risky",
+    "beyondCap": "Beyond tyre life cap — plan not executable",
+    "earlyLate": "Early / late",
+    "lifeCap": "Tyre life cap: lap {cap} — past the cap the plan cannot run",
+    "legend": "Pit window legend"
+  },
   "confidence": {
     "HIGH": "HIGH confidence — measured directly from the save",
     "MEDIUM": "MEDIUM confidence — derived from historical data inside the save",
@@ -167,7 +192,14 @@
       "tyreRec": "Tyre recommendation",
       "carRank": "Car rank",
       "carByDesigns": "by design points",
-      "carByPace": "by pace"
+      "carByPace": "by pace",
+      "heldPos": "held P{pos}",
+      "posBefore": "P{pos} before {track}"
+    },
+    "sec": {
+      "nextRace": "NEXT RACE",
+      "pace": "PACE",
+      "todo": "ACTIONS"
     },
     "nextRace": {
       "label": "Next race",
