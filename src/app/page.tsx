@@ -27,6 +27,7 @@ import { ParseProgress } from '@/components/pitwall/ParseProgress';
 import { ErrorAlert } from '@/components/pitwall/ErrorAlert';
 import { SaveMetaCard } from '@/components/pitwall/SaveMetaCard';
 import { SaveLibrary } from '@/components/pitwall/SaveLibrary';
+import { SaveAutoRestore } from '@/components/pitwall/SaveAutoRestore';
 import { WallNav } from '@/components/pitwall/WallNav';
 import { WallViews } from '@/components/pitwall/WallViews';
 import { WallHomeView } from '@/components/pitwall/WallHomeView';
@@ -113,6 +114,9 @@ function PitWallSurface() {
       </header>
 
       <main className="mx-auto w-full max-w-6xl flex-1 space-y-6 px-4 py-6">
+        {/* Auto-restore the last opened save from IndexedDB (Phase 3). */}
+        <SaveAutoRestore />
+
         {/* Command palette — mounted once; races are passed when a save is ready. */}
         <Suspense fallback={null}>
           <CommandPalette races={model?.races ?? []} />

@@ -52,7 +52,10 @@
     "open": "Mở",
     "delete": "Xoá",
     "savedOn": "Lưu lúc",
-    "confirmDelete": "Xoá save này khỏi trình duyệt?"
+    "confirmDelete": "Xoá save này khỏi trình duyệt?",
+    "active": "đang mở",
+    "restoredTitle": "Đã khôi phục save",
+    "restoredDesc": "Mở lại {name} từ bộ nhớ trình duyệt — không cần nạp lại file."
   },
   "privacy": {
     "localOnly": "Generated locally — no data leaves your device.",

@@ -1,0 +1,30 @@
+{
+  "name": "F1 Pit Wall — Save Analyzer",
+  "short_name": "Pit Wall",
+  "description": "Local-first F1 Manager save analyzer: pit wall dashboard, tyre lab, gazette. Generated locally — no data leaves your device.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#070b11",
+  "theme_color": "#070b11",
+  "icons": [
+    {
+      "src": "/icons/pitwall-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/pitwall-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/pitwall-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

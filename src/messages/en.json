@@ -52,7 +52,10 @@
     "open": "Open",
     "delete": "Delete",
     "savedOn": "Saved",
-    "confirmDelete": "Delete this save from the browser?"
+    "confirmDelete": "Delete this save from the browser?",
+    "active": "open",
+    "restoredTitle": "Save restored",
+    "restoredDesc": "Reopened {name} from browser storage — no re-upload needed."
   },
   "privacy": {
     "localOnly": "Generated locally — no data leaves your device.",

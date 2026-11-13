@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="F1 Pit Wall">
+  <rect width="512" height="512" rx="96" fill="#070b11"/>
+  <!-- telemetry grid -->
+  <g stroke="#223041" stroke-width="2" opacity="0.5">
+    <path d="M64 128h384M64 224h384M64 320h384M64 416h384"/>
+    <path d="M128 64v384M224 64v384M320 64v384M416 64v384"/>
+  </g>
+  <!-- chequered flag -->
+  <g>
+    <rect x="150" y="132" width="30" height="270" fill="#2ee6c8"/>
+    <g transform="translate(180 132)">
+      <rect x="0"   y="0"   width="36" height="36" fill="#2ee6c8"/>
+      <rect x="36"  y="0"   width="36" height="36" fill="#0d131b" stroke="#2ee6c8" stroke-width="4"/>
+      <rect x="72"  y="0"   width="36" height="36" fill="#2ee6c8"/>
+      <rect x="0"   y="36"  width="36" height="36" fill="#0d131b" stroke="#2ee6c8" stroke-width="4"/>
+      <rect x="36"  y="36"  width="36" height="36" fill="#2ee6c8"/>
+      <rect x="72"  y="36"  width="36" height="36" fill="#0d131b" stroke="#2ee6c8" stroke-width="4"/>
+      <rect x="0"   y="72"  width="36" height="36" fill="#2ee6c8"/>
+      <rect x="36"  y="72"  width="36" height="36" fill="#0d131b" stroke="#2ee6c8" stroke-width="4"/>
+      <rect x="72"  y="72"  width="36" height="36" fill="#2ee6c8"/>
+    </g>
+  </g>
+  <!-- pace trace -->
+  <polyline points="96,392 176,344 248,364 322,296 420,208"
+            fill="none" stroke="#2ee6c8" stroke-width="14"
+            stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="420" cy="208" r="22" fill="#2ee6c8"/>
+  <circle cx="420" cy="208" r="10" fill="#070b11"/>
+</svg>

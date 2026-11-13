@@ -12,9 +12,12 @@ import { FolderOpen, Trash2, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 import {
   listSaves,
   deleteSave,
+  setLastActiveSaveId,
+  getLastActiveSaveId,
   type StoredSave,
 } from '@/lib/save-db';
 import { useSaveStore } from '@/store/save.store';
@@ -23,11 +26,15 @@ export function SaveLibrary() {
   const t = useTranslations('library');
   const setReady = useSaveStore((s) => s.setReady);
   const [saves, setSaves] = useState<StoredSave[] | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
     listSaves()
       .then(setSaves)
       .catch(() => setSaves([]));
+    getLastActiveSaveId()
+      .then(setActiveId)
+      .catch(() => setActiveId(null));
   }, []);
 
   useEffect(() => {
@@ -39,6 +46,10 @@ export function SaveLibrary() {
       // confirm() is intentionally plain: destructive action, keyboard-safe.
       if (window.confirm(t('confirmDelete'))) {
         await deleteSave(id);
+        // A deleted save can no longer be the auto-restore target.
+        if ((await getLastActiveSaveId()) === id) {
+          await setLastActiveSaveId(null);
+        }
         refresh();
       }
     },
@@ -48,6 +59,10 @@ export function SaveLibrary() {
   const onOpen = useCallback(
     (stored: StoredSave) => {
       setReady(stored.model);
+      // Phase 3: opening a save makes it the auto-restore target.
+      setLastActiveSaveId(stored.model.meta.id).then(() => {
+        setActiveId(stored.model.meta.id);
+      }).catch(() => {});
     },
     [setReady],
   );
@@ -79,7 +94,10 @@ export function SaveLibrary() {
             {saves.map((s) => (
               <li
                 key={s.model.meta.id}
-                className="flex flex-wrap items-center gap-2 px-4 py-3 hover:bg-raised/40"
+                className={cn(
+                  'flex flex-wrap items-center gap-2 px-4 py-3 hover:bg-raised/40',
+                  s.model.meta.id === activeId && 'bg-teal/5',
+                )}
               >
                 <div className="min-w-0 flex-1">
                   <p className="flex flex-wrap items-center gap-2 text-sm text-ink">
@@ -90,6 +108,14 @@ export function SaveLibrary() {
                     >
                       {s.model.meta.gameVersion}
                     </Badge>
+                    {s.model.meta.id === activeId ? (
+                      <Badge
+                        variant="outline"
+                        className="border-teal/40 bg-teal/5 font-mono text-[10px] text-teal"
+                      >
+                        {t('active')}
+                      </Badge>
+                    ) : null}
                   </p>
                   <p className="mt-0.5 font-mono text-[11px] text-ink-faint">
                     {t('savedOn')}: {new Intl.DateTimeFormat(undefined, {

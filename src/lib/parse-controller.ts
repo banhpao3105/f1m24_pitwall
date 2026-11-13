@@ -9,7 +9,7 @@
 
 import { createParseSession, type ParseSession } from '@/parser/worker/parse-client';
 import { useSaveStore } from '@/store/save.store';
-import { putSave } from '@/lib/save-db';
+import { putSave, setLastActiveSaveId } from '@/lib/save-db';
 import { toast } from '@/hooks/use-toast';
 
 const MAX_FILE_BYTES = 500 * 1024 * 1024; // 500 MB (docs/05 §9.5)
@@ -54,6 +54,7 @@ export async function startParseFlow(file: File): Promise<void> {
     worker.terminate();
     try {
       await putSave(model);
+      await setLastActiveSaveId(model.meta.id);
     } catch (err) {
       // Persistence is best-effort (quota / private mode); the parse result
       // stays valid for this session.
