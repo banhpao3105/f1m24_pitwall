@@ -9,6 +9,16 @@
 import { useMemo } from 'react';
 import { buildTyreLab, type TyreLab } from '@/engines/tyre.engine';
 import { buildPaceBoard, type PaceBoard } from '@/engines/pace.engine';
+import { buildSim, type SimBoard, type SimOptions } from '@/engines/sim.engine';
+import { buildCarLab, type CarLab } from '@/engines/car.engine';
+import { buildFinance, type FinanceBoard } from '@/engines/finance.engine';
+import {
+  buildPersonnel,
+  buildDriverDuel,
+  type PersonnelBoard,
+  type Duel,
+} from '@/engines/personnel.engine';
+import { buildRegulations, type RegulationBoard } from '@/engines/regulation.engine';
 import type { EngineResult } from '@/domain/types';
 import { useSaveStore } from '@/store/save.store';
 
@@ -27,3 +37,56 @@ export function usePaceBoard(): EngineResult<PaceBoard> | null {
     return buildPaceBoard(model);
   }, [model]);
 }
+
+export function useSim(raceId: number | null): EngineResult<SimBoard> | null {
+  const model = useSaveStore((s) => s.model);
+  return useMemo(() => {
+    if (!model) return null;
+    return buildSim(model, raceId ?? 0);
+  }, [model, raceId]);
+}
+
+export function useCarLab(): EngineResult<CarLab> | null {
+  const model = useSaveStore((s) => s.model);
+  return useMemo(() => {
+    if (!model) return null;
+    return buildCarLab(model);
+  }, [model]);
+}
+
+export function useFinance(): EngineResult<FinanceBoard> | null {
+  const model = useSaveStore((s) => s.model);
+  return useMemo(() => {
+    if (!model) return null;
+    return buildFinance(model);
+  }, [model]);
+}
+
+export function usePersonnel(): EngineResult<PersonnelBoard> | null {
+  const model = useSaveStore((s) => s.model);
+  return useMemo(() => {
+    if (!model) return null;
+    return buildPersonnel(model);
+  }, [model]);
+}
+
+export function useDriverDuel(
+  aStaffId: number | null,
+  bStaffId: number | null,
+): EngineResult<Duel> | null {
+  const model = useSaveStore((s) => s.model);
+  return useMemo(() => {
+    if (!model || aStaffId == null || bStaffId == null) return null;
+    return buildDriverDuel(model, aStaffId, bStaffId);
+  }, [model, aStaffId, bStaffId]);
+}
+
+export function useRegulations(): EngineResult<RegulationBoard> | null {
+  const model = useSaveStore((s) => s.model);
+  return useMemo(() => {
+    if (!model) return null;
+    return buildRegulations(model);
+  }, [model]);
+}
+
+export type { SimOptions };

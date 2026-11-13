@@ -1,21 +1,26 @@
 'use client';
 
 /**
- * Tyre Lab (minimal v1) — docs/04 §7.3.3: hero recommendation card,
- * alternatives with time deltas, compound lives, observed data,
- * provenance. What-if sliders are Phase 2 (backlog).
+ * Tyre Lab — Phase 2 (docs/04 §7.3.3): hero recommendation card,
+ * alternatives with time deltas, WHAT-IF (pit shift slider + rain toggle
+ * — docs/03 §5.3), compound lives, observed data, provenance.
  */
 
 import { useTranslations } from 'next-intl';
-import { Waves } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Waves, SlidersHorizontal, CloudRain } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { useTyreLab } from '@/lib/engine-hooks';
+import { whatIfPitShift, buildWetPlan } from '@/engines/tyre.engine';
 import { RecommendationCard } from './RecommendationCard';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { StintTimeline } from './StintTimeline';
 import { PitWindowBar } from './PitWindowBar';
 import { CompoundBadge, type CompoundKey } from './CompoundBadge';
 import type { StrategyResult } from '@/engines/tyre.engine';
+import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
+import { cn } from '@/lib/utils';
 
 export function TyreLabView({
   model,
@@ -25,7 +30,29 @@ export function TyreLabView({
   raceId: number | null;
 }) {
   const t = useTranslations('tyres');
+  const tWhat = useTranslations('whatif');
   const tyre = useTyreLab(raceId);
+
+  // what-if local state (docs/03 §5.3: pit sớm/muộn ±, toggle mưa)
+  const [pitShift, setPitShift] = useState(0);
+  const [rainOn, setRainOn] = useState(false);
+
+  const whatIf = useMemo(() => {
+    if (!tyre?.data.best) return null;
+    return whatIfPitShift(
+      tyre.data.best,
+      tyre.data.laps,
+      tyre.data.lives,
+      tyre.data.deltas,
+      tyre.data.pitCostS,
+      pitShift,
+    );
+  }, [tyre, pitShift]);
+
+  const wetPlan = useMemo(() => {
+    if (!rainOn || !tyre) return null;
+    return buildWetPlan(model, tyre.data.laps);
+  }, [model, rainOn, tyre]);
 
   const seasonRaces = model.races.filter((r) => r.seasonId === model.meta.seasonId);
   const race = seasonRaces.find((r) => r.raceId === raceId) ?? seasonRaces.find((r) => r.state !== 2) ?? seasonRaces.at(-1) ?? null;
@@ -86,6 +113,106 @@ export function TyreLabView({
                   lifeCap={tyre.data.lives[tyre.data.best.stints[0].compound as CompoundKey]}
                 />
               </div>
+            ) : null}
+          </section>
+
+          {/* what-if (Phase 2) */}
+          <section aria-label={tWhat('title')} className="rounded-lg border border-line bg-panel p-4" data-testid="tyre-whatif">
+            <header className="mb-3 flex flex-wrap items-center gap-2">
+              <SlidersHorizontal className="h-4 w-4 text-teal" aria-hidden="true" />
+              <h3 className="text-sm font-semibold text-ink">{tWhat('title')}</h3>
+            </header>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="pit-shift" className="text-xs text-ink-soft">
+                  {tWhat('pitShift', { shift: pitShift })}
+                </label>
+                <Slider
+                  id="pit-shift"
+                  className="mt-2"
+                  min={-3}
+                  max={3}
+                  step={1}
+                  value={[pitShift]}
+                  onValueChange={(v) => setPitShift(v[0] ?? 0)}
+                  data-testid="pit-shift-slider"
+                />
+                <p className="mt-1 font-mono text-[10px] text-ink-faint">
+                  {pitShift === 0 ? tWhat('baseline') : pitShift > 0 ? tWhat('later', { laps: pitShift }) : tWhat('earlier', { laps: -pitShift })}
+                </p>
+              </div>
+              <div className="flex items-start gap-2">
+                <Switch
+                  id="rain-toggle"
+                  checked={rainOn}
+                  onCheckedChange={(v) => setRainOn(v)}
+                  data-testid="rain-toggle"
+                />
+                <label htmlFor="rain-toggle" className="flex cursor-pointer items-center gap-1.5 text-xs text-ink-soft">
+                  <CloudRain className="h-3.5 w-3.5 text-info" aria-hidden="true" />
+                  {tWhat('rain')}
+                </label>
+              </div>
+            </div>
+
+            {whatIf && whatIf.shifted ? (
+              <div className="mt-4 space-y-2" data-testid="whatif-result">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="text-ink-faint">{tWhat('plan')}</span>
+                  <span className="flex flex-wrap gap-1">
+                    {whatIf.shifted.stints.map((st, j) => (
+                      <span key={j} className="inline-flex items-center gap-0.5">
+                        <CompoundBadge compound={st.compound as CompoundKey} size="sm" />
+                        <span className="font-mono text-[10px] text-ink-soft">{st.laps}</span>
+                      </span>
+                    ))}
+                  </span>
+                  <span
+                    className={cn(
+                      'ml-auto rounded px-2 py-0.5 font-mono text-[11px]',
+                      whatIf.deltaS != null && whatIf.deltaS > 0.05
+                        ? 'bg-danger/10 text-danger'
+                        : whatIf.deltaS != null && whatIf.deltaS < -0.05
+                          ? 'bg-good/10 text-good'
+                          : 'bg-raised text-ink-soft',
+                    )}
+                  >
+                    {whatIf.deltaS != null
+                      ? `${whatIf.deltaS > 0 ? '+' : ''}${whatIf.deltaS.toFixed(1)}s`
+                      : tWhat('infeasible')}
+                  </span>
+                </div>
+                {whatIf.clamped ? (
+                  <p className="text-[11px] text-amber">{tWhat('clamped')}</p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {rainOn ? (
+              wetPlan ? (
+                <div className="mt-3 rounded border border-info/30 bg-info/5 p-3" data-testid="wet-plan">
+                  <p className="flex flex-wrap items-center gap-2 text-xs text-info">
+                    <CloudRain className="h-3.5 w-3.5" aria-hidden="true" />
+                    {tWhat('wetPlan')}
+                    <span className="flex flex-wrap gap-1">
+                      {wetPlan.stints.map((st, j) => (
+                        <span key={j} className="inline-flex items-center gap-0.5">
+                          <CompoundBadge compound={st.compound as CompoundKey} size="sm" />
+                          <span className="font-mono text-[10px] text-ink-soft">{st.laps}</span>
+                        </span>
+                      ))}
+                    </span>
+                  </p>
+                  <p className="mt-1 font-mono text-[10px] text-ink-faint">
+                    I {wetPlan.lives.I ?? '—'} / W {wetPlan.lives.W ?? '—'} {t('laps')} · {t(`source.${wetPlan.source === 'allocation' ? 'allocation' : 'model'}`)}
+                  </p>
+                  {wetPlan.note ? <p className="mt-1 text-[11px] text-amber">{wetPlan.note}</p> : null}
+                </div>
+              ) : (
+                <p className="mt-3 rounded border border-line bg-surface px-3 py-2 text-xs text-ink-faint">
+                  {tWhat('noWetData')}
+                </p>
+              )
             ) : null}
           </section>
 

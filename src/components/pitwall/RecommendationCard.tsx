@@ -10,8 +10,17 @@
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronDown, Lightbulb, TriangleAlert, Link2 } from 'lucide-react';
+import {
+  ChevronDown,
+  Lightbulb,
+  TriangleAlert,
+  Link2,
+  ThumbsUp,
+  ThumbsDown,
+} from 'lucide-react';
 import { ConfidenceBadge } from './ConfidenceBadge';
+import { useFeedbackStore } from '@/store/feedback.store';
+import { cn } from '@/lib/utils';
 import type { Recommendation } from '@/domain/provenance';
 
 export function RecommendationCard({
@@ -23,6 +32,8 @@ export function RecommendationCard({
 }) {
   const t = useTranslations('recommendation');
   const [showEvidence, setShowEvidence] = useState(false);
+  const vote = useFeedbackStore((s) => s.votes[recommendation.id]);
+  const toggleVote = useFeedbackStore((s) => s.toggleVote);
 
   return (
     <motion.article
@@ -59,12 +70,49 @@ export function RecommendationCard({
         </p>
       ) : null}
 
-      <div className="mt-2">
+      <footer className="mt-3 flex flex-wrap items-center gap-2">
+        {/* local-only feedback loop (docs/03 §5.11) — icon + text, never colour-only */}
+        <button
+          type="button"
+          onClick={() => toggleVote(recommendation.id, 'up')}
+          aria-pressed={vote === 'up'}
+          aria-label={t('feedbackUp')}
+          data-testid={`fb-up-${recommendation.id}`}
+          className={cn(
+            'inline-flex cursor-pointer items-center gap-1 rounded border px-2 py-1 text-[11px] transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring',
+            vote === 'up'
+              ? 'border-good/50 bg-good/10 text-good'
+              : 'border-line bg-surface text-ink-soft hover:border-good/40 hover:text-good',
+          )}
+        >
+          <ThumbsUp className="h-3 w-3" aria-hidden="true" />
+          {t('feedbackUp')}
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleVote(recommendation.id, 'down')}
+          aria-pressed={vote === 'down'}
+          aria-label={t('feedbackDown')}
+          data-testid={`fb-down-${recommendation.id}`}
+          className={cn(
+            'inline-flex cursor-pointer items-center gap-1 rounded border px-2 py-1 text-[11px] transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring',
+            vote === 'down'
+              ? 'border-danger/50 bg-danger/10 text-danger'
+              : 'border-line bg-surface text-ink-soft hover:border-danger/40 hover:text-danger',
+          )}
+        >
+          <ThumbsDown className="h-3 w-3" aria-hidden="true" />
+          {t('feedbackDown')}
+        </button>
+        {vote ? (
+          <span className="text-[10px] text-ink-faint">{t('feedbackSaved')}</span>
+        ) : null}
+
         <button
           type="button"
           onClick={() => setShowEvidence((v) => !v)}
           aria-expanded={showEvidence}
-          className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-ink-faint transition-colors duration-150 hover:text-ink-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+          className="ml-auto inline-flex cursor-pointer items-center gap-1 text-[11px] text-ink-faint transition-colors duration-150 hover:text-ink-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
         >
           <Link2 className="h-3 w-3" aria-hidden="true" />
           {t('evidence')}
@@ -73,42 +121,43 @@ export function RecommendationCard({
             aria-hidden="true"
           />
         </button>
-        {showEvidence ? (
-          <div className="mt-2 space-y-2 rounded bg-surface p-3" data-testid="evidence-list">
+      </footer>
+
+      {showEvidence ? (
+        <div className="mt-2 space-y-2 rounded bg-surface p-3" data-testid="evidence-list">
+          <div>
+            <p className="mb-1 text-[10px] uppercase tracking-wide text-ink-faint">
+              {t('evidenceList')}
+            </p>
+            <ul className="space-y-1">
+              {recommendation.evidence.map((e, i) => (
+                <li key={i} className="text-xs text-ink-soft">
+                  <span className="font-mono text-[10px] text-ink-faint">[{e.source}]</span>{' '}
+                  {e.label}
+                  {e.detail ? <span className="text-ink-faint"> — {e.detail}</span> : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+          {recommendation.assumptions.length > 0 ? (
             <div>
               <p className="mb-1 text-[10px] uppercase tracking-wide text-ink-faint">
-                {t('evidenceList')}
+                {t('assumptions')}
               </p>
               <ul className="space-y-1">
-                {recommendation.evidence.map((e, i) => (
-                  <li key={i} className="text-xs text-ink-soft">
-                    <span className="font-mono text-[10px] text-ink-faint">[{e.source}]</span>{' '}
-                    {e.label}
-                    {e.detail ? <span className="text-ink-faint"> — {e.detail}</span> : null}
+                {recommendation.assumptions.map((a, i) => (
+                  <li key={i} className="text-xs text-ink-faint">
+                    — {a.text}
+                    {a.fallbackValue ? (
+                      <span className="font-mono text-amber"> ({a.fallbackValue})</span>
+                    ) : null}
                   </li>
                 ))}
               </ul>
             </div>
-            {recommendation.assumptions.length > 0 ? (
-              <div>
-                <p className="mb-1 text-[10px] uppercase tracking-wide text-ink-faint">
-                  {t('assumptions')}
-                </p>
-                <ul className="space-y-1">
-                  {recommendation.assumptions.map((a, i) => (
-                    <li key={i} className="text-xs text-ink-faint">
-                      — {a.text}
-                      {a.fallbackValue ? (
-                        <span className="font-mono text-amber"> ({a.fallbackValue})</span>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+          ) : null}
+        </div>
+      ) : null}
     </motion.article>
   );
 }

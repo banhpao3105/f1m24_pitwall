@@ -2,7 +2,7 @@
   "app": {
     "title": "F1 PIT WALL",
     "tagline": "Trợ lý chiến thuật cho F1 Manager — đọc save, gợi ý hành động.",
-    "phaseBadge": "PHASE 1 — PIT WALL MVP",
+    "phaseBadge": "PHASE 2 — FACTORY & SEASON",
     "modeA": "RACE WEEKEND",
     "modeB": "FACTORY / SEASON"
   },
@@ -78,7 +78,7 @@
   },
   "footer": {
     "note": "F1 Pit Wall — công cụ phân tích save chạy hoàn toàn trên máy bạn. Không liên kết chính thức với Frontier Developments hay F1.",
-    "phase": "Phase 1 · Pit Wall MVP"
+    "phase": "Phase 2 · Factory & Season"
   },
   "locale": {
     "vi": "Tiếng Việt",
@@ -100,20 +100,36 @@
   "recommendation": {
     "evidence": "Xem bằng chứng",
     "evidenceList": "Bằng chứng",
-    "assumptions": "Giả định"
+    "assumptions": "Giả định",
+    "feedbackUp": "Hữu ích",
+    "feedbackDown": "Không hữu ích",
+    "feedbackSaved": "Đã lưu trên máy"
+  },
+  "unavailable": {
+    "label": "Thiếu dữ liệu — module chạy ở chế độ suy giảm"
   },
   "wall": {
     "nav": {
       "label": "Điều hướng Pit Wall",
       "home": "Pit Wall",
       "tyres": "Tyre Lab",
-      "race": "Race Weekend"
+      "race": "Race Weekend",
+      "cars": "Car Lab",
+      "drivers": "Drivers",
+      "season": "Season",
+      "strategy": "Strategy",
+      "research": "Research"
     },
+    "modeA": "RACE WEEKEND",
+    "modeB": "FACTORY / SEASON",
     "kpi": {
       "label": "KPI",
       "standings": "Xếp hạng đội",
       "season": "Tiến độ mùa",
-      "tyreRec": "Khuyến nghị lốp"
+      "tyreRec": "Khuyến nghị lốp",
+      "carRank": "Xếp hạng xe",
+      "carByDesigns": "theo design points",
+      "carByPace": "theo pace"
     },
     "nextRace": {
       "label": "Chặng tới",
@@ -137,7 +153,9 @@
     },
     "alerts": {
       "noRaces": "Save chưa có chặng hoàn thành — các khuyến nghị race sẽ rỗng cho tới khi đua chặng đầu tiên.",
-      "missingTables": "Thiếu bảng: {tables} — các module liên quan dùng fallback và ghi confidence LOW."
+      "missingTables": "Thiếu bảng: {tables} — các module liên quan dùng fallback và ghi confidence LOW.",
+      "partRisk": "Part {part} nguy cơ hỏng cao — kiểm tra/thay trước chặng tới.",
+      "contractExpiry": "Hợp đồng {name} sắp hết hạn ({days} ngày) — mở đàm phán gia hạn."
     }
   },
   "tyres": {
@@ -163,6 +181,19 @@
       "baseline": "baseline"
     }
   },
+  "whatif": {
+    "title": "What-if",
+    "pitShift": "{shift, plural, =0 {theo plan gốc} other {{shift} vòng}}",
+    "baseline": "Plan gốc — không dịch chuyển",
+    "later": "Pit muộn hơn {laps} vòng so với plan gốc",
+    "earlier": "Pit sớm hơn {laps} vòng so với plan gốc",
+    "rain": "Giả lập mưa",
+    "plan": "Plan khi dịch chuyển:",
+    "infeasible": "Không khả thi",
+    "clamped": "Đã chạm giới hạn đời lốp hoặc stint tối thiểu — plan được chặn theo rule game.",
+    "wetPlan": "Plan mưa (từ allocation):",
+    "noWetData": "Thiếu allocation lốp mưa (I/W) trong save — không dựng được plan mưa, không bịa thời gian."
+  },
   "race": {
     "laps": "vòng",
     "completed": "Đã đua",
@@ -177,6 +208,125 @@
     "paceFaster": "nhanh",
     "alreadyDone": "Chặng này đã đua xong — kế hoạch dưới đây mang tham chiếu.",
     "recs": "Khuyến nghị",
-    "noRace": "Không có chặng nào để hiển thị."
+    "noRace": "Không có chặng nào để hiển thị.",
+    "tabOverview": "Overview",
+    "tabsLabel": "Tab Race Weekend"
+  },
+  "sim": {
+    "tab": "Sim",
+    "title": "Quali & Race Sim",
+    "quali": "Quali sim — thứ tự xuất phát dự kiến",
+    "race": "Race sim — thứ tự về đích dự kiến",
+    "samples": "{count} mẫu",
+    "src": {
+      "quali": "quali",
+      "grid": "grid",
+      "practice": "practice",
+      "none": "—"
+    },
+    "paceDeltaHint": "Median fastest-lap delta vs best của chặng",
+    "assumptions": "Giả định & nguồn dữ liệu",
+    "noData": "Chưa đủ dữ liệu để chạy sim cho chặng này."
+  },
+  "drivers": {
+    "title": "Drivers — form, duel, giữ lốp",
+    "cards": "Thẻ tay đua",
+    "form": "Form",
+    "qualiMed": "Quali median",
+    "raceMed": "Race median",
+    "stint": "Laps/stint",
+    "stintHint": "Median vòng mỗi stint — proxy giữ lốp từ pit history",
+    "dnfRate": "DNF",
+    "laps": "vòng",
+    "duelTitle": "Teammate duel (head-to-head)",
+    "pickA": "Chọn tay đua A",
+    "pickB": "Chọn tay đua B",
+    "h2h": "H2H",
+    "h2hQuali": "Quali thắng",
+    "h2hRace": "Race thắng",
+    "points": "Điểm",
+    "duelNoData": "Chưa có chặng nào cả hai đều có kết quả để so H2H.",
+    "noData": "Chưa có tay đua nào trong save.",
+    "noDataHint": "Staff_BasicData + Staff_Contracts cần có trong save career."
+  },
+  "season": {
+    "title": "Season — lịch, standings, dữ liệu chặng",
+    "seasonNo": "Mùa {season}",
+    "calendar": "Lịch chặng",
+    "completed": "Đã đua",
+    "upcoming": "Chưa đua",
+    "sprint": "Sprint",
+    "rain": "Mưa",
+    "yes": "Có",
+    "no": "Không",
+    "standingsDrivers": "Bảng xếp hạng tay đua",
+    "standingsTeams": "Bảng xếp hạng đội",
+    "raceData": "Dữ liệu chặng",
+    "exportCsv": "Xuất CSV",
+    "colTrack": "Đường đua",
+    "colDay": "Ngày",
+    "colState": "Trạng thái",
+    "colSprint": "Sprint",
+    "colRain": "Mưa",
+    "colTemp": "Nhiệt độ",
+    "colLaps": "Vòng",
+    "colWinner": "Người thắng"
+  },
+  "cars": {
+    "title": "Car Lab — xe, durability, dev queue",
+    "league": "League xe",
+    "leagueByDesigns": "theo design points",
+    "leagueByPace": "fallback theo pace",
+    "pts": "điểm",
+    "durability": "Durability — condition & rủi ro hỏng",
+    "devQueue": "Dev queue — xếp theo points-per-budget",
+    "devQueueHint": "Hiệu quả điểm/1M credits, không phải điểm tuyệt đối",
+    "ppm": "pts/1M",
+    "noCost": "thiếu cột cost",
+    "partCount": "{count} part",
+    "supplier": "supplier part — bank reset mỗi mùa",
+    "noPartsData": "Parts_* chưa có dữ liệu trong save này",
+    "noPartsDataHint": "Car Lab chạy chế độ suy giảm: league theo pace fallback; nạp save trong race weekend hoặc introspect để bật part grid."
+  },
+  "strategy": {
+    "title": "Strategy — tài chính & nhân sự",
+    "finance": "Finance snapshot",
+    "balance": "Số dư",
+    "budget": "Budget",
+    "totalSpend": "Tổng chi",
+    "costPerPoint": "Chi/điểm",
+    "personnel": "Nhân sự & hợp đồng",
+    "roleDriver": "Tay đua",
+    "roleStaff": "Nhân sự",
+    "daysLeft": "{days} ngày",
+    "expired": "Hết hạn",
+    "morale": "Morale",
+    "contractFallback": "chưa map cột hợp đồng",
+    "patienceIntel": "Free-agent intel (ContractPatience)",
+    "suitability": "Phù hợp",
+    "opinion": "Cảm tình",
+    "threshold": "Ngưỡng",
+    "patienceHint": "Ngưỡng càng thấp (0–1) càng dễ ký — công thức từ docs/03 §5.7.",
+    "noFinance": "Finance_* chưa có dữ liệu trong save này",
+    "noFinanceHint": "Snapshot tự bật khi introspect save thật chốt được cột Balance/Transactions.",
+    "noContracts": "Staff_Contracts chưa map được",
+    "noContractsHint": "Phần hợp đồng trống — dữ liệu race (form/duel) ở tab Drivers vẫn chạy đầy đủ."
+  },
+  "research": {
+    "title": "Research — luật mới & expertise banking",
+    "proposals": "Đề xuất luật",
+    "voteAssumption": "tally thô — giả định vote=1 là YES (chưa verify)",
+    "proposalUnnamed": "Đề xuất không tên",
+    "yourVote": "Đội bạn: {vote}",
+    "yes": "YES",
+    "no": "NO",
+    "changes": "Thay đổi",
+    "noProposals": "Không có đề xuất luật nào trong save",
+    "noProposalsHint": "Research tự bật khi game mở kỳ bỏ phiếu.",
+    "expertise": "Expertise banking cho mùa sau",
+    "expertiseHint": "Σ NextSeasonExpertise — quyết định khởi điểm mùa mới",
+    "nextSeason": "Mùa sau:",
+    "noExpertise": "Parts_TeamExpertise chưa map được",
+    "noExpertiseHint": "Xếp hạng banking tự bật khi cột NextSeasonExpertise đọc được từ save."
   }
 }

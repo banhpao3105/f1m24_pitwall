@@ -1,0 +1,224 @@
+'use client';
+
+/**
+ * Season view — Phase 2 (docs/04 §7.3.5): calendar, driver + team
+ * standings, race data table with CSV export (JTBD #10). All data comes
+ * from the Normalized Model (standings formula verified on a real save).
+ */
+
+import { useTranslations } from 'next-intl';
+import { motion } from 'framer-motion';
+import { CalendarDays, Download, CloudRain } from 'lucide-react';
+import type { SaveModel } from '@/domain/types';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+
+function exportCsv(filename: string, header: string[], rows: (string | number)[][]): void {
+  const escape = (v: string | number): string => {
+    const s = String(v);
+    return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [header.map(escape).join(','), ...rows.map((r) => r.map(escape).join(','))];
+  // BOM so Excel reads UTF-8 (VI team/track names) correctly.
+  const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function SeasonView({ model }: { model: SaveModel }) {
+  const t = useTranslations('season');
+  const seasonId = model.meta.seasonId;
+  const races = model.races
+    .filter((r) => r.seasonId === seasonId)
+    .sort((a, b) => a.day - b.day);
+
+  const winnerOf = (raceId: number): string =>
+    model.races
+      .find((r) => r.raceId === raceId)
+      ?.results.find((res) => res.finishingPos === 1)?.driverName ?? '—';
+
+  const exportRaceData = () => {
+    exportCsv(
+      `f1m-season-${seasonId}.csv`,
+      [
+        t('colTrack'), t('colDay'), t('colState'), t('colSprint'),
+        t('colRain'), t('colTemp'), t('colLaps'), t('colWinner'),
+      ],
+      races.map((r) => [
+        r.trackName,
+        r.day,
+        r.state === 2 ? t('completed') : t('upcoming'),
+        r.isSprint ? t('yes') : t('no'),
+        r.weather?.raceRain ? t('yes') : t('no'),
+        r.weather?.raceTempC ?? '',
+        r.laps ?? '',
+        r.state === 2 ? winnerOf(r.raceId) : '',
+      ]),
+    );
+  };
+
+  return (
+    <div className="space-y-5" data-testid="season-view">
+      <header className="flex flex-wrap items-center gap-2">
+        <CalendarDays className="h-4 w-4 text-blue" aria-hidden="true" />
+        <h2 className="text-sm font-semibold text-ink">{t('title')}</h2>
+        <span className="font-mono text-xs text-ink-faint">
+          {t('seasonNo', { season: seasonId })}
+        </span>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={exportRaceData}
+          disabled={races.length === 0}
+          className="ml-auto cursor-pointer gap-1.5 border-line bg-surface text-ink-soft hover:text-ink"
+          data-testid="export-csv"
+        >
+          <Download className="h-3.5 w-3.5" aria-hidden="true" />
+          {t('exportCsv')}
+        </Button>
+      </header>
+
+      {/* calendar */}
+      <section aria-label={t('calendar')} className="rounded-lg border border-line bg-panel p-4">
+        <h3 className="mb-3 text-sm font-semibold text-ink">{t('calendar')}</h3>
+        <ol className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          {races.map((r, i) => (
+            <motion.li
+              key={r.raceId}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.15, delay: Math.min(i * 0.02, 0.2) }}
+              className={cn(
+                'flex flex-col gap-1 rounded border px-2.5 py-2',
+                r.state === 2 ? 'border-line bg-surface' : 'border-teal/40 bg-teal/5',
+              )}
+            >
+              <span className="flex items-center gap-1.5 text-xs font-medium text-ink">
+                <span className="w-4 font-mono text-[10px] text-ink-faint">{i + 1}</span>
+                <span className="truncate" title={r.trackName}>{r.trackName}</span>
+              </span>
+              <span className="flex flex-wrap items-center gap-1 pl-5">
+                <span
+                  className={cn(
+                    'rounded px-1 py-0.5 font-mono text-[9px] uppercase',
+                    r.state === 2 ? 'bg-raised text-ink-soft' : 'bg-teal/15 text-teal',
+                  )}
+                >
+                  {r.state === 2 ? t('completed') : t('upcoming')}
+                </span>
+                {r.isSprint ? (
+                  <span className="rounded bg-gold/15 px-1 py-0.5 font-mono text-[9px] text-gold">
+                    {t('sprint')}
+                  </span>
+                ) : null}
+                {r.weather?.raceRain ? (
+                  <span className="inline-flex items-center gap-0.5 rounded bg-info/10 px-1 py-0.5 text-[9px] text-info">
+                    <CloudRain className="h-2.5 w-2.5" aria-hidden="true" />
+                    {t('rain')}
+                  </span>
+                ) : null}
+              </span>
+            </motion.li>
+          ))}
+        </ol>
+      </section>
+
+      {/* standings */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <section aria-label={t('standingsDrivers')} className="rounded-lg border border-line bg-panel p-4">
+          <h3 className="mb-3 text-sm font-semibold text-ink">{t('standingsDrivers')}</h3>
+          <ul className="space-y-1">
+            {model.standings.drivers.map((row) => {
+              const isPlayerDriver = model.drivers.some(
+                (d) => d.staffId === row.id && d.teamId === model.player.teamId,
+              );
+              return (
+                <li
+                  key={row.id}
+                  className={cn(
+                    'flex items-center gap-2 rounded px-2 py-1 text-xs',
+                    isPlayerDriver ? 'bg-amber/10' : '',
+                  )}
+                  data-testid={`sd-${row.position}`}
+                >
+                  <span className="w-6 font-mono text-ink-faint">P{row.position}</span>
+                  <span className={cn('truncate', isPlayerDriver ? 'font-medium text-amber' : 'text-ink')}>
+                    {row.name}
+                  </span>
+                  <span className="ml-auto font-mono text-ink-soft">{row.points}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+        <section aria-label={t('standingsTeams')} className="rounded-lg border border-line bg-panel p-4">
+          <h3 className="mb-3 text-sm font-semibold text-ink">{t('standingsTeams')}</h3>
+          <ul className="space-y-1">
+            {model.standings.teams.map((row) => (
+              <li
+                key={row.id}
+                className={cn(
+                  'flex items-center gap-2 rounded px-2 py-1 text-xs',
+                  row.id === model.player.teamId ? 'bg-amber/10' : '',
+                )}
+                data-testid={`st-${row.position}`}
+              >
+                <span className="w-6 font-mono text-ink-faint">P{row.position}</span>
+                <span className={cn('truncate', row.id === model.player.teamId ? 'font-medium text-amber' : 'text-ink')}>
+                  {row.name}
+                </span>
+                <span className="ml-auto font-mono text-ink-soft">{row.points}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
+
+      {/* race data table */}
+      <section aria-label={t('raceData')} className="rounded-lg border border-line bg-panel p-4">
+        <h3 className="mb-3 text-sm font-semibold text-ink">{t('raceData')}</h3>
+        <div className="max-h-96 overflow-y-auto" data-testid="race-data-table">
+          <table className="w-full min-w-[560px] text-left text-xs">
+            <thead className="sticky top-0 bg-panel">
+              <tr className="text-[10px] uppercase tracking-wide text-ink-faint">
+                <th className="px-2 py-1.5">{t('colTrack')}</th>
+                <th className="px-2 py-1.5">{t('colDay')}</th>
+                <th className="px-2 py-1.5">{t('colState')}</th>
+                <th className="px-2 py-1.5">{t('colLaps')}</th>
+                <th className="px-2 py-1.5">{t('colTemp')}</th>
+                <th className="px-2 py-1.5">{t('colWinner')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {races.map((r) => (
+                <tr key={r.raceId} className="border-t border-line/60">
+                  <td className="px-2 py-1.5 text-ink">
+                    {r.trackName}
+                    {r.isSprint ? <span className="ml-1 font-mono text-[9px] text-gold">{t('sprint')}</span> : null}
+                  </td>
+                  <td className="px-2 py-1.5 font-mono text-ink-soft">{r.day}</td>
+                  <td className="px-2 py-1.5">
+                    <span className={r.state === 2 ? 'text-ink-soft' : 'text-teal'}>
+                      {r.state === 2 ? t('completed') : t('upcoming')}
+                    </span>
+                  </td>
+                  <td className="px-2 py-1.5 font-mono text-ink-soft">{r.laps ?? '—'}</td>
+                  <td className="px-2 py-1.5 font-mono text-ink-soft">
+                    {r.weather?.raceTempC != null ? `${r.weather.raceTempC}°C` : '—'}
+                  </td>
+                  <td className="px-2 py-1.5 text-ink">
+                    {r.state === 2 ? winnerOf(r.raceId) : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}

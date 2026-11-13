@@ -1,11 +1,11 @@
 'use client';
 
 /**
- * F1 Pit Wall — Phase 1 single-surface page.
+ * F1 Pit Wall — Phase 2 single-surface page.
  *
  * Planning deviations (documented in src/lib/i18n/config.ts):
- *   - The sandbox preview exposes only `/`, so Phase 1 views live on this
- *     route with query-param deep-links (`/?view=tyres&race=12`) instead of
+ *   - The sandbox preview exposes only `/`, so Phase 1/2 views live on this
+ *     route with query-param deep-links (`/?view=cars&race=12`) instead of
  *     the `/wall/*` route map in docs/04 §7.2. The view switch is a
  *     component swap — the route map applies unchanged once routing exists.
  *   - next-intl without locale prefixes; locale persisted in Zustand.
@@ -13,7 +13,7 @@
 
 import { useTranslations } from 'next-intl';
 import { NextIntlClientProvider } from 'next-intl';
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Flag } from 'lucide-react';
 import { messages } from '@/lib/i18n/config';
@@ -38,6 +38,17 @@ import { Button } from '@/components/ui/button';
 export default function PitWallPage() {
   const locale = useUiStore((s) => s.locale);
   const activeLocale = locale ?? 'vi';
+
+  // Dev-only debug hook: lets browser automation / devtools inject a
+  // synthetic SaveModel to exercise views without a real .sav. Compiled
+  // out of production behaviour (no-op branch on the client bundle).
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'production') {
+      (window as unknown as { __pitwall?: { useSaveStore: typeof useSaveStore } }).__pitwall = {
+        useSaveStore,
+      };
+    }
+  }, []);
 
   return (
     <NextIntlClientProvider

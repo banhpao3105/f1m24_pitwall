@@ -12,6 +12,11 @@ import { useWallNav } from './WallNav';
 import { WallHomeView } from './WallHomeView';
 import { TyreLabView } from './TyreLabView';
 import { RaceWeekendView } from './RaceWeekendView';
+import { CarLabView } from './CarLabView';
+import { DriversView } from './DriversView';
+import { SeasonView } from './SeasonView';
+import { StrategyView } from './StrategyView';
+import { ResearchView } from './ResearchView';
 
 export function WallViews() {
   const model = useSaveStore((s) => s.model);
@@ -23,6 +28,16 @@ export function WallViews() {
       return <TyreLabView model={model} raceId={raceId} />;
     case 'race':
       return <RaceWeekendView model={model} raceId={raceId} />;
+    case 'cars':
+      return <CarLabView />;
+    case 'drivers':
+      return <DriversView model={model} />;
+    case 'season':
+      return <SeasonView model={model} />;
+    case 'strategy':
+      return <StrategyView />;
+    case 'research':
+      return <ResearchView />;
     case 'wall':
     default:
       return <WallHomeView model={model} />;

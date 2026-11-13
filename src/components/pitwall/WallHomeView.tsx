@@ -8,9 +8,9 @@
 
 import { useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
-import { Trophy, Timer, Waves, TrendingDown, TrendingUp } from 'lucide-react';
+import { Trophy, Timer, Waves, TrendingDown, TrendingUp, Car } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
-import { usePaceBoard, useTyreLab } from '@/lib/engine-hooks';
+import { usePaceBoard, useTyreLab, useCarLab, useFinance } from '@/lib/engine-hooks';
 import { useWallNav } from './WallNav';
 import { RecommendationCard } from './RecommendationCard';
 import { StintTimeline } from './StintTimeline';
@@ -27,6 +27,8 @@ export function WallHomeView({ model }: { model: SaveModel }) {
 
   const tyre = useTyreLab(nextRace?.raceId ?? null);
   const pace = usePaceBoard();
+  const carLab = useCarLab();
+  const finance = useFinance();
   const { setView } = useWallNav();
 
   // Player's best-placed driver (contract team → fallback player team name).
@@ -41,6 +43,7 @@ export function WallHomeView({ model }: { model: SaveModel }) {
 
   const paceRow = pace?.data.rows.find((r) => r.isPlayer) ?? null;
   const rivalRow = pace?.data.rivals.slice().sort((a, b) => Math.abs(a.paceDeltaS - (paceRow?.paceDeltaS ?? 0)) - Math.abs(b.paceDeltaS - (paceRow?.paceDeltaS ?? 0)))[0] ?? null;
+  const carLeagueRow = carLab?.data.league.rows.find((r) => r.isPlayer) ?? null;
 
   const kpis: { icon: React.ReactNode; label: string; value: string; sub?: string; tone?: 'good' | 'bad' | 'neutral' }[] = [
     {
@@ -63,11 +66,19 @@ export function WallHomeView({ model }: { model: SaveModel }) {
         : '—',
       sub: tyre ? `${tyre.data.best?.stops ?? 0} pit` : undefined,
     },
+    {
+      icon: <Car className="h-3.5 w-3.5" />,
+      label: t('kpi.carRank'),
+      value: carLeagueRow?.rank != null ? `#${carLeagueRow.rank}` : '—',
+      sub: carLab?.data.league.source === 'designs' ? t('kpi.carByDesigns') : t('kpi.carByPace'),
+    },
   ];
 
   const topRecs = [
     ...(tyre?.recommendations ?? []),
     ...(pace?.recommendations ?? []),
+    ...(carLab?.recommendations ?? []),
+    ...(finance?.recommendations ?? []),
   ].slice(0, 3);
 
   return (
@@ -75,7 +86,7 @@ export function WallHomeView({ model }: { model: SaveModel }) {
       <AlertBanner model={model} />
 
       {/* KPI strip — bento full-width (docs §7.3.1) */}
-      <section aria-label={t('kpi.label')} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <section aria-label={t('kpi.label')} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {kpis.map((kpi, i) => (
           <motion.div
             key={kpi.label}

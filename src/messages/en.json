@@ -2,16 +2,16 @@
   "app": {
     "title": "F1 PIT WALL",
     "tagline": "Strategy assistant for F1 Manager — reads your save, suggests actions.",
-    "phaseBadge": "PHASE 1 — PIT WALL MVP",
+    "phaseBadge": "PHASE 2 — FACTORY & SEASON",
     "modeA": "RACE WEEKEND",
     "modeB": "FACTORY / SEASON"
   },
   "upload": {
-    "title": "Load your F1 Manager save",
-    "hint": "Drag & drop a .sav file here, or click to browse",
+    "title": "Load an F1 Manager save",
+    "hint": "Drag and drop a .sav file here, or click to browse",
     "accept": "Accepts .sav files only (F1 Manager 23/24)",
     "sizeLimit": "500 MB limit",
-    "cta": "Choose .sav file",
+    "cta": "Choose a .sav file",
     "parsing": "Parsing your save locally…"
   },
   "progress": {
@@ -19,14 +19,14 @@
     "cancel": "Cancel",
     "stages": {
       "gvas": "Reading GVAS structure…",
-      "inflate": "Inflating embedded database…",
+      "inflate": "Inflating database…",
       "sqlite": "Opening SQLite…",
       "normalize": "Normalizing data…",
       "done": "Done"
     }
   },
   "meta": {
-    "title": "Save loaded",
+    "title": "Loaded save",
     "team": "Team",
     "manager": "Team Principal",
     "season": "Season",
@@ -40,45 +40,45 @@
     "customTeam": "Custom team",
     "saveId": "Save hash",
     "warnings": {
-      "NO_COMPLETED_RACES": "No completed races in this save — race analytics modules will be empty; factory/season modules still work."
+      "NO_COMPLETED_RACES": "No completed races yet — race analytics stay empty while factory/season modules still work."
     },
-    "missingTables": "Missing optional tables: {tables} — related modules will use fallbacks and state confidence LOW.",
-    "nextPhase": "Pit Wall Home + recommendations arrive in Phase 1."
+    "missingTables": "Missing optional tables: {tables} — related modules fall back and report confidence LOW.",
+    "nextPhase": "Pit Wall Home + recommendations will arrive in Phase 1."
   },
   "library": {
     "title": "Save library (this device)",
-    "subtitle": "Parsed models are stored in IndexedDB — the raw .sav is never stored.",
+    "subtitle": "Parsed models live in IndexedDB — the raw .sav is never stored.",
     "empty": "No saves stored in this browser yet.",
     "open": "Open",
     "delete": "Delete",
-    "savedOn": "Saved at",
+    "savedOn": "Saved",
     "confirmDelete": "Delete this save from the browser?"
   },
   "privacy": {
     "localOnly": "Generated locally — no data leaves your device.",
-    "readonly": "Read-only — the app never writes to or modifies your save file.",
-    "detail": "All parsing runs in a Web Worker inside your browser. No upload, no server, no tracking. Delete your data anytime from the Library."
+    "readonly": "Read-only .sav — the app never writes or edits save files.",
+    "detail": "All parsing runs in a Web Worker inside your browser. No upload, no server, no tracking. Delete your data any time from the Library."
   },
   "errors": {
-    "title": "Cannot read this save",
+    "title": "Cannot read the save",
     "retry": "Try another file",
-    "NOT_A_GVAS_SAVE": "This is not an Unreal/GVAS save — pick the correct F1 Manager .sav file.",
-    "UNSUPPORTED_SAVE_FORMAT": "Save version not supported. Supported: F1 Manager 23 and 24 (volta23/volta24 builds).",
-    "MALFORMED_GVAS": "The save looks truncated or corrupted. Re-save from the game or try another copy.",
-    "NOT_A_SQLITE_DB": "The embedded database inside the save is invalid — the save may have been written mid-way.",
-    "DB_INFLATE_FAILED": "Could not decompress the embedded database — the file may be corrupted.",
-    "MISSING_CORE_TABLES": "Save is missing mandatory tables: {tables}. This may be an unsupported game mode or stage.",
-    "DB_OPEN_FAILED": "Could not open the SQLite database inside the save. Try again or report the game build.",
-    "NORMALIZE_FAILED": "Parsed rows failed normalization — unknown schema. Please report with the game build.",
+    "NOT_A_GVAS_SAVE": "This is not an Unreal/GVAS save — pick a real F1 Manager .sav file.",
+    "UNSUPPORTED_SAVE_FORMAT": "Unsupported save version. F1 Manager 23 and 24 (volta23/volta24 builds) are supported.",
+    "MALFORMED_GVAS": "The save looks truncated or corrupted. Re-export from the game or try another copy.",
+    "NOT_A_SQLITE_DB": "The embedded database is invalid — the save may have been written incompletely.",
+    "DB_INFLATE_FAILED": "Could not inflate the database inside the save — the file may be damaged.",
+    "MISSING_CORE_TABLES": "Save is missing required tables: {tables}. This may be an unsupported mode/stage.",
+    "DB_OPEN_FAILED": "Could not open the SQLite database. Try again, or report the game build.",
+    "NORMALIZE_FAILED": "Parsed data could not be normalized — unknown schema. Report with the game build.",
     "FILE_TOO_LARGE": "File too large (500 MB limit).",
     "BAD_EXTENSION": "Only .sav files are accepted.",
     "WORKER_ERROR": "System error while parsing (worker). Reload the page and try again.",
-    "FILE_READ_ERROR": "Could not read the file from disk. Pick the file again.",
-    "PARSE_FAILED": "Unknown parse failure. Details: {message}"
+    "FILE_READ_ERROR": "Could not read the file from disk. Try selecting it again.",
+    "PARSE_FAILED": "Unknown parsing error. Details: {message}"
   },
   "footer": {
     "note": "F1 Pit Wall — a save analysis tool that runs entirely on your machine. Not affiliated with Frontier Developments or F1.",
-    "phase": "Phase 1 · Pit Wall MVP"
+    "phase": "Phase 2 · Factory & Season"
   },
   "locale": {
     "vi": "Tiếng Việt",
@@ -93,31 +93,47 @@
   },
   "confidence": {
     "HIGH": "HIGH confidence — measured directly from the save",
-    "MEDIUM": "MEDIUM confidence — derived from historical data in the save",
-    "LOW": "LOW confidence — model constants used because the save lacks data",
+    "MEDIUM": "MEDIUM confidence — derived from historical data inside the save",
+    "LOW": "LOW confidence — model constant used because the save lacks data",
     "semantics": "Every number has its source in the evidence section."
   },
   "recommendation": {
-    "evidence": "View evidence",
+    "evidence": "Show evidence",
     "evidenceList": "Evidence",
-    "assumptions": "Assumptions"
+    "assumptions": "Assumptions",
+    "feedbackUp": "Useful",
+    "feedbackDown": "Not useful",
+    "feedbackSaved": "Saved locally"
+  },
+  "unavailable": {
+    "label": "Missing data — module running degraded"
   },
   "wall": {
     "nav": {
       "label": "Pit Wall navigation",
       "home": "Pit Wall",
       "tyres": "Tyre Lab",
-      "race": "Race Weekend"
+      "race": "Race Weekend",
+      "cars": "Car Lab",
+      "drivers": "Drivers",
+      "season": "Season",
+      "strategy": "Strategy",
+      "research": "Research"
     },
+    "modeA": "RACE WEEKEND",
+    "modeB": "FACTORY / SEASON",
     "kpi": {
       "label": "KPI",
-      "standings": "Team standing",
+      "standings": "Team standings",
       "season": "Season progress",
-      "tyreRec": "Tyre recommendation"
+      "tyreRec": "Tyre recommendation",
+      "carRank": "Car rank",
+      "carByDesigns": "by design points",
+      "carByPace": "by pace"
     },
     "nextRace": {
       "label": "Next race",
-      "rain": "Rain forecast",
+      "rain": "Rain expected",
       "openRace": "Open Race Weekend",
       "openTyres": "Open Tyre Lab",
       "noPlan": "No tyre plan could be built for this race yet."
@@ -128,7 +144,7 @@
       "slower": "slower",
       "faster": "faster",
       "rank": "Pace rank {rank}/{total}",
-      "noData": "Not enough pace data — load a save after the next race."
+      "noData": "Not enough pace data yet — reload your save after the next race."
     },
     "todo": {
       "label": "What to do next",
@@ -136,8 +152,10 @@
       "driverLead": "Your driver: {name} — P{pos}, {points} pts"
     },
     "alerts": {
-      "noRaces": "No completed races in this save — race recommendations stay empty until the first race is done.",
-      "missingTables": "Missing tables: {tables} — related modules use fallbacks and state confidence LOW."
+      "noRaces": "No completed races — race recommendations stay empty until the first race.",
+      "missingTables": "Missing tables: {tables} — related modules fall back with confidence LOW.",
+      "partRisk": "Part {part} at high failure risk — inspect/replace before the next race.",
+      "contractExpiry": "{name}'s contract expires in {days} days — open renewal talks."
     }
   },
   "tyres": {
@@ -145,14 +163,14 @@
     "laps": "laps",
     "pitCost": "/pit",
     "noRace": "No race to analyse.",
-    "noPlan": "No valid tyre plan for this race.",
+    "noPlan": "Could not build a valid tyre plan for this race.",
     "hero": "Recommended plan",
     "heroPlan": "{plan} — {stops} stop(s)",
     "expectedStops": "Expected field stops: ~{stops} (source: {source})",
     "alternatives": "Alternatives",
     "fastest": "Fastest",
-    "lives": "Compound life",
-    "wet": "Rain likely ({rain}) — Inter/Wet plan appears once this weekend's allocation data exists.",
+    "lives": "Compound lives",
+    "wet": "Rain possible ({rain}) — Inter/Wet plans appear once this weekend's allocation data exists.",
     "provenance": "Data sources & assumptions",
     "source": {
       "allocation": "allocation",
@@ -163,20 +181,152 @@
       "baseline": "baseline"
     }
   },
+  "whatif": {
+    "title": "What-if",
+    "pitShift": "{shift, plural, =0 {original plan} other {{shift} lap(s)}}",
+    "baseline": "Original plan — no shift",
+    "later": "Pitting {laps} lap(s) later than the original plan",
+    "earlier": "Pitting {laps} lap(s) earlier than the original plan",
+    "rain": "Simulate rain",
+    "plan": "Shifted plan:",
+    "infeasible": "Infeasible",
+    "clamped": "Hit a tyre-life or minimum-stint limit — the plan was clamped per game rules.",
+    "wetPlan": "Wet plan (from allocation):",
+    "noWetData": "No wet-tyre (I/W) allocation in the save — no wet plan can be built, no fabricated timings."
+  },
   "race": {
     "laps": "laps",
     "completed": "Completed",
     "upcoming": "Upcoming",
     "rain": "Rain",
     "dry": "Dry",
-    "lastResult": "Your team: P{pos} ({points} pts){dnf}",
+    "lastResult": "Your team's result: P{pos} ({points} pts){dnf}",
     "plan": "Recommended tyre plan",
     "pace": "Pace vs rival",
     "paceValue": "{gap}/lap {dir} than {rival}",
     "paceSlower": "slower",
     "paceFaster": "faster",
-    "alreadyDone": "This race is completed — the plan below is reference only.",
+    "alreadyDone": "This race is completed — the plan below is for reference.",
     "recs": "Recommendations",
-    "noRace": "No race to show."
+    "noRace": "No race to display.",
+    "tabOverview": "Overview",
+    "tabsLabel": "Race Weekend tabs"
+  },
+  "sim": {
+    "tab": "Sim",
+    "title": "Quali & Race Sim",
+    "quali": "Quali sim — predicted grid",
+    "race": "Race sim — projected finishing order",
+    "samples": "{count} samples",
+    "src": {
+      "quali": "quali",
+      "grid": "grid",
+      "practice": "practice",
+      "none": "—"
+    },
+    "paceDeltaHint": "Median fastest-lap delta vs the session best",
+    "assumptions": "Assumptions & data sources",
+    "noData": "Not enough data to run the sim for this race."
+  },
+  "drivers": {
+    "title": "Drivers — form, duel, tyre preservation",
+    "cards": "Driver cards",
+    "form": "Form",
+    "qualiMed": "Quali median",
+    "raceMed": "Race median",
+    "stint": "Laps/stint",
+    "stintHint": "Median laps per stint — tyre preservation proxy from pit history",
+    "dnfRate": "DNF",
+    "laps": "laps",
+    "duelTitle": "Teammate duel (head-to-head)",
+    "pickA": "Pick driver A",
+    "pickB": "Pick driver B",
+    "h2h": "H2H",
+    "h2hQuali": "Quali wins",
+    "h2hRace": "Race wins",
+    "points": "Points",
+    "duelNoData": "No race yet where both drivers finished for an H2H comparison.",
+    "noData": "No drivers found in the save.",
+    "noDataHint": "Staff_BasicData + Staff_Contracts must exist in the career save."
+  },
+  "season": {
+    "title": "Season — calendar, standings, race data",
+    "seasonNo": "Season {season}",
+    "calendar": "Race calendar",
+    "completed": "Done",
+    "upcoming": "Upcoming",
+    "sprint": "Sprint",
+    "rain": "Rain",
+    "yes": "Yes",
+    "no": "No",
+    "standingsDrivers": "Driver standings",
+    "standingsTeams": "Team standings",
+    "raceData": "Race data",
+    "exportCsv": "Export CSV",
+    "colTrack": "Track",
+    "colDay": "Day",
+    "colState": "State",
+    "colSprint": "Sprint",
+    "colRain": "Rain",
+    "colTemp": "Temp",
+    "colLaps": "Laps",
+    "colWinner": "Winner"
+  },
+  "cars": {
+    "title": "Car Lab — car, durability, dev queue",
+    "league": "Car league",
+    "leagueByDesigns": "by design points",
+    "leagueByPace": "pace fallback",
+    "pts": "pts",
+    "durability": "Durability — condition & failure risk",
+    "devQueue": "Dev queue — ranked by points-per-budget",
+    "devQueueHint": "Efficiency in points/1M credits, not absolute points",
+    "ppm": "pts/1M",
+    "noCost": "cost column missing",
+    "partCount": "{count} part(s)",
+    "supplier": "supplier part — bank resets each season",
+    "noPartsData": "Parts_* has no data in this save",
+    "noPartsDataHint": "Car Lab runs degraded: league via pace fallback; load the save during a race weekend or introspect to enable the part grid."
+  },
+  "strategy": {
+    "title": "Strategy — finance & personnel",
+    "finance": "Finance snapshot",
+    "balance": "Balance",
+    "budget": "Budget",
+    "totalSpend": "Total spend",
+    "costPerPoint": "Cost/point",
+    "personnel": "Personnel & contracts",
+    "roleDriver": "Driver",
+    "roleStaff": "Staff",
+    "daysLeft": "{days} days",
+    "expired": "Expired",
+    "morale": "Morale",
+    "contractFallback": "contract columns unmapped",
+    "patienceIntel": "Free-agent intel (ContractPatience)",
+    "suitability": "Suitability",
+    "opinion": "Opinion",
+    "threshold": "Threshold",
+    "patienceHint": "Lower threshold (0–1) = easier to sign — formula per docs/03 §5.7.",
+    "noFinance": "Finance_* has no data in this save",
+    "noFinanceHint": "The snapshot enables automatically once introspection of a real save confirms Balance/Transactions columns.",
+    "noContracts": "Staff_Contracts unmapped",
+    "noContractsHint": "Contracts are empty — race data (form/duel) on the Drivers tab still works fully."
+  },
+  "research": {
+    "title": "Research — regulations & expertise banking",
+    "proposals": "Regulation proposals",
+    "voteAssumption": "raw tally — assumes vote=1 is YES (unverified)",
+    "proposalUnnamed": "Unnamed proposal",
+    "yourVote": "Your team: {vote}",
+    "yes": "YES",
+    "no": "NO",
+    "changes": "Changes",
+    "noProposals": "No regulation proposals in the save",
+    "noProposalsHint": "Research enables itself when the game opens a vote.",
+    "expertise": "Expertise banking for next season",
+    "expertiseHint": "Σ NextSeasonExpertise — decides next season's starting point",
+    "nextSeason": "Next season:",
+    "noExpertise": "Parts_TeamExpertise unmapped",
+    "noExpertiseHint": "The banking ranking enables once NextSeasonExpertise is readable from the save."
   }
 }

@@ -1,20 +1,23 @@
 'use client';
 
 /**
- * Race Weekend view (minimal v1) — docs/04 §7.3.2: header (track, laps,
- * weather), pit window + hero plan, pace snapshot vs rival, last result
- * summary. Sim tabs (quali/race sim) are Phase 2.
+ * Race Weekend view — Phase 2 (docs/04 §7.3.2): tabs Overview | Sim.
+ * Overview: header (track, laps, weather), pit window + hero plan, pace
+ * snapshot, last result. Sim tab: quali sim (Q1/Q2/Q3 band) + race sim
+ * (docs/03 §5.2 — logic ported to sim.engine, UI rebuilt).
  */
 
 import { useTranslations } from 'next-intl';
-import { Flag, CloudRain, Thermometer, CircleAlert } from 'lucide-react';
+import { useState } from 'react';
+import { Flag, CloudRain, Thermometer, CircleAlert, Gauge, Timer } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
-import { useTyreLab, usePaceBoard } from '@/lib/engine-hooks';
+import { useTyreLab, usePaceBoard, useSim } from '@/lib/engine-hooks';
 import { StintTimeline } from './StintTimeline';
 import { PitWindowBar } from './PitWindowBar';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { CompoundBadge, type CompoundKey } from './CompoundBadge';
 import { RecommendationCard } from './RecommendationCard';
+import { cn } from '@/lib/utils';
 
 export function RaceWeekendView({
   model,
@@ -24,6 +27,8 @@ export function RaceWeekendView({
   raceId: number | null;
 }) {
   const t = useTranslations('race');
+  const tSim = useTranslations('sim');
+  const [tab, setTab] = useState<'overview' | 'sim'>('overview');
   const seasonRaces = model.races.filter((r) => r.seasonId === model.meta.seasonId);
   const race =
     seasonRaces.find((r) => r.raceId === raceId) ??
@@ -33,6 +38,7 @@ export function RaceWeekendView({
 
   const tyre = useTyreLab(race?.raceId ?? null);
   const pace = usePaceBoard();
+  const sim = useSim(race?.raceId ?? null);
 
   if (!race) {
     return (
@@ -48,6 +54,11 @@ export function RaceWeekendView({
     : null;
   const fastest = tyre?.data.best ?? null;
   const firstStintCompound = fastest?.stints[0]?.compound as CompoundKey | undefined;
+
+  const tabs: { key: 'overview' | 'sim'; label: string; icon: React.ReactNode }[] = [
+    { key: 'overview', label: t('tabOverview'), icon: <Flag className="h-3.5 w-3.5" /> },
+    { key: 'sim', label: tSim('tab'), icon: <Timer className="h-3.5 w-3.5" /> },
+  ];
 
   return (
     <div className="space-y-5" data-testid="race-weekend">
@@ -82,60 +93,185 @@ export function RaceWeekendView({
         ) : null}
       </header>
 
-      {fastest ? (
-        <section aria-label={t('plan')} className="rounded-lg border border-line bg-panel p-4">
-          <header className="mb-3 flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-semibold text-ink">{t('plan')}</h3>
-            <span className="font-mono text-xs text-teal">
-              {fastest.stints.map((s) => `${s.compound}(${s.laps})`).join(' → ')}
-            </span>
-            {tyre ? <span className="ml-auto"><ConfidenceBadge confidence={tyre.confidence} /></span> : null}
-          </header>
-          <StintTimeline stints={fastest.stints} totalLaps={tyre?.data.laps ?? race.laps ?? 0} pitLaps={fastest.pitLaps} />
-          {fastest.pitLaps.length > 0 && firstStintCompound ? (
-            <div className="mt-4">
-              <PitWindowBar
-                optimalLap={fastest.pitLaps[0]}
-                windowLo={Math.max(2, fastest.pitLaps[0] - 2)}
-                windowHi={fastest.pitLaps[0] + 2}
-                totalLaps={tyre?.data.laps ?? race.laps ?? 0}
-                lifeCap={firstStintCompound ? tyre?.data.lives[firstStintCompound] : undefined}
-              />
+      {/* tabs */}
+      <nav aria-label={t('tabsLabel')} className="flex gap-1.5">
+        {tabs.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => setTab(item.key)}
+            aria-pressed={tab === item.key}
+            className={cn(
+              'inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring',
+              tab === item.key
+                ? 'border-teal/50 bg-teal/10 text-teal'
+                : 'border-line bg-surface text-ink-soft hover:border-line-strong hover:text-ink',
+            )}
+          >
+            {item.icon}
+            {item.label}
+          </button>
+        ))}
+      </nav>
+
+      {tab === 'overview' ? (
+        <>
+          {fastest ? (
+            <section aria-label={t('plan')} className="rounded-lg border border-line bg-panel p-4">
+              <header className="mb-3 flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-semibold text-ink">{t('plan')}</h3>
+                <span className="font-mono text-xs text-teal">
+                  {fastest.stints.map((s) => `${s.compound}(${s.laps})`).join(' → ')}
+                </span>
+                {tyre ? <span className="ml-auto"><ConfidenceBadge confidence={tyre.confidence} /></span> : null}
+              </header>
+              <StintTimeline stints={fastest.stints} totalLaps={tyre?.data.laps ?? race.laps ?? 0} pitLaps={fastest.pitLaps} />
+              {fastest.pitLaps.length > 0 && firstStintCompound ? (
+                <div className="mt-4">
+                  <PitWindowBar
+                    optimalLap={fastest.pitLaps[0]}
+                    windowLo={Math.max(2, fastest.pitLaps[0] - 2)}
+                    windowHi={fastest.pitLaps[0] + 2}
+                    totalLaps={tyre?.data.laps ?? race.laps ?? 0}
+                    lifeCap={firstStintCompound ? tyre?.data.lives[firstStintCompound] : undefined}
+                  />
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          {pace && pace.data.playerVsRivalS != null ? (
+            <section aria-label={t('pace')} className="rounded-lg border border-line bg-panel p-4">
+              <header className="mb-2 flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-ink">{t('pace')}</h3>
+                <ConfidenceBadge confidence={pace.confidence} />
+              </header>
+              <p className="text-xs text-ink-soft">
+                {t('paceValue', {
+                  gap: `${Math.abs(pace.data.playerVsRivalS).toFixed(3)}s`,
+                  dir: pace.data.playerVsRivalS > 0 ? t('paceSlower') : t('paceFaster'),
+                  rival: pace.data.rivals[0]?.teamName ?? '—',
+                })}
+              </p>
+            </section>
+          ) : null}
+
+          {tyre?.warnings.includes('RACE_ALREADY_COMPLETED') ? (
+            <div className="flex items-start gap-2 rounded-lg border border-amber/40 bg-amber/10 px-3 py-2">
+              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber" aria-hidden="true" />
+              <p className="text-xs text-amber">{t('alreadyDone')}</p>
             </div>
           ) : null}
-        </section>
-      ) : null}
 
-      {pace && pace.data.playerVsRivalS != null ? (
-        <section aria-label={t('pace')} className="rounded-lg border border-line bg-panel p-4">
-          <header className="mb-2 flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-ink">{t('pace')}</h3>
-            <ConfidenceBadge confidence={pace.confidence} />
+          {tyre && tyre.recommendations.length > 0 ? (
+            <section aria-label={t('recs')} className="space-y-3">
+              {tyre.recommendations.map((rec) => (
+                <RecommendationCard key={rec.id} recommendation={rec} />
+              ))}
+            </section>
+          ) : null}
+        </>
+      ) : (
+        /* ── Sim tab (docs/04 §7.3.2) ── */
+        <div className="space-y-4" data-testid="sim-panel">
+          <header className="flex flex-wrap items-center gap-2">
+            <Gauge className="h-4 w-4 text-teal" aria-hidden="true" />
+            <h3 className="text-sm font-semibold text-ink">{tSim('title')}</h3>
+            <span className="font-mono text-[11px] text-ink-faint">
+              {sim?.data.laps ?? race.laps ?? '—'} {t('laps')}
+            </span>
+            {sim ? <span className="ml-auto"><ConfidenceBadge confidence={sim.confidence} /></span> : null}
           </header>
-          <p className="text-xs text-ink-soft">
-            {t('paceValue', {
-              gap: `${Math.abs(pace.data.playerVsRivalS).toFixed(3)}s`,
-              dir: pace.data.playerVsRivalS > 0 ? t('paceSlower') : t('paceFaster'),
-              rival: pace.data.rivals[0]?.teamName ?? '—',
-            })}
-          </p>
-        </section>
-      ) : null}
 
-      {tyre?.warnings.includes('RACE_ALREADY_COMPLETED') ? (
-        <div className="flex items-start gap-2 rounded-lg border border-amber/40 bg-amber/10 px-3 py-2">
-          <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber" aria-hidden="true" />
-          <p className="text-xs text-amber">{t('alreadyDone')}</p>
+          {sim ? (
+            <>
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                {/* quali sim */}
+                <section aria-label={tSim('quali')} className="rounded-lg border border-line bg-panel p-4">
+                  <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">
+                    {tSim('quali')}
+                  </h4>
+                  <ul className="max-h-96 space-y-1 overflow-y-auto pr-1" data-testid="sim-quali">
+                    {sim.data.quali.map((q) => (
+                      <li
+                        key={q.driverId}
+                        className={cn(
+                          'flex items-center gap-2 rounded px-2 py-1 text-xs',
+                          q.isPlayer ? 'bg-amber/10' : '',
+                        )}
+                      >
+                        <span className="w-6 font-mono text-ink-faint">P{q.predictedGridPos}</span>
+                        <span className={cn('truncate', q.isPlayer ? 'font-medium text-amber' : 'text-ink')}>
+                          {q.driverName}
+                        </span>
+                        <span className="ml-auto flex items-center gap-1.5 font-mono text-[10px] text-ink-faint">
+                          <span className="rounded bg-raised px-1 py-0.5">{q.band}</span>
+                          <span title={tSim('samples', { count: q.samples })}>{tSim(`src.${q.source}`)}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+
+                {/* race sim */}
+                <section aria-label={tSim('race')} className="rounded-lg border border-line bg-panel p-4">
+                  <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">
+                    {tSim('race')}
+                  </h4>
+                  <ul className="max-h-96 space-y-1 overflow-y-auto pr-1" data-testid="sim-race">
+                    {sim.data.race.map((r) => (
+                      <li
+                        key={r.driverId}
+                        className={cn(
+                          'flex items-center gap-2 rounded px-2 py-1 text-xs',
+                          r.isPlayer ? 'bg-amber/10' : '',
+                        )}
+                      >
+                        <span className="w-6 font-mono text-ink-faint">P{r.projectedFinish}</span>
+                        <span className={cn('truncate', r.isPlayer ? 'font-medium text-amber' : 'text-ink')}>
+                          {r.driverName}
+                        </span>
+                        <span className="ml-auto flex items-center gap-2 font-mono text-[10px] text-ink-faint">
+                          {r.paceDeltaS != null ? (
+                            <span title={tSim('paceDeltaHint')}>
+                              +{r.paceDeltaS.toFixed(3)}s
+                            </span>
+                          ) : null}
+                          {r.expectedStops != null ? <span>~{r.expectedStops} pit</span> : null}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              </div>
+
+              {sim.recommendations.map((rec) => (
+                <RecommendationCard key={rec.id} recommendation={rec} />
+              ))}
+
+              <details className="rounded-lg border border-line bg-surface p-4">
+                <summary className="cursor-pointer select-none text-xs font-medium text-ink-soft">
+                  {tSim('assumptions')}
+                </summary>
+                <ul className="mt-2 space-y-1">
+                  {sim.assumptions.map((a, i) => (
+                    <li key={i} className="text-xs text-ink-faint">— {a.text}</li>
+                  ))}
+                  {sim.evidence.map((e, i) => (
+                    <li key={`e${i}`} className="text-xs text-ink-soft">
+                      <span className="font-mono text-[10px] text-ink-faint">[{e.source}]</span> {e.label}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            </>
+          ) : (
+            <p className="rounded-lg border border-line bg-panel p-6 text-sm text-ink-faint">
+              {tSim('noData')}
+            </p>
+          )}
         </div>
-      ) : null}
-
-      {tyre && tyre.recommendations.length > 0 ? (
-        <section aria-label={t('recs')} className="space-y-3">
-          {tyre.recommendations.map((rec) => (
-            <RecommendationCard key={rec.id} recommendation={rec} />
-          ))}
-        </section>
-      ) : null}
+      )}
     </div>
   );
 }
