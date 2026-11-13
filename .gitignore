@@ -1,2 +1,19 @@
-skills/
+# dependencies
 node_modules/
+
+# sandbox / AI-assistant skills
+skills/
+
+# build output — never in git
+.next/
+out/
+
+# dev / server logs
+dev.log
+server.log
+
+# game save files — local-only by design (LOCAL-FIRST rule)
+*.sav
+
+# browser automation artifacts
+workspace/
