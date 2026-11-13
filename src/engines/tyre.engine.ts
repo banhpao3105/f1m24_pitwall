@@ -335,6 +335,178 @@ export function evaluateStrategy(
   return best;
 }
 
+/* ── what-if (Phase 2, docs/03 §5.3: slider pit sớm/muộn + toggle mưa) ──── */
+
+export interface WhatIfPitShiftResult {
+  baseline: StrategyResult;
+  shifted: StrategyResult | null;
+  /** shifted.timeS − baseline.timeS (positive = slower). */
+  deltaS: number | null;
+  /** True when a boundary had to be clamped to stint limits / tyre life. */
+  clamped: boolean;
+}
+
+/**
+ * Shifts every pit lap of a plan by `shift` laps, clamps each stint to
+ * [MIN_STINT_LAPS, tyre life] (the game kills a set at its life estimate),
+ * lets the final stint absorb the remainder, and recomputes deg + time
+ * with the same deltas/pit cost. Returns null when no feasible split
+ * exists for the requested shift.
+ */
+export function whatIfPitShift(
+  best: StrategyResult,
+  laps: number,
+  maxStint: Record<Compound, number>,
+  deltas: Record<Compound, number>,
+  pitCostS: number,
+  shift: number,
+): WhatIfPitShiftResult {
+  const n = best.stints.length;
+  if (n === 0 || shift === 0) {
+    return { baseline: best, shifted: best, deltaS: 0, clamped: false };
+  }
+
+  /* rebuild boundaries */
+  const boundaries = best.pitLaps.map((lap) => lap + shift);
+  let clamped = false;
+  let lo = MIN_STINT_LAPS;
+  for (let i = 0; i < boundaries.length; i++) {
+    const hi = laps - MIN_STINT_LAPS * (boundaries.length - 1 - i);
+    const lifeCap =
+      i === 0
+        ? laps
+        : Math.min(laps, best.stints.slice(0, i + 1).reduce((s, st) => s + maxStint[st.compound], 0));
+    const min = Math.max(lo + 1, MIN_STINT_LAPS);
+    const max = Math.min(hi, lifeCap);
+    if (max < min) return { baseline: best, shifted: null, deltaS: null, clamped: true };
+    if (boundaries[i] < min) {
+      boundaries[i] = min;
+      clamped = true;
+    } else if (boundaries[i] > max) {
+      boundaries[i] = max;
+      clamped = true;
+    }
+    lo = boundaries[i];
+  }
+
+  /* stints from boundaries; hard life ceiling per compound */
+  const stints: PlannedStint[] = [];
+  let from = 0;
+  for (let i = 0; i < n; i++) {
+    const compound = best.stints[i].compound;
+    const life = maxStint[compound];
+    let stintLaps =
+      (i < n - 1 ? boundaries[i] : laps) - from;
+    if (stintLaps > life) {
+      stintLaps = life;
+      clamped = true;
+    }
+    if (stintLaps < MIN_STINT_LAPS) {
+      return { baseline: best, shifted: null, deltaS: null, clamped: true };
+    }
+    stints.push({
+      compound,
+      laps: stintLaps,
+      fromLap: from + 1,
+      toLap: from + stintLaps,
+      deltaS: deltas[compound],
+      degS: stintDegPenalty(compound, stintLaps, life),
+    });
+    from += stintLaps;
+  }
+  if (from !== laps) {
+    // life clamp shortened the plan — extend the last stint if legal
+    const last = stints[stints.length - 1];
+    const life = maxStint[last.compound];
+    const extra = laps - from;
+    if (extra > 0) {
+      if (last.laps + extra > life) {
+        return { baseline: best, shifted: null, deltaS: null, clamped: true };
+      }
+      last.laps += extra;
+      last.toLap = laps;
+      last.degS = stintDegPenalty(last.compound, last.laps, life);
+      clamped = true;
+    }
+  }
+
+  const stops = n - 1;
+  const timeS =
+    stints.reduce((s, st) => s + st.deltaS * st.laps + st.degS, 0) + stops * pitCostS;
+  const shifted: StrategyResult = {
+    order: best.order,
+    stops,
+    timeS: Math.round(timeS * 10) / 10,
+    stints,
+    pitLaps: stints.slice(0, -1).map((st) => st.toLap),
+    vsBestS: null,
+  };
+  return {
+    baseline: best,
+    shifted,
+    deltaS: Math.round((shifted.timeS - best.timeS) * 10) / 10,
+    clamped,
+  };
+}
+
+export interface WetPlanStint {
+  compound: 'I' | 'W';
+  laps: number;
+}
+
+export interface WetPlanResult {
+  stints: WetPlanStint[];
+  pitLaps: number[];
+  lives: { I: number | null; W: number | null };
+  source: 'allocation' | 'none';
+  note?: string;
+}
+
+/**
+ * Wet plan built ONLY from fresh-set allocation lives (no invented wet
+ * constants): start Intermediate, switch to Wet when the track floods if
+ * both lives are known. Returns null when the save has no wet allocation —
+ * the UI then shows the explicit "thiếu dữ liệu" state.
+ */
+export function buildWetPlan(model: SaveModel, laps: number): WetPlanResult | null {
+  const freshLife = (type: number): number | null => {
+    const values = model.tyres
+      .filter((t) => t.weekendTyreType === type && t.frontLeftWear >= 0.99 && t.estimatedLapLifeRemaining != null)
+      .map((t) => t.estimatedLapLifeRemaining as number);
+    const m = median(values);
+    return m != null ? Math.max(MIN_STINT_LAPS, Math.round(m)) : null;
+  };
+  const iLife = freshLife(1);
+  const wLife = freshLife(0);
+  if (iLife == null && wLife == null) {
+    return null;
+  }
+  const stints: WetPlanStint[] = [];
+  let remaining = laps;
+  if (iLife != null && (wLife == null || iLife < laps)) {
+    const iLaps = Math.min(iLife, laps);
+    stints.push({ compound: 'I', laps: iLaps });
+    remaining = laps - iLaps;
+  }
+  if (remaining > 0) {
+    if (wLife != null) {
+      stints.push({ compound: 'W', laps: remaining });
+    } else {
+      stints.push({ compound: 'I', laps: remaining });
+    }
+  }
+  return {
+    stints,
+    pitLaps: stints.length > 1 ? [stints[0].laps] : [],
+    lives: { I: iLife, W: wLife },
+    source: iLife != null || wLife != null ? 'allocation' : 'none',
+    note:
+      iLife != null && wLife == null
+        ? 'Không có wet-set life trong allocation — phần cuối giả định chạy tiếp Inter, theo dõi điều kiện đường.'
+        : undefined,
+  };
+}
+
 /* ── the engine ──────────────────────────────────────────────────────────── */
 
 export interface TyreLab {
