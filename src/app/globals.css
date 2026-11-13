@@ -232,3 +232,21 @@
     break-after: avoid;
   }
 }
+
+/* ── Live pulse — Phase 3 motion polish (docs/06 §6.4) ──────────────────
+   Only for genuinely live states (race in progress). The global
+   prefers-reduced-motion kill-switch above flattens it automatically. */
+@keyframes pitwall-live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.8);
+  }
+}
+.live-pulse-dot {
+  animation: pitwall-live-pulse 1.6s ease-in-out infinite;
+}

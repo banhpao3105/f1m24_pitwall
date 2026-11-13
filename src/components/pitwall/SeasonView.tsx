@@ -91,7 +91,8 @@ export function SeasonView({ model }: { model: SaveModel }) {
               key={r.raceId}
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.15, delay: Math.min(i * 0.02, 0.2) }}
+              // docs/06 §6.4 stagger standard: 0.04 s, first load only.
+              transition={{ duration: 0.15, delay: Math.min(i * 0.04, 0.2) }}
               className={cn(
                 'flex flex-col gap-1 rounded border px-2.5 py-2',
                 r.state === 2 ? 'border-line bg-surface' : 'border-teal/40 bg-teal/5',

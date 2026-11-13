@@ -16,6 +16,7 @@ import { RecommendationCard } from './RecommendationCard';
 import { StintTimeline } from './StintTimeline';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { AlertBanner } from './AlertBanner';
+import { NumberTween } from './NumberTween';
 
 export function WallHomeView({ model }: { model: SaveModel }) {
   const t = useTranslations('wall');
@@ -45,12 +46,14 @@ export function WallHomeView({ model }: { model: SaveModel }) {
   const rivalRow = pace?.data.rivals.slice().sort((a, b) => Math.abs(a.paceDeltaS - (paceRow?.paceDeltaS ?? 0)) - Math.abs(b.paceDeltaS - (paceRow?.paceDeltaS ?? 0)))[0] ?? null;
   const carLeagueRow = carLab?.data.league.rows.find((r) => r.isPlayer) ?? null;
 
-  const kpis: { icon: React.ReactNode; label: string; value: string; sub?: string; tone?: 'good' | 'bad' | 'neutral' }[] = [
+  const kpis: { icon: React.ReactNode; label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: 'good' | 'bad' | 'neutral' }[] = [
     {
       icon: <Trophy className="h-3.5 w-3.5" />,
       label: t('kpi.standings'),
       value: playerTeamRow ? `P${playerTeamRow.position}` : '—',
-      sub: playerTeamRow ? `${playerTeamRow.points} pts` : undefined,
+      sub: playerTeamRow ? (
+        <NumberTween value={playerTeamRow.points} format={(n) => `${Math.round(n)} pts`} />
+      ) : undefined,
     },
     {
       icon: <Timer className="h-3.5 w-3.5" />,
@@ -69,7 +72,11 @@ export function WallHomeView({ model }: { model: SaveModel }) {
     {
       icon: <Car className="h-3.5 w-3.5" />,
       label: t('kpi.carRank'),
-      value: carLeagueRow?.rank != null ? `#${carLeagueRow.rank}` : '—',
+      value: carLeagueRow?.rank != null ? (
+        <NumberTween value={carLeagueRow.rank} format={(n) => `#${Math.round(n)}`} />
+      ) : (
+        '—'
+      ),
       sub: carLab?.data.league.source === 'designs' ? t('kpi.carByDesigns') : t('kpi.carByPace'),
     },
   ];
@@ -99,7 +106,7 @@ export function WallHomeView({ model }: { model: SaveModel }) {
               <span className="text-ink-faint" aria-hidden="true">{kpi.icon}</span>
               {kpi.label}
             </p>
-            <p className="mt-1 truncate font-mono text-lg font-bold text-ink" title={kpi.value}>
+            <p className="mt-1 truncate font-mono text-lg font-bold text-ink" title={typeof kpi.value === 'string' ? kpi.value : undefined}>
               {kpi.value}
             </p>
             {kpi.sub ? <p className="truncate text-[11px] text-ink-soft">{kpi.sub}</p> : null}
@@ -114,6 +121,15 @@ export function WallHomeView({ model }: { model: SaveModel }) {
             <section aria-label={t('nextRace.label')} className="rounded-lg border border-line bg-panel p-4">
               <header className="mb-3 flex items-center gap-2">
                 <h2 className="text-sm font-semibold text-ink">{t('nextRace.label')}</h2>
+                {nextRace.state === 1 ? (
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded bg-danger/10 px-1.5 py-0.5 font-mono text-[10px] uppercase text-danger"
+                    data-testid="live-badge"
+                  >
+                    <span className="live-pulse-dot h-1.5 w-1.5 rounded-full bg-danger" aria-hidden="true" />
+                    {t('nextRace.live')}
+                  </span>
+                ) : null}
                 <span className="font-mono text-xs text-teal">{nextRace.trackName}</span>
                 {nextRace.weather?.raceRain ? (
                   <span className="rounded bg-info/10 px-1.5 py-0.5 text-[10px] text-info">

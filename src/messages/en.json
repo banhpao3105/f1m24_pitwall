@@ -140,7 +140,8 @@
       "rain": "Rain expected",
       "openRace": "Open Race Weekend",
       "openTyres": "Open Tyre Lab",
-      "noPlan": "No tyre plan could be built for this race yet."
+      "noPlan": "No tyre plan could be built for this race yet.",
+      "live": "LIVE"
     },
     "pace": {
       "label": "Pace vs direct rival",

@@ -140,7 +140,8 @@
       "rain": "Có mưa dự kiến",
       "openRace": "Mở Race Weekend",
       "openTyres": "Mở Tyre Lab",
-      "noPlan": "Chưa xây được kế hoạch lốp cho chặng này."
+      "noPlan": "Chưa xây được kế hoạch lốp cho chặng này.",
+      "live": "ĐANG ĐUA"
     },
     "pace": {
       "label": "Pace vs đối thủ trực tiếp",
