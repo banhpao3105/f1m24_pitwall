@@ -20,6 +20,7 @@ import {
   CalendarDays,
   Briefcase,
   FlaskConical,
+  Newspaper,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Race } from '@/domain/types';
@@ -33,7 +34,8 @@ export type WallView =
   | 'drivers'
   | 'season'
   | 'strategy'
-  | 'research';
+  | 'research'
+  | 'gazette';
 
 export function useWallNav() {
   const router = useRouter();
@@ -57,7 +59,7 @@ interface NavItem {
   key: WallView;
   label: string;
   icon: React.ReactNode;
-  mode: 'A' | 'B';
+  mode: 'A' | 'B' | 'N';
 }
 
 export function WallNav({ races }: { races: Race[] }) {
@@ -78,6 +80,8 @@ export function WallNav({ races }: { races: Race[] }) {
     { key: 'season', label: t('nav.season'), icon: <CalendarDays className="h-3.5 w-3.5" />, mode: 'B' },
     { key: 'strategy', label: t('nav.strategy'), icon: <Briefcase className="h-3.5 w-3.5" />, mode: 'B' },
     { key: 'research', label: t('nav.research'), icon: <FlaskConical className="h-3.5 w-3.5" />, mode: 'B' },
+    // Narrative group (docs/04 §7.4): keep-alive storytelling, not decisions.
+    { key: 'gazette', label: t('nav.gazette'), icon: <Newspaper className="h-3.5 w-3.5" />, mode: 'N' },
   ];
 
   const button = (item: NavItem) => (
@@ -86,14 +90,16 @@ export function WallNav({ races }: { races: Race[] }) {
       type="button"
       onClick={() => setView(item.key, item.key === 'wall' ? undefined : activeRaceId ?? undefined)}
       aria-current={view === item.key ? 'page' : undefined}
-      title={item.mode === 'A' ? t('modeA') : t('modeB')}
+      title={modeTitle(item.mode)}
       className={cn(
         'inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors duration-150',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring',
         view === item.key
           ? item.mode === 'A'
             ? 'border-teal/50 bg-teal/10 text-teal'
-            : 'border-amber/50 bg-amber/10 text-amber'
+            : item.mode === 'B'
+              ? 'border-amber/50 bg-amber/10 text-amber'
+              : 'border-gold/50 bg-gold/10 text-gold'
           : 'border-line bg-surface text-ink-soft hover:border-line-strong hover:text-ink',
       )}
     >
@@ -101,6 +107,9 @@ export function WallNav({ races }: { races: Race[] }) {
       {item.label}
     </button>
   );
+
+  const modeTitle = (m: NavItem['mode']): string =>
+    m === 'A' ? t('modeA') : m === 'B' ? t('modeB') : t('modeN');
 
   return (
     <nav aria-label={t('nav.label')} className="flex flex-wrap items-center gap-1.5">
@@ -113,6 +122,11 @@ export function WallNav({ races }: { races: Race[] }) {
         {t('modeB')}
       </span>
       {items.filter((i) => i.mode === 'B').map(button)}
+      <span className="mx-1 hidden h-4 w-px bg-line sm:block" aria-hidden="true" />
+      <span className="mr-1 hidden rounded border border-gold/40 bg-gold/5 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide text-gold sm:inline-block">
+        {t('modeN')}
+      </span>
+      {items.filter((i) => i.mode === 'N').map(button)}
     </nav>
   );
 }

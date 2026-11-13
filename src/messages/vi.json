@@ -2,7 +2,7 @@
   "app": {
     "title": "F1 PIT WALL",
     "tagline": "Trợ lý chiến thuật cho F1 Manager — đọc save, gợi ý hành động.",
-    "phaseBadge": "PHASE 2 — FACTORY & SEASON",
+    "phaseBadge": "PHASE 3 — TẠP CHÍ & HOÀN THIỆN",
     "modeA": "RACE WEEKEND",
     "modeB": "FACTORY / SEASON"
   },
@@ -118,7 +118,8 @@
       "drivers": "Drivers",
       "season": "Season",
       "strategy": "Strategy",
-      "research": "Research"
+      "research": "Research",
+      "gazette": "Gazette"
     },
     "modeA": "RACE WEEKEND",
     "modeB": "FACTORY / SEASON",
@@ -156,7 +157,8 @@
       "missingTables": "Thiếu bảng: {tables} — các module liên quan dùng fallback và ghi confidence LOW.",
       "partRisk": "Part {part} nguy cơ hỏng cao — kiểm tra/thay trước chặng tới.",
       "contractExpiry": "Hợp đồng {name} sắp hết hạn ({days} ngày) — mở đàm phán gia hạn."
-    }
+    },
+    "modeN": "TẠP CHÍ"
   },
   "tyres": {
     "title": "Tyre Lab",
@@ -328,5 +330,189 @@
     "nextSeason": "Mùa sau:",
     "noExpertise": "Parts_TeamExpertise chưa map được",
     "noExpertiseHint": "Xếp hạng banking tự bật khi cột NextSeasonExpertise đọc được từ save."
+  },
+  "gazette": {
+    "nav": "Gazette",
+    "openInPitWall": "Xem Pit Wall cho chặng này",
+    "notCompleted": "Chặng này chưa hoàn thành — Gazette sẽ xuất bản ngay khi có kết quả trong save.",
+    "notFound": "Không tìm thấy chặng đua này trong save.",
+    "masthead": {
+      "name": "Tạp chí Đường Đua",
+      "tagline": "Tổng hợp tự động từ file save của bạn — không dữ liệu nào rời khỏi thiết bị.",
+      "vol": "Tập",
+      "no": "Số",
+      "season": "Mùa giải",
+      "round": "Chặng"
+    },
+    "dateline": {
+      "temp": "Ngày đua chính: {temp}°C",
+      "wet": "đường đua ướt",
+      "dry": "đường đua khô ráo",
+      "noWeather": "Save không ghi thời tiết cho chặng này"
+    },
+    "headline": {
+      "wireToWire": "{driver} DẪN ĐẦU TỪ ĐẦU ĐẾN CUỐI TẠI {track}",
+      "fromPos": "{driver} THẮNG TỪ VỊ TRÍ P{pos} TẠI {track}"
+    },
+    "subhead": {
+      "wireToWire": "{driver} biến pole thành chiến thắng từ đầu đến cuối cho {team} — {p2} ({p2Team}) bị chặn lại với khoảng cách {gap}",
+      "fromPos": "{driver} lội ngược dòng từ P{pos} để giành chiến thắng cho {team} — {p2} ({p2Team}) bị chặn lại với khoảng cách {gap}",
+      "solo": "{driver} giành chiến thắng cho {team}"
+    },
+    "colPos": "Hạng",
+    "colGrid": "Xuất phát",
+    "colDriver": "Tay đua",
+    "colTeam": "Đội",
+    "colGap": "Gap",
+    "colOv": "Vượt",
+    "colPts": "Điểm",
+    "dnf": "DNF",
+    "noDataCol": "—",
+    "awards": {
+      "title": "Giải thưởng của cuối tuần",
+      "winner": "Người về nhất",
+      "fastestLap": "Vòng đua nhanh nhất",
+      "flSuffix": "Vòng đua nhanh nhất: {time}",
+      "pit": "Pit stop nhanh nhất",
+      "comeback": "Pha lội ngược dòng của cuộc đua",
+      "comebackCaption": "{name}: P{from} → P{to}",
+      "dotdUnavailable": "Driver of the Day không có trong save F1M 24 (không có bảng dữ liệu tương ứng) — không ước lượng thay thế."
+    },
+    "highlights": {
+      "title": "Điểm nhấn của chặng đua",
+      "podium": "Bục vinh quang",
+      "fastestLap": "Vòng đua nhanh nhất",
+      "pitStop": "Pit stop nhanh nhất",
+      "chequered": "Lá cờ đích",
+      "comeback": "Pha lội ngược dòng"
+    },
+    "quotes": {
+      "winner": {
+        "dominant": [
+          "Chiếc xe hôm nay thật đáng kinh ngạc — chúng tôi đã làm đúng mọi thứ vào đúng thời điểm quan trọng.",
+          "Dẫn đầu từ đèn xuất phát đến lá cờ đích, không gặp biến động gì lớn. Đó là kiểu ngày Chủ nhật mà bạn luôn mong muốn.",
+          "Chúng tôi có đủ tốc độ để kiểm soát cuộc đua từ phía trước, và đội đã trao cho tôi một chiếc xe hoàn hảo cho điều đó."
+        ],
+        "close": [
+          "Thành thật mà nói, cuộc so găng khít hơn tôi mong muốn — nhưng chiến thắng vẫn là chiến thắng, và tôi nhận nó.",
+          "Hôm nay chúng tôi đã phải chiến đấu cho từng phần mười giây. Nỗ lực tuyệt vời từ mọi người trên pit wall.",
+          "Tôi nhìn thấy họ trong gương suốt cả cuộc đua — hồi hộp, nhưng chúng tôi đã trụ vững."
+        ],
+        "balanced": [
+          "Rất hài lòng với cách chúng tôi kiểm soát cuộc đua này. Đội đã cho tôi một chiến thuật tuyệt vời để triển khai.",
+          "Đó chính xác là kiểu ngày Chủ nhật mà chúng tôi cần. Cảm ơn tất cả mọi người trong garage vì nỗ lực này.",
+          "Sau vòng phân hạng chúng tôi đã biết mình có tốc độ — nhưng vẫn phải đưa xe về đích, và hôm nay chúng tôi đã làm được."
+        ]
+      },
+      "random": {
+        "dnf": [
+          "Không phải ngày mà chúng ta mong đợi. Chúng ta sẽ phân tích dữ liệu và trở lại mạnh mẽ hơn ở chặng kế tiếp.",
+          "Kết thúc buổi chiều theo cách đáng tiếc, nhưng đôi khi đua xe là vậy. Hướng tới chặng tiếp theo.",
+          "Tốc độ đã có trước khi cuộc đua kết thúc — đó là điều tích cực duy nhất mà tôi có thể rút ra hôm nay."
+        ],
+        "points": [
+          "Ngày tốt lành cho đội — chúng tôi đã tận dụng tối đa những gì có được, và những điểm số rất quan trọng.",
+          "Vui khi mang về một ít điểm. Chiếc xe chạy tốt ngay khi chúng tôi căn chỉnh xong bộ cân bằng.",
+          "Một cuộc đua sạch sẽ và tự tin từ phía chúng tôi. Bước nhỏ, nhưng chúng ta đang đi đúng hướng."
+        ],
+        "midfield": [
+          "Không phải kết quả mà chúng tôi mong đợi, nhưng tốc độ vẫn có những điểm sáng.",
+          "Hôm nay chúng tôi chỉ đứng nhầm phía trong cuộc chiến giành điểm. Chuyện đó cũng xảy ra.",
+          "Cuộc so găng khốc liệt ở giữa đoàn đua — cuối tuần này mọi người khít nhau đến từng phần mười."
+        ],
+        "backmarker": [
+          "Cuối tuần khó khăn với chúng tôi, nhưng chúng ta sẽ tiếp tục tìm hiểu tốc độ đã mất ở đâu.",
+          "Không có nhiều điều để nói — hôm nay chúng tôi đơn giản không đủ tốc độ để cạnh tranh.",
+          "Chúng ta sẽ tái nhóm và xem có thể cải thiện được gì trước chặng kế tiếp."
+        ]
+      },
+      "quoteFrom": "— {name}"
+    },
+    "transfers": {
+      "title": "Thị trường chuyển nhượng",
+      "joinsFor": "cho mùa giải {season}",
+      "untilSeason": "hợp đồng đến hết mùa {season}",
+      "empty": "Chưa có hợp đồng tương lai nào (ContractType = 3) trong save tại thời điểm này.",
+      "quote": {
+        "promotion": [
+          "Đây là điều tôi đã theo đuổi suốt sự nghiệp — không thể chờ được nữa để ngồi vào chiếc xe của {team}.",
+          "Thành thật mà nói, giấc mơ đã thành hiện thực. Đã đến lúc chứng minh tôi xứng đáng có mặt trên đội hình xuất phát.",
+          "Tôi sẽ không giấu: tôi hơi hồi hộp, nhưng chủ yếu là rất phấn khích vì cuối cùng cũng có được cơ hội của mình."
+        ],
+        "stepUp": [
+          "Đây là một cơ hội khổng lồ và tôi sẵn sàng nắm lấy nó bằng cả hai tay.",
+          "Tôi luôn tin rằng mình có thể cạnh tranh chiến thắng với đúng chiếc xe phù hợp — giờ tôi có cơ hội chứng minh điều đó.",
+          "Rời {oldTeam} không phải là quyết định dễ dàng, nhưng bước đi này là để chiến đấu cho những điều lớn hơn."
+        ],
+        "joiningUs": [
+          "Tôi đã nghe nhiều điều tích cực về dự án của đội này, và tôi muốn góp phần đưa nó đi xa hơn.",
+          "Tham vọng nơi đây tương xứng với tham vọng của tôi — tôi tin chúng ta có thể cùng nhau làm nên điều đặc biệt.",
+          "Chương mới, thử thách mới. Tôi không thể chờ được nữa để bắt đầu."
+        ],
+        "lateral": [
+          "Đôi khi một thay đổi bối cảnh chính là điều sự nghiệp cần. Tôi háo hức chờ đón chương tiếp theo.",
+          "Đội mới, mục tiêu mới — tôi nghĩ đây là bước đi đúng đắn cho tôi ở thời điểm hiện tại.",
+          "Tôi muốn cảm ơn tất cả những ai ở {oldTeam} cho những năm tháng làm việc cùng nhau. Giờ là lúc cho một điều mới."
+        ]
+      }
+    },
+    "nextRace": {
+      "title": "Nhìn trước chặng kế tiếp",
+      "daysAway": "còn {days} ngày",
+      "thisWeekend": "cuối tuần này",
+      "alreadyRun": "đã diễn ra",
+      "trackType1": "Đường đua nhiều lực ép",
+      "trackType2": "Đường đua tốc độ",
+      "trackType0": "Đường đua cân bằng",
+      "noNext": "Đây là chặng cuối cùng của mùa giải."
+    },
+    "odds": {
+      "teamTitle": "Tỷ lệ — Đội đua thắng cuộc",
+      "driverTitle": "Tỷ lệ — Tay đua thắng cuộc",
+      "colOdds": "Tỷ lệ",
+      "colForm": "Phong độ",
+      "colAvg": "Điểm TB",
+      "disclaimer": "Tỷ lệ do tòa soạn tính từ kết quả mùa giải (overround 1,15) — chỉ mang tính tham khảo, không phải kèo cược thật.",
+      "basisTrackType": "Dựa trên {count} chặng cùng loại đường đua trong mùa này.",
+      "basisSeason": "Dựa trên các kết quả của mùa giải tính đến thời điểm này.",
+      "darkHorseTitle": "Ngựa ô của tuần",
+      "darkHorseTeam": "{team} đang lên phong độ chóng mặt: trung bình {recent} điểm/chặng trong ba chặng gần nhất, so với {early} trước đó.",
+      "darkHorseDriver": "Ở phía tay đua, hãy để mắt tới {driver} ({team}) — trung bình {recent} điểm/chặng gần đây, vượt xa phong độ đầu mùa."
+    },
+    "trivia": {
+      "title": "Ghi chép đường đua",
+      "lastWinner": "Lần gần nhất tại đây, {driver} ({team}) đã giành chiến thắng.",
+      "mostWins": "{driver} là người thắng cuộc nhiều nhất tại đường đua này ({wins} chiến thắng).",
+      "lapRecord": "Kỷ lục vòng đua: {time} ({driver}, {year}).",
+      "lapRecordNoName": "Kỷ lục vòng đua: {time} (năm {year}) — tay đua lập kỷ lục không xác định được tên trong save.",
+      "empty": "Đường đua này chưa có lịch sử chặng nào trong save."
+    },
+    "narrative": {
+      "weatherDryAll": "Cả ba phiên của cuối tuần đều diễn ra trên đường đua khô ráo.",
+      "weatherWetAll": "Mưa phủ sóng suốt cuối tuần, từ phiên tập đầu tiên cho đến lá cờ đích.",
+      "weatherWetPq": "Tập luyện và vòng phân hạng diễn ra trong điều kiện ướt khó khăn, nhưng đường đua đã khô ráo trở lại trước giờ đua chính.",
+      "weatherWetRace": "Tập luyện và vòng phân hạng diễn ra trên mặt đường khô, nhưng cuộc đua chính lại được tranh tài dưới mưa.",
+      "weatherMixed": "Thời tiết thay đổi liên tục giữa các phiên trong suốt cuối tuần.",
+      "weatherNoData": "Save không ghi trạng thái mưa theo phiên cho chặng này.",
+      "overtakes": "Toàn bộ đoàn đua đã có tổng cộng {count} pha vượt trong buổi chiều hôm.",
+      "retirements": "{count} chiếc xe không thể về đến lá cờ đích.",
+      "scBoth": "Cuộc đua bị gián đoạn bởi {sc} lần Safety Car và {vsc} lần Virtual Safety Car.",
+      "scOnly": "Safety Car xuất hiện {sc} lần trong cuộc đua.",
+      "vscOnly": "Virtual Safety Car được kích hoạt {vsc} lần trong cuộc đua.",
+      "cleanRace": "Cuộc đua diễn ra liền mạch từ đèn xuất phát đến lá cờ đích mà không có xe an toàn nào.",
+      "scNoData": "Save không ghi số lần xe an toàn xuất hiện.",
+      "flRecord": "Vòng đua nhanh nhất của ngày thuộc về {driver} ({team}) — {time}, một kỷ lục tuyệt đối mới cho đường đua {track}, nơi có lịch sử từ năm {year}.",
+      "fl": "Vòng đua nhanh nhất của ngày thuộc về {driver} ({team}) — {time}.",
+      "lead": "Kết quả ngày Chủ nhật chỉ nhẹ nhàng xáo trộn cuộc đua vô địch: {leader} ({team}) dẫn đầu với {points} điểm, hơn {second} {gap} điểm.",
+      "teamWatchSummary": "{lines} thuộc {team}.",
+      "teamWatchLine": "{driver} về đích P{pos} (+{points} điểm)",
+      "teamWatchDnf": "{driver} bỏ cuộc (DNF)",
+      "teamWatchNoPts": "{driver} về P{pos} (không có điểm)",
+      "teamWatchStanding": "Hiện đang P{pos} tại Giải vô địch Đội đua với {points} điểm."
+    },
+    "provenance": {
+      "title": "Nguồn dữ liệu",
+      "locally": "Generated locally — no data leaves your device."
+    }
   }
 }

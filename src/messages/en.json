@@ -2,7 +2,7 @@
   "app": {
     "title": "F1 PIT WALL",
     "tagline": "Strategy assistant for F1 Manager — reads your save, suggests actions.",
-    "phaseBadge": "PHASE 2 — FACTORY & SEASON",
+    "phaseBadge": "PHASE 3 — GAZETTE & POLISH",
     "modeA": "RACE WEEKEND",
     "modeB": "FACTORY / SEASON"
   },
@@ -118,7 +118,8 @@
       "drivers": "Drivers",
       "season": "Season",
       "strategy": "Strategy",
-      "research": "Research"
+      "research": "Research",
+      "gazette": "Gazette"
     },
     "modeA": "RACE WEEKEND",
     "modeB": "FACTORY / SEASON",
@@ -156,7 +157,8 @@
       "missingTables": "Missing tables: {tables} — related modules fall back with confidence LOW.",
       "partRisk": "Part {part} at high failure risk — inspect/replace before the next race.",
       "contractExpiry": "{name}'s contract expires in {days} days — open renewal talks."
-    }
+    },
+    "modeN": "NARRATIVE"
   },
   "tyres": {
     "title": "Tyre Lab",
@@ -328,5 +330,189 @@
     "nextSeason": "Next season:",
     "noExpertise": "Parts_TeamExpertise unmapped",
     "noExpertiseHint": "The banking ranking enables once NextSeasonExpertise is readable from the save."
+  },
+  "gazette": {
+    "nav": "Gazette",
+    "openInPitWall": "Open the Pit Wall for this race",
+    "notCompleted": "This race has not finished yet — the Gazette will publish the moment results land in a save.",
+    "notFound": "This race was not found in the save.",
+    "masthead": {
+      "name": "The Circuit Gazette",
+      "tagline": "Compiled automatically from your save — no data leaves your device.",
+      "vol": "Vol.",
+      "no": "No.",
+      "season": "Season",
+      "round": "Round"
+    },
+    "dateline": {
+      "temp": "Race day: {temp}°C",
+      "wet": "wet track",
+      "dry": "dry track",
+      "noWeather": "The save carries no weather for this race"
+    },
+    "headline": {
+      "wireToWire": "{driver} LEADS START TO FINISH AT {track}",
+      "fromPos": "{driver} WINS FROM P{pos} AT {track}"
+    },
+    "subhead": {
+      "wireToWire": "{driver} converts pole into a lights-to-flag win for {team} — {p2} ({p2Team}) denied by {gap}",
+      "fromPos": "{driver} recovers from P{pos} to win for {team} — {p2} ({p2Team}) denied by {gap}",
+      "solo": "{driver} wins for {team}"
+    },
+    "colPos": "Pos",
+    "colGrid": "Grid",
+    "colDriver": "Driver",
+    "colTeam": "Team",
+    "colGap": "Gap",
+    "colOv": "OV",
+    "colPts": "Pts",
+    "dnf": "DNF",
+    "noDataCol": "—",
+    "awards": {
+      "title": "Weekend Awards",
+      "winner": "Race Winner",
+      "fastestLap": "Fastest Lap",
+      "flSuffix": "Fastest lap: {time}",
+      "pit": "Fastest Pit Stop",
+      "comeback": "Comeback of the Race",
+      "comebackCaption": "{name}: P{from} → P{to}",
+      "dotdUnavailable": "Driver of the Day is not stored in F1M 24 saves (no matching table) — not estimated."
+    },
+    "highlights": {
+      "title": "Race Highlights",
+      "podium": "Podium",
+      "fastestLap": "Fastest Lap",
+      "pitStop": "Fastest Pit Stop",
+      "chequered": "Chequered Flag",
+      "comeback": "Comeback of the Race"
+    },
+    "quotes": {
+      "winner": {
+        "dominant": [
+          "The car was just incredible all weekend — we did everything right when it mattered.",
+          "Lights to flag, no real dramas out there. That's how you want a Sunday to go.",
+          "We had the pace to control it from the front, and the team gave me a perfect car for it."
+        ],
+        "close": [
+          "That was closer than I'd have liked, honestly — but a win's a win, and I'll take it.",
+          "We had to fight for every tenth today. Great effort from everyone on the pit wall.",
+          "I could see them in my mirrors the whole way — nerve-wracking, but we held on."
+        ],
+        "balanced": [
+          "Really pleased with how we managed that one. The team gave me a great strategy to work with.",
+          "That's exactly the kind of Sunday we needed. Thanks to everyone in the garage for the effort.",
+          "We knew after qualifying we had the pace — you still have to bring it home, and today we did."
+        ]
+      },
+      "random": {
+        "dnf": [
+          "Not the day we wanted. We'll go through the data and come back stronger next round.",
+          "Frustrating way to end the afternoon, but that's racing sometimes. Onto the next one.",
+          "The pace was there before it ended, which is the only positive I can take from today."
+        ],
+        "points": [
+          "Solid day for the team — we maximised what we had and the points matter.",
+          "Happy to bring some points home. The car felt good once we got the balance sorted.",
+          "A good, clean race from our side. Small steps, but we're moving in the right direction."
+        ],
+        "midfield": [
+          "Not the result we were hoping for, but there were some positives in the pace.",
+          "We were just on the wrong side of the fight for points today. It happens.",
+          "A tough midfield battle out there — everyone was so close on pace this weekend."
+        ],
+        "backmarker": [
+          "Difficult weekend for us, but we'll keep working to understand where the pace went.",
+          "Not much more to say — we simply didn't have the pace to fight today.",
+          "We'll regroup and look at what we can improve before the next round."
+        ]
+      },
+      "quoteFrom": "— {name}"
+    },
+    "transfers": {
+      "title": "Driver Market",
+      "joinsFor": "joins for {season}",
+      "untilSeason": "contracted through {season}",
+      "empty": "No future contracts (ContractType = 3) in the save at this point.",
+      "quote": {
+        "promotion": [
+          "This is what I've been working towards my whole career — I can't wait to get in the car for {team}.",
+          "A dream come true, honestly. Time to prove I belong on the grid.",
+          "I'm not going to pretend I'm not nervous, but mostly I'm just excited to finally get my shot."
+        ],
+        "stepUp": [
+          "This is a huge opportunity and I'm ready to grab it with both hands.",
+          "I've always believed I could compete for wins with the right car underneath me — now I get the chance to prove it.",
+          "Leaving {oldTeam} wasn't an easy decision, but this move is about fighting for more."
+        ],
+        "joiningUs": [
+          "I've heard great things about this team's project, and I want to be part of building it further.",
+          "The ambition here matches mine — I think we can achieve something special together.",
+          "New chapter, new challenge. I can't wait to get started."
+        ],
+        "lateral": [
+          "Sometimes a change of scenery is exactly what a career needs. I'm looking forward to the next chapter.",
+          "New team, new goals — I think this is the right move for where I am right now.",
+          "I want to thank everyone at {oldTeam} for the years together. Now it's time for something new."
+        ]
+      }
+    },
+    "nextRace": {
+      "title": "Next Race Preview",
+      "daysAway": "in {days} days",
+      "thisWeekend": "this weekend",
+      "alreadyRun": "already run",
+      "trackType1": "Downforce circuit",
+      "trackType2": "Power circuit",
+      "trackType0": "Balanced circuit",
+      "noNext": "This was the final round of the season."
+    },
+    "odds": {
+      "teamTitle": "Odds — Winning Constructor",
+      "driverTitle": "Odds — Winning Driver",
+      "colOdds": "Odds",
+      "colForm": "Form",
+      "colAvg": "Avg pts",
+      "disclaimer": "House odds compiled from this season's results (1.15 overround) — for reference only, not a betting market.",
+      "basisTrackType": "Based on {count} races at similar circuits this season.",
+      "basisSeason": "Based on this season's results so far.",
+      "darkHorseTitle": "Dark Horse of the Week",
+      "darkHorseTeam": "{team} have picked up form fast: {recent} points a race over the last three rounds, up from {early} before that.",
+      "darkHorseDriver": "Among the drivers, keep an eye on {driver} ({team}) — {recent} points a race lately, well up on earlier-season form."
+    },
+    "trivia": {
+      "title": "Track Notebook",
+      "lastWinner": "Last time out here, {driver} ({team}) took the win.",
+      "mostWins": "{driver} has the most wins at this circuit ({wins}).",
+      "lapRecord": "Lap record: {time} ({driver}, {year}).",
+      "lapRecordNoName": "Lap record: {time} ({year}) — the record holder could not be resolved from the save.",
+      "empty": "No completed history for this circuit in the save yet."
+    },
+    "narrative": {
+      "weatherDryAll": "Every session across the weekend stayed dry.",
+      "weatherWetAll": "Rain followed the field all weekend, from first practice through to the chequered flag.",
+      "weatherWetPq": "The grid endured a wet, tricky practice and qualifying before conditions dried out for the race itself.",
+      "weatherWetRace": "Practice and qualifying were run in the dry, but the race itself was contested in the wet.",
+      "weatherMixed": "Conditions swung from session to session across the weekend.",
+      "weatherNoData": "The save carries no per-session rain flags for this race.",
+      "overtakes": "The field combined for {count} overtakes across the afternoon.",
+      "retirements": "{count} cars failed to see the chequered flag.",
+      "scBoth": "The race was interrupted by {sc} Safety Car periods and {vsc} Virtual Safety Car periods.",
+      "scOnly": "{sc} Safety Car periods were the only interruption to the action.",
+      "vscOnly": "{vsc} Virtual Safety Car periods were the only interruption to the action.",
+      "cleanRace": "The race ran caution-free from lights to flag.",
+      "scNoData": "The save does not record safety-car deployments.",
+      "flRecord": "The fastest lap of the day belonged to {driver} of {team}, who stopped the clocks at {time} — a new outright track record at {track}, first held since {year}.",
+      "fl": "The fastest lap of the day belonged to {driver} of {team}, who stopped the clocks at {time}.",
+      "lead": "Sunday's result shuffles the title picture only a little: {leader} ({team}) leads on {points} points, {gap} clear of {second}.",
+      "teamWatchSummary": "{lines} for {team}.",
+      "teamWatchLine": "{driver} came home P{pos} (+{points} pts)",
+      "teamWatchDnf": "{driver} retired (DNF)",
+      "teamWatchNoPts": "{driver} finished P{pos} (no points)",
+      "teamWatchStanding": "Currently P{pos} in the Constructors' Championship on {points} points."
+    },
+    "provenance": {
+      "title": "Data provenance",
+      "locally": "Generated locally — no data leaves your device."
+    }
   }
 }

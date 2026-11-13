@@ -19,6 +19,7 @@ import {
   type Duel,
 } from '@/engines/personnel.engine';
 import { buildRegulations, type RegulationBoard } from '@/engines/regulation.engine';
+import { buildGazetteIssue, type GazetteIssue } from '@/engines/gazette.engine';
 import type { EngineResult } from '@/domain/types';
 import { useSaveStore } from '@/store/save.store';
 
@@ -87,6 +88,14 @@ export function useRegulations(): EngineResult<RegulationBoard> | null {
     if (!model) return null;
     return buildRegulations(model);
   }, [model]);
+}
+
+export function useGazette(raceId: number | null): EngineResult<GazetteIssue> | null {
+  const model = useSaveStore((s) => s.model);
+  return useMemo(() => {
+    if (!model || raceId == null) return null;
+    return buildGazetteIssue(model, raceId);
+  }, [model, raceId]);
 }
 
 export type { SimOptions };

@@ -17,6 +17,7 @@ import { DriversView } from './DriversView';
 import { SeasonView } from './SeasonView';
 import { StrategyView } from './StrategyView';
 import { ResearchView } from './ResearchView';
+import { GazetteView } from './GazetteView';
 
 export function WallViews() {
   const model = useSaveStore((s) => s.model);
@@ -38,6 +39,8 @@ export function WallViews() {
       return <StrategyView />;
     case 'research':
       return <ResearchView />;
+    case 'gazette':
+      return <GazetteView model={model} raceId={raceId} />;
     case 'wall':
     default:
       return <WallHomeView model={model} />;
