@@ -23,6 +23,7 @@ import {
   Clock,
   Flag,
   Newspaper,
+  Printer,
   ShieldCheck,
   Timer,
   TrendingUp,
@@ -281,6 +282,20 @@ export function GazetteView({ model, raceId }: { model: SaveModel; raceId: numbe
 
   return (
     <div className="space-y-5" data-testid="gazette-view">
+      {/* print toolbar — screen only (docs/05 Phase 3: PDF/print export) */}
+      <div className="flex justify-end print:hidden">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => window.print()}
+          data-testid="gazette-print"
+          className="cursor-pointer gap-1.5 border-line bg-surface text-ink-soft hover:text-ink"
+        >
+          <Printer className="h-3.5 w-3.5" aria-hidden="true" />
+          {t('printButton')}
+        </Button>
+      </div>
+
       {/* masthead — persistent identity header (oracle v2.1) */}
       <header className="gazette-sheet rounded-lg border border-gold/30 bg-panel px-4 py-5 text-center print:border-line">
         <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-ink-faint">

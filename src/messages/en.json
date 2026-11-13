@@ -516,7 +516,8 @@
     "provenance": {
       "title": "Data provenance",
       "locally": "Generated locally — no data leaves your device."
-    }
+    },
+    "printButton": "Print / Save PDF"
   },
   "palette": {
     "title": "Command palette",

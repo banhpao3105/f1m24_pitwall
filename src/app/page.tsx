@@ -76,7 +76,7 @@ function PitWallSurface() {
 
   return (
     <div className="pitwall-grid-bg flex min-h-screen flex-col bg-void text-ink">
-      <header className="sticky top-0 z-10 border-b border-line bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
+      <header className="sticky top-0 z-10 border-b border-line bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/80 print:hidden">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
           <div className="flex items-center gap-2.5">
             <span className="flex h-8 w-8 items-center justify-center rounded-md border border-teal/40 bg-teal/10" aria-hidden="true">
@@ -158,7 +158,7 @@ function PitWallSurface() {
             className="space-y-5"
             data-testid="wall-shell"
           >
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3 print:hidden">
               <WallNav races={model.races} />
               <Button
                 size="sm"
@@ -174,12 +174,14 @@ function PitWallSurface() {
               <WallViews />
             </Suspense>
 
-            <SaveLibrary />
+            <div className="print:hidden">
+              <SaveLibrary />
+            </div>
           </motion.div>
         ) : null}
       </main>
 
-      <footer className="mt-auto border-t border-line bg-surface">
+      <footer className="mt-auto border-t border-line bg-surface print:hidden">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <p className="text-[11px] leading-relaxed text-ink-faint">{t('footer.note')}</p>
           <span className="ml-auto font-mono text-[10px] uppercase tracking-wide text-ink-faint">

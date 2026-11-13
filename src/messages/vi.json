@@ -516,7 +516,8 @@
     "provenance": {
       "title": "Nguồn dữ liệu",
       "locally": "Generated locally — no data leaves your device."
-    }
+    },
+    "printButton": "In / Xuất PDF"
   },
   "palette": {
     "title": "Bảng điều khiển lệnh",

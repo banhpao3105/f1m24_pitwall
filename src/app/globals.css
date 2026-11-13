@@ -186,3 +186,49 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ── Print stylesheet — Phase 3 Gazette export (docs/05 Phase 3) ──
+   Newspaper output: white paper, ink text, no chrome (header/nav/footer/
+   library are hidden via `print:hidden` in the components). Sections keep
+   their borders so the printed sheet still reads like the Gazette. */
+@media print {
+  html,
+  body {
+    background: #ffffff !important;
+  }
+  .pitwall-grid-bg {
+    background-image: none !important;
+  }
+  /* Brutal ink override — cyber tokens are tuned for dark screens. */
+  *,
+  *::before,
+  *::after {
+    color: #111111 !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    border-color: #999999 !important;
+  }
+  /* Scroll containers print in full instead of a 96px window. */
+  .max-h-96 {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  /* Toasts/popovers never print (viewport also carries print:hidden). */
+  [data-radix-popper-content-wrapper],
+  [data-sonner-toaster] {
+    display: none !important;
+  }
+  table {
+    break-inside: auto;
+  }
+  tr,
+  li {
+    break-inside: avoid;
+  }
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+}
