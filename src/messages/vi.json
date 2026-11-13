@@ -453,6 +453,7 @@
     "noExpertiseHint": "Xếp hạng banking tự bật khi cột NextSeasonExpertise đọc được từ save."
   },
   "gazette": {
+    "sidebarLabel": "Phụ bản",
     "nav": "Gazette",
     "openInPitWall": "Xem Pit Wall cho chặng này",
     "notCompleted": "Chặng này chưa hoàn thành — Gazette sẽ xuất bản ngay khi có kết quả trong save.",
@@ -588,6 +589,7 @@
       "noNext": "Đây là chặng cuối cùng của mùa giải."
     },
     "odds": {
+      "title": "Tỷ lệ — chặng tới",
       "teamTitle": "Tỷ lệ — Đội đua thắng cuộc",
       "driverTitle": "Tỷ lệ — Tay đua thắng cuộc",
       "colOdds": "Tỷ lệ",

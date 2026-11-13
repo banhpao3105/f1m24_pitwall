@@ -250,3 +250,16 @@
 .live-pulse-dot {
   animation: pitwall-live-pulse 1.6s ease-in-out infinite;
 }
+
+/* ── Gazette newspaper typography — v0.5.0 Step 5 ──────────────────────
+   Drop cap on the front-page article's first paragraph. Print keeps it
+   (newspaper look); reduced-motion rules don't affect it (static). */
+.gazette-dropcap::first-letter {
+  float: left;
+  margin-right: 0.4rem;
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 2.6rem;
+  line-height: 0.85;
+  font-weight: 700;
+  color: var(--color-gold, #ffc94d);
+}

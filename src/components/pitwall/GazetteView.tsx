@@ -34,6 +34,7 @@ import { trackDisplay } from '@/lib/track-display';
 import { useGazette } from '@/lib/engine-hooks';
 import { useWallNav } from './WallNav';
 import { ConfidenceBadge } from './ConfidenceBadge';
+import { TeamDot } from './TeamIdentity';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -352,9 +353,9 @@ export function GazetteView({ model, raceId }: { model: SaveModel; raceId: numbe
           <ConfidenceBadge confidence={gazette.confidence} />
         </div>
 
-        <div className="mt-4 space-y-2 text-sm leading-relaxed text-ink">
+        <div className="mt-4 space-y-3 text-[13px] leading-relaxed text-ink sm:columns-2 sm:gap-8 [&>p]:break-inside-avoid [&>blockquote]:break-inside-avoid">
           {winner != null && p2 != null ? (
-            <p>
+            <p className="gazette-dropcap">
               {issue.wireToWire
                 ? t('subhead.wireToWire', {
                     driver: winner.driverName,
@@ -375,6 +376,18 @@ export function GazetteView({ model, raceId }: { model: SaveModel; raceId: numbe
           ) : null}
           {weatherLine != null ? <p>{weatherLine}</p> : null}
           <p>{para2Parts.join(' ')}</p>
+          {/* pull quote — the winner's line, front-page style (v0.5.0 step 5) */}
+          {winnerQuoteText != null && winner != null ? (
+            <blockquote
+              className="my-3 break-inside-avoid border-l-2 border-gold/60 pl-3 text-base font-medium italic leading-snug text-ink"
+              data-testid="gazette-pullquote"
+            >
+              “{winnerQuoteText}”
+              <footer className="mt-1 font-mono text-[10px] uppercase tracking-wide text-ink-faint not-italic">
+                {t('quotes.quoteFrom', { name: winner.driverName })}
+              </footer>
+            </blockquote>
+          ) : null}
           {para3 != null ? <p>{para3}</p> : null}
           {para4 != null ? <p>{para4}</p> : null}
         </div>
@@ -403,7 +416,12 @@ export function GazetteView({ model, raceId }: { model: SaveModel; raceId: numbe
                   >
                     <td className="px-2 py-1.5 font-mono text-ink">{r.dnf ? t('dnf') : `P${r.finishPos}`}</td>
                     <td className="px-2 py-1.5 font-mono text-ink-faint">{r.startPos ?? '—'}</td>
-                    <td className="px-2 py-1.5 text-ink">{r.driverName}</td>
+                    <td className="px-2 py-1.5 text-ink">
+                      <span className="flex items-center gap-1.5">
+                        <TeamDot model={model} teamId={r.teamId} />
+                        {r.driverName}
+                      </span>
+                    </td>
                     <td className="px-2 py-1.5 text-ink-soft">{r.teamName}</td>
                     <td className="px-2 py-1.5 text-right font-mono text-ink-soft">{formatGap(r.gapS)}</td>
                     <td className="px-2 py-1.5 text-right font-mono text-ink-soft">
@@ -418,6 +436,9 @@ export function GazetteView({ model, raceId }: { model: SaveModel; raceId: numbe
         </div>
       </section>
 
+      {/* v0.5.0 step 5 — newspaper body: main column + right sidebar */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+      <div className="space-y-4 lg:col-span-8">
       {/* awards + highlights */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Section title={t('awards.title')} icon={<Award className="h-4 w-4" />} testId="gazette-awards">
@@ -462,9 +483,6 @@ export function GazetteView({ model, raceId }: { model: SaveModel; raceId: numbe
           <p className="mt-3 border-t border-line/60 pt-2 text-[11px] text-ink-faint">
             {t('awards.dotdUnavailable')}
           </p>
-          {winnerQuoteText != null && winner != null ? (
-            <QuoteBlock name={winner.driverName} text={winnerQuoteText} />
-          ) : null}
           {randomQuoteText != null && issue.quoteSlots.random != null ? (
             <QuoteBlock
               name={issue.quoteSlots.random.driverName}
@@ -563,153 +581,40 @@ export function GazetteView({ model, raceId }: { model: SaveModel; raceId: numbe
         )}
       </Section>
 
-      {/* next race preview */}
+      {/* next race preview — header row stays in the main column (v0.5.0:
+          trivia / odds / dark-horse moved to the right sidebar) */}
       <Section title={t('nextRace.title')} icon={<BookOpen className="h-4 w-4" />} testId="gazette-next">
         {nr == null ? (
           <p className="text-sm text-ink-soft">{t('nextRace.noNext')}</p>
         ) : (
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-baseline gap-2">
-              <span className="text-lg font-semibold text-ink">{trackDisplay(nr.trackName, locale as 'vi' | 'en')}</span>
-              {trackTypeLabel(nr.trackType) != null ? (
-                <span className="rounded bg-raised px-1.5 py-0.5 font-mono text-[10px] uppercase text-ink-soft">
-                  {trackTypeLabel(nr.trackType)}
-                </span>
-              ) : null}
-              <span className="font-mono text-xs text-gold">
-                {nr.isCompleted
-                  ? t('nextRace.alreadyRun')
-                  : nr.daysAway <= 0
-                    ? t('nextRace.thisWeekend')
-                    : t('nextRace.daysAway', { days: nr.daysAway })}
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span className="text-lg font-semibold text-ink">{trackDisplay(nr.trackName, locale as 'vi' | 'en')}</span>
+            {trackTypeLabel(nr.trackType) != null ? (
+              <span className="rounded bg-raised px-1.5 py-0.5 font-mono text-[10px] uppercase text-ink-soft">
+                {trackTypeLabel(nr.trackType)}
               </span>
-              <Button
-                size="sm"
-                variant="outline"
-                className="ml-auto cursor-pointer gap-1.5 border-teal/40 bg-teal/5 text-teal hover:bg-teal/10"
-                onClick={() => setView('race', nr.raceId)}
-                data-testid="gazette-open-race"
-              >
-                {t('openInPitWall')}
-                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-              </Button>
-            </div>
-
-            {issue.trivia != null ? (
-              <div className="rounded border border-line/60 bg-surface p-3 text-sm">
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-faint">
-                  {t('trivia.title')}
-                </p>
-                <ul className="space-y-1 text-xs text-ink-soft">
-                  {issue.trivia.lastWinner ? (
-                    <li>
-                      {t('trivia.lastWinner', {
-                        driver: issue.trivia.lastWinner.driverName,
-                        team: issue.trivia.lastWinner.teamName,
-                      })}
-                    </li>
-                  ) : null}
-                  {issue.trivia.mostWins ? (
-                    <li>
-                      {t('trivia.mostWins', {
-                        driver: issue.trivia.mostWins.driverName,
-                        wins: issue.trivia.mostWins.wins,
-                      })}
-                    </li>
-                  ) : null}
-                  {issue.trivia.lapRecord ? (
-                    <li>
-                      {issue.trivia.lapRecord.driverName
-                        ? t('trivia.lapRecord', {
-                            time: formatLapTime(issue.trivia.lapRecord.lapMs),
-                            driver: issue.trivia.lapRecord.driverName,
-                            year: issue.trivia.lapRecord.year ?? '—',
-                          })
-                        : t('trivia.lapRecordNoName', {
-                            time: formatLapTime(issue.trivia.lapRecord.lapMs),
-                            year: issue.trivia.lapRecord.year ?? '—',
-                          })}
-                    </li>
-                  ) : null}
-                </ul>
-              </div>
             ) : null}
-
-            {fav != null ? (
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                <OddsTable
-                  title={t('odds.teamTitle')}
-                  rows={fav.teams.map((row) => ({
-                    id: row.id,
-                    name: row.name,
-                    sub: '',
-                    odds: row.odds,
-                    form: row.form,
-                    avgPoints: row.avgPoints,
-                    highlight: row.id === model.player.teamId,
-                  }))}
-                  colOdds={t('odds.colOdds')}
-                  colForm={t('odds.colForm')}
-                  colAvg={t('odds.colAvg')}
-                />
-                <OddsTable
-                  title={t('odds.driverTitle')}
-                  rows={fav.drivers.map((row) => ({
-                    id: row.id,
-                    name: row.name,
-                    sub: row.teamName,
-                    odds: row.odds,
-                    form: row.form,
-                    avgPoints: row.avgPoints,
-                    highlight: row.teamName === model.player.teamName,
-                  }))}
-                  colOdds={t('odds.colOdds')}
-                  colForm={t('odds.colForm')}
-                  colAvg={t('odds.colAvg')}
-                />
-              </div>
-            ) : null}
-
-            {fav != null ? (
-              <p className="text-[11px] text-ink-faint">
-                {fav.basis === 'trackType'
-                  ? t('odds.basisTrackType', { count: fav.sampleRaces })
-                  : t('odds.basisSeason')}{' '}
-                {t('odds.disclaimer')}
-              </p>
-            ) : null}
-
-            {issue.darkHorse != null ? (
-              <div className="rounded border border-gold/30 bg-gold/5 p-3 text-sm" data-testid="gazette-darkhorse">
-                <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gold">
-                  <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
-                  {t('odds.darkHorseTitle')}
-                </p>
-                <ul className="space-y-1 text-xs text-ink-soft">
-                  {issue.darkHorse.team ? (
-                    <li>
-                      {t('odds.darkHorseTeam', {
-                        team: issue.darkHorse.team.teamName,
-                        recent: issue.darkHorse.team.recentAvg.toFixed(1),
-                        early: issue.darkHorse.team.earlyAvg.toFixed(1),
-                      })}
-                    </li>
-                  ) : null}
-                  {issue.darkHorse.driver ? (
-                    <li>
-                      {t('odds.darkHorseDriver', {
-                        driver: issue.darkHorse.driver.driverName,
-                        team: issue.darkHorse.driver.teamName,
-                        recent: issue.darkHorse.driver.recentAvg.toFixed(1),
-                      })}
-                    </li>
-                  ) : null}
-                </ul>
-              </div>
-            ) : null}
+            <span className="font-mono text-xs text-gold">
+              {nr.isCompleted
+                ? t('nextRace.alreadyRun')
+                : nr.daysAway <= 0
+                  ? t('nextRace.thisWeekend')
+                  : t('nextRace.daysAway', { days: nr.daysAway })}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto cursor-pointer gap-1.5 border-teal/40 bg-teal/5 text-teal hover:bg-teal/10"
+              onClick={() => setView('race', nr.raceId)}
+              data-testid="gazette-open-race"
+            >
+              {t('openInPitWall')}
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
           </div>
         )}
       </Section>
+
 
       {/* team watch + provenance footer */}
       <Section title={model.player.teamName} icon={<ShieldCheck className="h-4 w-4" />}>
@@ -737,6 +642,117 @@ export function GazetteView({ model, raceId }: { model: SaveModel; raceId: numbe
           {t('provenance.locally')}
         </p>
       </Section>
+      </div>
+
+      {/* right sidebar — odds / dark horse / trivia as standalone boxes
+          (v0.5.0 step 5; collapses under the main column in print/mobile) */}
+      <aside className="space-y-4 lg:col-span-4" aria-label={t('sidebarLabel')} data-testid="gazette-sidebar">
+        {fav != null ? (
+          <Section title={t('odds.title')} icon={<Trophy className="h-4 w-4" />} testId="gazette-odds-box">
+            <div className="space-y-3">
+              <OddsTable
+                title={t('odds.teamTitle')}
+                rows={fav.teams.map((row) => ({
+                  id: row.id,
+                  name: row.name,
+                  sub: '',
+                  odds: row.odds,
+                  form: row.form,
+                  avgPoints: row.avgPoints,
+                  highlight: row.id === model.player.teamId,
+                }))}
+                colOdds={t('odds.colOdds')}
+                colForm={t('odds.colForm')}
+                colAvg={t('odds.colAvg')}
+              />
+              <OddsTable
+                title={t('odds.driverTitle')}
+                rows={fav.drivers.map((row) => ({
+                  id: row.id,
+                  name: row.name,
+                  sub: row.teamName,
+                  odds: row.odds,
+                  form: row.form,
+                  avgPoints: row.avgPoints,
+                  highlight: row.teamName === model.player.teamName,
+                }))}
+                colOdds={t('odds.colOdds')}
+                colForm={t('odds.colForm')}
+                colAvg={t('odds.colAvg')}
+              />
+              <p className="text-[11px] text-ink-faint">
+                {fav.basis === 'trackType'
+                  ? t('odds.basisTrackType', { count: fav.sampleRaces })
+                  : t('odds.basisSeason')}{' '}
+                {t('odds.disclaimer')}
+              </p>
+            </div>
+          </Section>
+        ) : null}
+
+        {issue.darkHorse != null ? (
+          <Section title={t('odds.darkHorseTitle')} icon={<Trophy className="h-4 w-4" />} testId="gazette-darkhorse-box">
+            <ul className="space-y-1 text-xs text-ink-soft" data-testid="gazette-darkhorse">
+              {issue.darkHorse.team ? (
+                <li>
+                  {t('odds.darkHorseTeam', {
+                    team: issue.darkHorse.team.teamName,
+                    recent: issue.darkHorse.team.recentAvg.toFixed(1),
+                    early: issue.darkHorse.team.earlyAvg.toFixed(1),
+                  })}
+                </li>
+              ) : null}
+              {issue.darkHorse.driver ? (
+                <li>
+                  {t('odds.darkHorseDriver', {
+                    driver: issue.darkHorse.driver.driverName,
+                    team: issue.darkHorse.driver.teamName,
+                    recent: issue.darkHorse.driver.recentAvg.toFixed(1),
+                  })}
+                </li>
+              ) : null}
+            </ul>
+          </Section>
+        ) : null}
+
+        {issue.trivia != null ? (
+          <Section title={t('trivia.title')} icon={<BookOpen className="h-4 w-4" />} testId="gazette-trivia-box">
+            <ul className="space-y-1 text-xs text-ink-soft">
+              {issue.trivia.lastWinner ? (
+                <li>
+                  {t('trivia.lastWinner', {
+                    driver: issue.trivia.lastWinner.driverName,
+                    team: issue.trivia.lastWinner.teamName,
+                  })}
+                </li>
+              ) : null}
+              {issue.trivia.mostWins ? (
+                <li>
+                  {t('trivia.mostWins', {
+                    driver: issue.trivia.mostWins.driverName,
+                    wins: issue.trivia.mostWins.wins,
+                  })}
+                </li>
+              ) : null}
+              {issue.trivia.lapRecord ? (
+                <li>
+                  {issue.trivia.lapRecord.driverName
+                    ? t('trivia.lapRecord', {
+                        time: formatLapTime(issue.trivia.lapRecord.lapMs),
+                        driver: issue.trivia.lapRecord.driverName,
+                        year: issue.trivia.lapRecord.year ?? '—',
+                      })
+                    : t('trivia.lapRecordNoName', {
+                        time: formatLapTime(issue.trivia.lapRecord.lapMs),
+                        year: issue.trivia.lapRecord.year ?? '—',
+                      })}
+                </li>
+              ) : null}
+            </ul>
+          </Section>
+        ) : null}
+      </aside>
+      </div>
     </div>
   );
 }
@@ -797,9 +813,9 @@ function OddsTable({
   colAvg: string;
 }) {
   return (
-    <div className="rounded border border-line/60 bg-surface p-3" data-testid="gazette-odds">
+    <div className="min-w-0 overflow-x-auto rounded border border-line/60 bg-surface p-3" data-testid="gazette-odds">
       <p className="mb-2 text-xs font-semibold text-ink">{title}</p>
-      <table className="w-full text-left text-xs">
+      <table className="w-full min-w-[260px] text-left text-xs">
         <thead>
           <tr className="text-[10px] uppercase tracking-wide text-ink-faint">
             <th className="px-1.5 py-1">#</th>

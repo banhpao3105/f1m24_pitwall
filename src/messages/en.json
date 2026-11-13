@@ -453,6 +453,7 @@
     "noExpertiseHint": "The banking ranking enables once NextSeasonExpertise is readable from the save."
   },
   "gazette": {
+    "sidebarLabel": "Paper sidebar",
     "nav": "Gazette",
     "openInPitWall": "Open the Pit Wall for this race",
     "notCompleted": "This race has not finished yet — the Gazette will publish the moment results land in a save.",
@@ -588,6 +589,7 @@
       "noNext": "This was the final round of the season."
     },
     "odds": {
+      "title": "Odds — next round",
       "teamTitle": "Odds — Winning Constructor",
       "driverTitle": "Odds — Winning Driver",
       "colOdds": "Odds",

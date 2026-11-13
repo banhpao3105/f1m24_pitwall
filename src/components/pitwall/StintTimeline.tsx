@@ -27,7 +27,9 @@ export function StintTimeline({
   if (stints.length === 0 || totalLaps <= 0) return null;
   return (
     <div data-testid="stint-timeline">
-      <div className="flex h-9 w-full overflow-hidden rounded border border-line">
+      {/* v0.5.0 mobile: scroll horizontally instead of crushing labels */}
+      <div className="overflow-x-auto pitwall-scroll">
+        <div className="flex h-9 min-w-[300px] w-full overflow-hidden rounded border border-line">
         {stints.map((stint, i) => (
           <motion.div
             key={i}
@@ -55,6 +57,7 @@ export function StintTimeline({
             </span>
           </motion.div>
         ))}
+        </div>
       </div>
       {pitLaps.length > 0 ? (
         <div className="mt-1 flex justify-between font-mono text-[10px] text-ink-faint">
