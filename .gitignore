@@ -67,3 +67,6 @@ db/
 prisma/
 tests/*.sh
 skills/
+
+# Prisma is not used by the local-first v1 (no server DB) — keep out of repo
+src/lib/db.ts
