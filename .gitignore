@@ -57,3 +57,13 @@ server.log
 dist/
 upload/
 agent-ctx/
+
+# Sandbox-only infrastructure (not part of the product repo)
+.zscripts/
+mini-services/
+examples/
+Caddyfile
+db/
+prisma/
+tests/*.sh
+skills/
