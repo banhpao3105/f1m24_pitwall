@@ -349,6 +349,22 @@ function toGameVersion(v: string): GameVersionId {
 }
 
 /**
+ * Display patches for decoded staff-name keys (0.4.1). The game stores
+ * localization KEYS that drop apostrophes/spaces ("OWard") and resolves
+ * them via its own string table at runtime — the save alone cannot recover
+ * the spelling. The patch restores the official public spelling of the
+ * affected roster names (deterministic, display-only, extendable as new
+ * names are observed). Oracle names.js shows the raw decoded form; this is
+ * a deliberate, documented deviation requested by the owner.
+ */
+export const STAFF_NAME_DISPLAY_PATCHES: Record<string, string> = {
+  OWard: "O'Ward", // Pato O'Ward (F1M24 roster)
+  DeLaRosa: 'de la Rosa', // Pedro de la Rosa
+  dosSantos: 'dos Santos', // generated staff particle surname
+  Barichello: 'Barrichello', // Rubens Barrichello (legend roster)
+};
+
+/**
  * Generated staff names arrive as localization keys, e.g.
  * "[StaffName_Forename_Male_Pato]" / "[StaffName_Surname_OWard]". The
  * readable name is embedded in the key — extracting it is faithful to the
@@ -366,10 +382,14 @@ export function cleanStaffName(raw: string): string {
   const key = m[1];
   const PREFIXES = ['StaffName_Forename_Male_', 'StaffName_Forename_Female_', 'StaffName_Surname_'];
   for (const p of PREFIXES) {
-    if (key.startsWith(p)) return removeTrailingDigit(key.slice(p.length));
+    if (key.startsWith(p)) {
+      const decoded = removeTrailingDigit(key.slice(p.length));
+      return STAFF_NAME_DISPLAY_PATCHES[decoded] ?? decoded;
+    }
   }
   // Unknown key shape — keep the tail segment, still readable.
-  return removeTrailingDigit(key.split('_').pop() ?? token);
+  const tail = removeTrailingDigit(key.split('_').pop() ?? token);
+  return STAFF_NAME_DISPLAY_PATCHES[tail] ?? tail;
 }
 
 /** Oracle names.js:9705 — a single trailing digit is a key artifact. */

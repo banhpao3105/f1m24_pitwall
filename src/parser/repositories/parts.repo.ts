@@ -103,6 +103,9 @@ export interface RawParts {
 }
 
 export function getPartsSnapshot(db: SqlJsDatabase): RawParts {
+  /* PartType value → label from the save's own enum table (0.4.1). */
+  const typeLabels = getPartTypeLabels(db);
+
   /* stat values first — designs need them attached */
   const sv = readTable(db, STAT_VALUES_TABLE);
   const svMap = buildColumnMap(sv.columns, STAT_VALUE_CANDIDATES);
@@ -134,7 +137,7 @@ export function getPartsSnapshot(db: SqlJsDatabase): RawParts {
             designId,
             teamId: readNum(row, colIndex(dsg.columns, dMap.teamId)),
             partType: dMap.partType
-              ? readNumOrStr(row, dsg.columns, dMap, 'partType')
+              ? resolvePartType(readNumOrStr(row, dsg.columns, dMap, 'partType'), typeLabels)
               : undefined,
             name: readStr(row, colIndex(dsg.columns, dMap.name)),
             status: dMap.status
@@ -163,7 +166,7 @@ export function getPartsSnapshot(db: SqlJsDatabase): RawParts {
             carId: readNum(row, colIndex(itm.columns, iMap.carId)),
             teamId: readNum(row, colIndex(itm.columns, iMap.teamId)),
             partType: iMap.partType
-              ? readNumOrStr(row, itm.columns, iMap, 'partType')
+              ? resolvePartType(readNumOrStr(row, itm.columns, iMap, 'partType'), typeLabels)
               : undefined,
             condition: normalizeCondition(
               readNum(row, colIndex(itm.columns, iMap.condition)),
@@ -202,7 +205,7 @@ export function getPartsSnapshot(db: SqlJsDatabase): RawParts {
           {
             teamId,
             partType: eMap.partType
-              ? readNumOrStr(row, exp.columns, eMap, 'partType')
+              ? resolvePartType(readNumOrStr(row, exp.columns, eMap, 'partType'), typeLabels)
               : undefined,
             expertise: readNum(row, colIndex(exp.columns, eMap.expertise)),
             nextSeasonExpertise: readNum(
@@ -233,4 +236,38 @@ export function getPartsSnapshot(db: SqlJsDatabase): RawParts {
 export function isSupplierPartType(partType: string | undefined): boolean {
   if (!partType) return false;
   return /engine|ers|gearbox|powertrain|energystore/i.test(partType);
+}
+
+/**
+ * PartType display labels from the save's own enum table (0.4.1).
+ * Parts_Enum_Type(Value, Name) is the game's authoritative PartType → label
+ * mapping; raw designs/items store the numeric Value ("0", "1"). Returning
+ * the save's own Name keeps the part grid readable WITHOUT hardcoding a
+ * lookup table in the app (still local-first, still traceable to the save).
+ */
+export function getPartTypeLabels(db: SqlJsDatabase): Map<number, string> {
+  const enumTable = readTable(db, 'Parts_Enum_Type');
+  const labels = new Map<number, string>();
+  if (!enumTable.present) return labels;
+  const vIdx = colIndex(enumTable.columns, 'Value');
+  const nIdx = colIndex(enumTable.columns, 'Name');
+  if (vIdx < 0 || nIdx < 0) return labels;
+  for (const row of enumTable.rows) {
+    const value = readNum(row, vIdx);
+    const name = readStr(row, nIdx);
+    if (value != null && name != null && !labels.has(value)) labels.set(value, name);
+  }
+  return labels;
+}
+
+/** Resolve a raw PartType value against the enum labels (numeric-safe). */
+export function resolvePartType(
+  raw: string | undefined,
+  labels: Map<number, string>,
+): string | undefined {
+  if (raw == null) return undefined;
+  if (/^\d+$/.test(raw)) {
+    return labels.get(Number(raw)) ?? `PartType ${raw}`;
+  }
+  return raw;
 }

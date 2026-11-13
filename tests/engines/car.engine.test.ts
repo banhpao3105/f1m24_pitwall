@@ -151,4 +151,33 @@ describe('buildCarLab — dev queue', () => {
     expect(rec?.confidence).toBe('LOW');
     expect(lab.assumptions.some((a) => a.text.includes('Parts_*'))).toBe(true);
   });
+
+  it('0.4.1 regression: healthy mapped parts do NOT trigger degraded-mode rec', () => {
+    // Real-save shape (verified 1.11.0): Parts_Items map fine, all conditions
+    // healthy, and Parts_Designs has NO Points column → empty queue. The old
+    // logic fired "chế độ suy giảm" here; it must now report healthy status.
+    const model = makeModel({
+      parts: {
+        designs: [
+          { designId: 1, teamId: 1, partType: 'FrontWing', stats: [] },
+          { designId: 2, teamId: 1, partType: 'Floor', stats: [] },
+        ],
+        items: [
+          { itemId: 1, designId: 1, partType: 'FrontWing', condition: 0.95 },
+          { itemId: 2, designId: 2, partType: 'Floor', condition: 0.88 },
+        ],
+        loadouts: [],
+        expertise: [],
+        tablesPresent: { designs: true, items: true, statValues: false, loadouts: false, expertise: false },
+      },
+    });
+    const lab = buildCarLab(model);
+    expect(lab.data.parts.length).toBeGreaterThan(0);
+    expect(lab.data.devQueue).toHaveLength(0);
+    expect(lab.recommendations.find((r) => r.id === 'car-nodata')).toBeUndefined();
+    const healthy = lab.recommendations.find((r) => r.id === 'car-parts-healthy');
+    expect(healthy).toBeDefined();
+    expect(healthy?.title).toContain('Không có part nào trong vùng rủi ro');
+    expect(healthy?.why).toContain('Parts_Designs.Points');
+  });
 });

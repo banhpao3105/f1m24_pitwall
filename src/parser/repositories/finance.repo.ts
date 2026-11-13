@@ -44,6 +44,27 @@ export interface RawFinance {
 }
 
 export function getFinanceSnapshot(db: SqlJsDatabase): RawFinance {
+  /* TransactionType value → label from the save's own enum table (0.4.1) —
+   * same pattern as Parts_Enum_Type; raw transactions store numeric types. */
+  const typeLabels = new Map<number, string>();
+  const txEnum = readTable(db, 'Finance_Enum_TransactionType');
+  if (txEnum.present) {
+    const vIdx = colIndex(txEnum.columns, 'TransactionType');
+    const nIdx = colIndex(txEnum.columns, 'Name');
+    if (vIdx >= 0 && nIdx >= 0) {
+      for (const row of txEnum.rows) {
+        const v = readNum(row, vIdx);
+        const n = readStr(row, nIdx);
+        if (v != null && n != null && !typeLabels.has(v)) typeLabels.set(v, n);
+      }
+    }
+  }
+  const resolveCategory = (raw: string | undefined): string | undefined => {
+    if (raw == null) return undefined;
+    if (/^\d+$/.test(raw)) return typeLabels.get(Number(raw)) ?? `Type ${raw}`;
+    return raw;
+  };
+
   const bal = readTable(db, BALANCE_TABLE);
   const bMap = buildColumnMap(bal.columns, BALANCE_CANDIDATES);
   const perTeam = new Map<
@@ -74,10 +95,14 @@ export function getFinanceSnapshot(db: SqlJsDatabase): RawFinance {
 
   const tx = readTable(db, TRANSACTIONS_TABLE);
   const tMap = buildColumnMap(tx.columns, TX_CANDIDATES);
+  const txIdIdx = colIndex(tx.columns, tMap.txId);
   const transactions: FinanceTransactionRow[] = tx.present
-    ? tx.rows.flatMap((row) => {
-        const idIdx = colIndex(tx.columns, tMap.txId);
-        const txId = readNum(row, idIdx);
+    ? tx.rows.flatMap((row, i) => {
+        // 0.4.1 bug fix (verified 1.11.0): Finance_Transactions has NO
+        // primary-key column at all — the old `txId == null → skip` dropped
+        // EVERY row. Fall back to the row position as a stable local id
+        // (ordering/reference only; the save itself has no id to preserve).
+        const txId = readNum(row, txIdIdx) ?? (txIdIdx < 0 ? i : null);
         if (txId == null) return [];
         return [
           {
@@ -86,7 +111,7 @@ export function getFinanceSnapshot(db: SqlJsDatabase): RawFinance {
             day: readNum(row, colIndex(tx.columns, tMap.day)),
             amount: readNum(row, colIndex(tx.columns, tMap.amount)),
             category: tMap.category
-              ? readStr(row, colIndex(tx.columns, tMap.category))
+              ? resolveCategory(readStr(row, colIndex(tx.columns, tMap.category)))
               : undefined,
             note: tMap.note ? readStr(row, colIndex(tx.columns, tMap.note)) : undefined,
           },

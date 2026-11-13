@@ -98,6 +98,48 @@ describe('buildFinance', () => {
     expect(fin.recommendations[0].id).toBe('finance-nodata');
     expect(fin.assumptions.some((a) => a.text.includes('Finance_*'))).toBe(true);
   });
+
+  it('0.4.1 regression: all-zero league is NOT "above median"', () => {
+    // Real-save shape (early season): every team banks 0 — median 0, player 0,
+    // and the old `>=` check claimed "trên median" while the title said
+    // "hạng 11/11". The rec must now word the tie and drop the wrong claim.
+    const model = makeModel({
+      parts: {
+        ...emptyPhase2Sections().parts,
+        expertise: [1, 2, 3].map((teamId) => ({
+          teamId,
+          partType: 'FrontWing',
+          nextSeasonExpertise: 0,
+        })),
+        tablesPresent: { designs: false, items: false, statValues: false, loadouts: false, expertise: true },
+      },
+    });
+    const fin = buildFinance(model);
+    const rec = fin.recommendations.find((r) => r.id === 'finance-expertise-bank');
+    expect(rec).toBeDefined();
+    expect(rec?.title).toMatch(/Expertise bank mùa sau: 0 \(hạng \d\/3\)/);
+    expect(rec?.action).not.toContain('trên median');
+    expect(rec?.action).toContain('Cả giải chưa bank');
+    expect(rec?.why).toContain('toàn bộ 3 đội đang bằng 0');
+    expect(rec?.riskIfIgnored).toBeUndefined();
+  });
+
+  it('0.4.1: strictly above median keeps the "giữ bank" advice', () => {
+    const model = makeModel({
+      parts: {
+        ...emptyPhase2Sections().parts,
+        expertise: [
+          { teamId: 1, partType: 'FrontWing', nextSeasonExpertise: 50 },
+          { teamId: 2, partType: 'FrontWing', nextSeasonExpertise: 20 },
+          { teamId: 3, partType: 'FrontWing', nextSeasonExpertise: 10 },
+        ],
+        tablesPresent: { designs: false, items: false, statValues: false, loadouts: false, expertise: true },
+      },
+    });
+    const fin = buildFinance(model);
+    const rec = fin.recommendations.find((r) => r.id === 'finance-expertise-bank');
+    expect(rec?.action).toContain('Giữ bank');
+  });
 });
 
 describe('buildRegulations', () => {

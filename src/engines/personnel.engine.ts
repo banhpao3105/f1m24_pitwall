@@ -18,7 +18,7 @@
 
 import type { Confidence, Evidence, Assumption, Recommendation } from '../domain/provenance';
 import type { EngineResult } from '../domain/types';
-import type { SaveModel } from '../domain/types';
+import type { SaveModel, StaffContractRow } from '../domain/types';
 
 export const CONTRACT_ALERT_DAYS = 60;
 export const FORM_RACES = 5;
@@ -174,12 +174,39 @@ export function buildPersonnel(model: SaveModel): EngineResult<PersonnelBoard> {
     };
   });
 
-  /* contracts (adaptive) */
+  /* contracts (adaptive)
+   *
+   * 0.4.1 bug fix: Staff_Contracts is contract HISTORY — one staff can have
+   * several rows (renewals verified in the real 1.11.0 save), which produced
+   * duplicate React keys and double rows in the Strategy list. The board
+   * exposes ONE row per staff — the contract in force:
+   *   1. the latest contract that has already started (StartDay ≤ current
+   *      day), tie-break: higher EndSeason;
+   *   2. otherwise (all future-dated) the earliest StartDay.
+   * The raw rows stay in the model for the Gazette transfer history.
+   */
+  const pickCurrent = (rows: StaffContractRow[]): StaffContractRow => {
+    const started = rows.filter((r) => r.startDay != null && r.startDay <= model.meta.day);
+    const pool = started.length > 0 ? started : rows;
+    if (started.length > 0) {
+      return [...pool].sort(
+        (a, b) => (b.startDay ?? -1) - (a.startDay ?? -1) || (b.endSeason ?? -1) - (a.endSeason ?? -1),
+      )[0];
+    }
+    return [...pool].sort((a, b) => (a.startDay ?? Infinity) - (b.startDay ?? Infinity))[0];
+  };
+  const contractsByStaff = new Map<number, StaffContractRow[]>();
+  for (const c of model.personnel.contracts) {
+    const list = contractsByStaff.get(c.staffId);
+    if (list) list.push(c);
+    else contractsByStaff.set(c.staffId, [c]);
+  }
   const nameById = new Map(model.drivers.map((d) => [d.staffId, d.fullName]));
   const moraleById = new Map(
     model.personnel.performance.filter((p) => p.morale != null).map((p) => [p.staffId, p.morale as number]),
   );
-  const contracts: ContractCard[] = model.personnel.contracts.map((c) => {
+  const contracts: ContractCard[] = [...contractsByStaff.values()].map((rows) => {
+    const c = pickCurrent(rows);
     const daysLeft = c.endDay != null ? c.endDay - model.meta.day : null;
     return {
       staffId: c.staffId,
@@ -194,13 +221,27 @@ export function buildPersonnel(model: SaveModel): EngineResult<PersonnelBoard> {
     };
   });
 
-  const patience = model.personnel.patience.map((p) => ({
-    staffId: p.staffId,
-    name: nameById.get(p.staffId) ?? null,
-    suitability: p.suitability ?? null,
-    opinion: p.opinion ?? null,
-    threshold: p.threshold ?? null,
-  }));
+  /* patience intel — F1M24 stores one row per (staff, team). The decision-
+   * relevant row is the one about the PLAYER team; when the team column is
+   * unavailable (older schema) fall back to the first row per staff so the
+   * list stays duplicate-free. */
+  const playerPatience = model.personnel.patience.filter(
+    (p) => p.teamId != null ? p.teamId === playerTeamId : true,
+  );
+  const patienceSeen = new Set<number>();
+  const patience = playerPatience
+    .filter((p) => {
+      if (patienceSeen.has(p.staffId)) return false;
+      patienceSeen.add(p.staffId);
+      return true;
+    })
+    .map((p) => ({
+      staffId: p.staffId,
+      name: nameById.get(p.staffId) ?? null,
+      suitability: p.suitability ?? null,
+      opinion: p.opinion ?? null,
+      threshold: p.threshold ?? null,
+    }));
 
   const hasContractData = model.personnel.tablesPresent.contracts && contracts.length > 0;
   const hasPatienceData = model.personnel.tablesPresent.patience && patience.length > 0;

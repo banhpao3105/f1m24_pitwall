@@ -80,6 +80,13 @@ describe('buildPaceBoard', () => {
     // also within pace tolerance. rivalRef = nearest by pace = team 2.
     expect(board.rivals.map((r) => r.teamId).sort()).toEqual([2, 3]);
 
+    // 0.4.1: rivalRef is the single team playerVsRivalS is measured against
+    // (nearest pace), NOT rivals[0] (the fastest rival).
+    expect(board.rivalRef?.teamId).toBe(2);
+    expect(board.rivalRef?.teamName).toBe('Rival Racing');
+    // the recommendation quotes the same team as rivalRef
+    expect(result.recommendations[0].title).toContain('Rival Racing');
+
     // player − rival per race = 80200 − 80350 = −150ms → −0.15s (player faster)
     expect(board.playerVsRivalS).toBeCloseTo(-0.15, 6);
     expect(result.recommendations[0].title).toContain('nhanh hơn');
@@ -105,5 +112,30 @@ describe('buildPaceBoard', () => {
     const a = buildPaceBoard(model);
     const b = buildPaceBoard(model);
     expect(JSON.stringify(a.data.rows)).toBe(JSON.stringify(b.data.rows));
+  });
+
+  it('0.4.1 regression: rivalRef follows pace proximity, not list order', () => {
+    // Player +1.0s; team 2 far ahead (+0.1s); team 3 just behind (+1.05s).
+    // rivals[0] would be team 2 (fastest); rivalRef must be team 3.
+    const laps = { 1: 81000, 2: 80100, 3: 81050 } as Record<number, number>;
+    const results = [1, 2, 3].flatMap((teamId) =>
+      [1, 2].map((n) => ({
+        driverId: teamId * 10 + n,
+        driverName: `D${teamId}${n}`,
+        teamId,
+        teamName: `Team ${teamId}`,
+        finishingPos: teamId * 2 + n,
+        points: 0,
+        dnf: false,
+        fastestLapMs: laps[teamId],
+      })),
+    );
+    const race: Race = {
+      raceId: 9, seasonId: 2023, trackId: 9, trackName: 'T9',
+      day: 90, state: 2, isSprint: false, results,
+    };
+    const result = buildPaceBoard(makeModel([race], standings));
+    expect(result.data.rivals.map((r) => r.teamId)).toContain(2);
+    expect(result.data.rivalRef?.teamId).toBe(3);
   });
 });

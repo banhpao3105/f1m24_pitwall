@@ -282,15 +282,31 @@ export function buildCarLab(model: SaveModel): EngineResult<CarLab> {
     });
   }
   if (recommendations.length === 0) {
-    recommendations.push({
-      id: 'car-nodata',
-      title: 'Car Lab đang chạy ở chế độ suy giảm',
-      action: 'Nạp save trong race weekend (khi Parts data được game ghi đầy đủ) hoặc introspect save để chốt schema Parts_*',
-      why: `Thiếu bảng/cột Parts: designs=${model.parts.tablesPresent.designs}, items=${model.parts.tablesPresent.items}. League xe đang dùng pace fallback — vẫn dùng được nhưng không có part grid/durability/dev queue.`,
-      confidence: 'LOW',
-      evidence,
-      assumptions,
-    });
+    /* 0.4.1 bug fix: the "degraded mode" rec used to fire whenever the dev
+     * queue was empty — even with Parts fully mapped and healthy. The real
+     * F1M24 schema has NO design-points column (verified 1.11.0), so an
+     * empty queue is the NORM, not a data loss. Distinguish three states. */
+    if (!hasPartsData || parts.length === 0) {
+      recommendations.push({
+        id: 'car-nodata',
+        title: 'Car Lab đang chạy ở chế độ suy giảm',
+        action: 'Nạp save trong race weekend (khi Parts data được game ghi đầy đủ) hoặc introspect save để chốt schema Parts_*',
+        why: `Thiếu bảng/cột Parts: designs=${model.parts.tablesPresent.designs}, items=${model.parts.tablesPresent.items}${hasPartsData ? ' (bảng có nhưng không map được part nào của đội bạn)' : ''}. League xe đang dùng pace fallback — vẫn dùng được nhưng không có part grid/durability/dev queue.`,
+        confidence: 'LOW',
+        evidence,
+        assumptions,
+      });
+    } else {
+      recommendations.push({
+        id: 'car-parts-healthy',
+        title: 'Không có part nào trong vùng rủi ro',
+        action: 'Giữ lịch bảo dưỡng hiện tại — kiểm tra lại condition sau 1–2 chặng (parts mòn dần theo usage)',
+        why: `Condition ${parts.length} nhóm part của đội bạn đều trên ngưỡng WATCH ${DURABILITY_RISK_WATCH_BELOW} (thấp nhất: ${parts[0]?.partType ?? 'n/a'} ${(parts[0]?.conditionAvg ?? 1) * 100}%). Dev queue trống vì schema F1M24 không có cột điểm thiết kế (Parts_Designs.Points) — league xe vẫn xếp theo pace board (ghi rõ ở evidence).`,
+        confidence: 'MEDIUM',
+        evidence,
+        assumptions,
+      });
+    }
   }
 
   const warnings: string[] = [];

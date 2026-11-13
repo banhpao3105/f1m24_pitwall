@@ -261,6 +261,9 @@ export interface StaffPerformanceRow {
 
 export interface ContractPatienceRow {
   staffId: number;
+  /** Target team of this patience row — F1M24 saves store one row per
+   * (staff, team); the player-team row is the decision-relevant one. */
+  teamId?: number;
   suitability?: number;
   opinion?: number;
   /** Acceptance threshold 0..1 — lower = easier to sign (docs/03 §5.7). */

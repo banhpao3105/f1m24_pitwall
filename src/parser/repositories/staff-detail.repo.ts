@@ -16,7 +16,6 @@ import {
   buildColumnMap,
   colIndex,
   readNum,
-  pkCandidates,
 } from './adaptive';
 import type {
   StaffContractRow,
@@ -48,9 +47,11 @@ const PERFORMANCE_CANDIDATES: Record<string, string[]> = {
 
 const PATIENCE_CANDIDATES: Record<string, string[]> = {
   staffId: ['StaffID', 'StaffID_1'],
-  suitability: ['Suitability', 'SuitabilityScore'],
-  opinion: ['Opinion', 'OpinionScore', 'OpinionOfPlayer'],
-  threshold: ['Threshold', 'AcceptanceThreshold', 'Patience', 'PatienceThreshold'],
+  // F1M24 (verified 1.11.0): one row per (StaffID, TeamID) — 11 teams.
+  teamId: ['TeamID', 'TeamID_1'],
+  suitability: ['Suitability', 'SuitabilityRating'],
+  opinion: ['Opinion', 'OpinionRating', 'TeamOpinionRating'],
+  threshold: ['Threshold', 'ContractAcceptanceThreshold', 'AcceptanceThreshold', 'Patience', 'PatienceThreshold'],
 };
 
 export interface RawStaffDetail {
@@ -107,6 +108,7 @@ export function getStaffDetail(db: SqlJsDatabase): RawStaffDetail {
         return [
           {
             staffId,
+            teamId: readNum(row, colIndex(pat.columns, aMap.teamId)),
             suitability: readNum(row, colIndex(pat.columns, aMap.suitability)),
             opinion: readNum(row, colIndex(pat.columns, aMap.opinion)),
             threshold: readNum(row, colIndex(pat.columns, aMap.threshold)),

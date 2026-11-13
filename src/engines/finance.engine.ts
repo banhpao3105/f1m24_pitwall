@@ -184,20 +184,29 @@ export function buildFinance(model: SaveModel): EngineResult<FinanceBoard> {
   /* recommendations (6-field standard) */
   const recommendations: Recommendation[] = [];
   if (playerExp && medianNext != null && expRows.length > 1) {
-    const aboveMedian = playerExp.nextSeason >= medianNext;
+    // 0.4.1 bug fix: `>=` claimed "above median" when the whole league sat at
+    // 0 (median 0, player 0, rank last). Compare strictly and word the tie.
+    const aboveMedian = playerExp.nextSeason > medianNext;
+    const atMedian = playerExp.nextSeason === medianNext;
+    const allZero = expRows.every((r) => r.nextSeason === 0);
     recommendations.push({
       id: 'finance-expertise-bank',
       title: `Expertise bank mùa sau: ${playerExp.nextSeason} (hạng ${playerExp.rank}/${expRows.length})`,
       action: aboveMedian
         ? 'Giữ bank — vốn expertise của bạn đã trên median giải, chi R&D thêm vào cuối mùa chỉ tăng giá trị đã lớn'
-        : 'Đẩy R&D cuối mùa để nâng NextSeasonExpertise lên tối thiểu bằng median giải',
-      why: `Tổng NextSeasonExpertise của bạn ${playerExp.nextSeason} vs median giải ${medianNext} (nguồn: Parts_TeamExpertise.NextSeasonExpertise — cột đã xác minh từ bản cũ).`,
+        : atMedian
+          ? allZero
+            ? 'Cả giải chưa bank expertise nào (toàn bộ 0) — chưa có mặt trận nào thắng/thua; bật R&D bank từ giữa mùa để tạo khoảng cách'
+            : 'Bằng median giải — chưa có lợi thế; đẩy R&D cuối mùa để nhích lên trên nhóm giữa'
+          : 'Đẩy R&D cuối mùa để nâng NextSeasonExpertise lên tối thiểu bằng median giải',
+      why: `Tổng NextSeasonExpertise của bạn ${playerExp.nextSeason} vs median giải ${medianNext}${allZero ? ` — lưu ý: toàn bộ ${expRows.length} đội đang bằng 0, xếp hạng ở giai đoạn này chỉ phản ánh thứ tự hiển thị` : ''} (nguồn: Parts_TeamExpertise.NextSeasonExpertise — cột đã xác minh từ bản cũ).`,
       confidence: expRows.length >= 5 ? 'HIGH' : 'MEDIUM',
       evidence,
       assumptions,
-      riskIfIgnored: aboveMedian
-        ? undefined
-        : 'Vào mùa mới bạn xuất phát sau các đội về expertise — mất thời gian đuổi đầu mùa',
+      riskIfIgnored:
+        aboveMedian || (atMedian && allZero)
+          ? undefined
+          : 'Vào mùa mới bạn xuất phát sau các đội về expertise — mất thời gian đuổi đầu mùa',
     });
   }
   if (costPerPoint != null) {

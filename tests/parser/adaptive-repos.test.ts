@@ -92,13 +92,42 @@ describe('getPartsSnapshot', () => {
     expect(snap.tablesPresent.designs).toBe(false);
   });
 
+  it('0.4.1 regression: maps the F1M24 singular PK convention (DesignID/ItemID)', () => {
+    // Real 1.11.0 schema — the old "<Table>ID" pkCandidates missed these
+    // entirely, dropping EVERY design/item row (Car Lab looked degraded).
+    const db = dbFrom([
+      `CREATE TABLE Parts_Designs (DesignID INTEGER, TeamID INTEGER, PartType INTEGER);`,
+      `INSERT INTO Parts_Designs VALUES (11, 1, 7);`,
+      `CREATE TABLE Parts_Items (ItemID INTEGER, DesignID INTEGER, Condition REAL);`,
+      `INSERT INTO Parts_Items VALUES (5, 11, 0.9);`,
+    ]);
+    const snap = getPartsSnapshot(db);
+    expect(snap.designs).toHaveLength(1);
+    expect(snap.designs[0]).toMatchObject({ designId: 11, teamId: 1 });
+    expect(snap.items).toHaveLength(1);
+    expect(snap.items[0]).toMatchObject({ itemId: 5, designId: 11, condition: 0.9 });
+  });
+
   it('coerces numeric part types to strings', () => {
     const db = dbFrom([
       `CREATE TABLE Parts_Designs (Parts_DesignsID INTEGER, TeamID INTEGER, PartType INTEGER);`,
       `INSERT INTO Parts_Designs VALUES (1, 3, 7);`,
     ]);
     const snap = getPartsSnapshot(db);
-    expect(snap.designs[0].partType).toBe('7');
+    // 0.4.1: numeric types without a Parts_Enum_Type table get a readable
+    // placeholder instead of a bare number.
+    expect(snap.designs[0].partType).toBe('PartType 7');
+  });
+
+  it('resolves numeric part types via the save enum table (0.4.1)', () => {
+    const db = dbFrom([
+      `CREATE TABLE Parts_Designs (DesignID INTEGER, TeamID INTEGER, PartType INTEGER);`,
+      `CREATE TABLE Parts_Enum_Type (Value INTEGER, Name TEXT);`,
+      `INSERT INTO Parts_Designs VALUES (1, 3, 7);`,
+      `INSERT INTO Parts_Enum_Type VALUES (7, 'FrontWing');`,
+    ]);
+    const snap = getPartsSnapshot(db);
+    expect(snap.designs[0].partType).toBe('FrontWing');
   });
 
   it('normalizes condition from 0..100 scale and rejects unknown scales', () => {
@@ -143,6 +172,26 @@ describe('getFinanceSnapshot', () => {
     expect(fin.transactions).toEqual([]);
     expect(fin.tablesPresent).toEqual({ balance: false, transactions: false });
   });
+
+  it('0.4.1 regression: keeps transactions when the table has no PK column', () => {
+    // Real 1.11.0 Finance_Transactions: TeamID, Day, Value, TransactionType,
+    // Reference, AffectsCostCap — no id column. The old `txId == null → skip`
+    // dropped EVERY transaction (finance snapshot was permanently empty).
+    const db = dbFrom([
+      `CREATE TABLE Finance_TeamBalance (TeamID INTEGER, Balance INTEGER);`,
+      `INSERT INTO Finance_TeamBalance VALUES (1, 20000000);`,
+      `CREATE TABLE Finance_Transactions (TeamID INTEGER, Day INTEGER, Value INTEGER, TransactionType INTEGER);`,
+      `INSERT INTO Finance_Transactions VALUES (1, 12, -14400000, 22);`,
+      `INSERT INTO Finance_Transactions VALUES (1, 13, -2000000, 9);`,
+      `CREATE TABLE Finance_Enum_TransactionType (TransactionType INTEGER, Name TEXT);`,
+      `INSERT INTO Finance_Enum_TransactionType VALUES (22, 'PartDesign');`,
+      `INSERT INTO Finance_Enum_TransactionType VALUES (9, 'PartManufacture');`,
+    ]);
+    const fin = getFinanceSnapshot(db);
+    expect(fin.transactions).toHaveLength(2);
+    expect(fin.transactions[0]).toMatchObject({ teamId: 1, amount: -14400000, category: 'PartDesign' });
+    expect(fin.transactions[1].category).toBe('PartManufacture');
+  });
 });
 
 /* ── staff detail ────────────────────────────────────────────────────────── */
@@ -163,6 +212,21 @@ describe('getStaffDetail', () => {
     expect(staff.contracts[0]).toMatchObject({ staffId: 7, teamId: 1, contractType: 0, salary: 1250000, endDay: 340 });
     expect(staff.performance[0]).toMatchObject({ staffId: 7, rating: 84, morale: 66 });
     expect(staff.patience[0]).toMatchObject({ staffId: 8, threshold: 0.2 });
+  });
+
+  it('0.4.1: maps patience TeamID + verified F1M24 rating columns', () => {
+    // Real 1.11.0 Staff_ContractPatience: one row per (StaffID, TeamID) with
+    // SuitabilityRating / TeamOpinionRating / ContractAcceptanceThreshold.
+    const db = dbFrom([
+      `CREATE TABLE Staff_ContractPatience (StaffID INTEGER, TeamID INTEGER, SuitabilityRating INTEGER, TeamOpinionRating INTEGER, ContractAcceptanceThreshold REAL);`,
+      `INSERT INTO Staff_ContractPatience VALUES (7, 1, 41, 89, 0.657);`,
+      `INSERT INTO Staff_ContractPatience VALUES (7, 2, 12, 30, 0.9);`,
+    ]);
+    const staff = getStaffDetail(db);
+    expect(staff.patience).toHaveLength(2);
+    expect(staff.patience[0]).toMatchObject({
+      staffId: 7, teamId: 1, suitability: 41, opinion: 89, threshold: 0.657,
+    });
   });
 
   it('degrades when staff detail tables are missing', () => {

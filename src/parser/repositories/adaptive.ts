@@ -100,7 +100,13 @@ export function readNumOrStr(
   return typeof v === 'number' ? String(v) : String(v);
 }
 
-/** Primary-key candidates for a table (F1M convention: "<Table>ID"). */
+/** Primary-key candidates for a table (F1M convention: "<SingularEntity>ID"). */
 export function pkCandidates(table: string): string[] {
-  return [`${table}ID`, `${table}_ID`, 'ID', 'Id'];
+  // 0.4.1 bug fix (verified against a real 1.11.0 save): F1M24 names the PK
+  // after the SINGULAR entity — Parts_Designs → DesignID, Parts_Items →
+  // ItemID, Regulations_Proposals → ProposalID. The old "<Table>ID" guesses
+  // never matched, so every Parts/Regulations row was silently dropped.
+  const last = table.split('_').pop() ?? table;
+  const singular = last.endsWith('s') ? last.slice(0, -1) : last;
+  return [`${table}ID`, `${table}_ID`, `${singular}ID`, 'ID', 'Id'];
 }

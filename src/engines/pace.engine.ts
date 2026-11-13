@@ -40,6 +40,13 @@ export interface PaceBoard {
   playerTeamId: number;
   /** The reference rival used in recommendations (nearest above/below). */
   rivals: PaceTeamRow[];
+  /**
+   * The single rival `playerVsRivalS` is measured against — the rival with
+   * the closest median pace to the player. UI copy MUST use this team when
+   * quoting `playerVsRivalS`; `rivals` may contain faster teams that are
+   * NOT the reference (bug fix 0.4.1: Race Weekend quoted rivals[0]).
+   */
+  rivalRef: PaceTeamRow | null;
   /** Median (player − rival) per race, seconds; positive = player slower. */
   playerVsRivalS: number | null;
   /** Trend over the last races: negative = player closing the gap. */
@@ -249,6 +256,7 @@ export function buildPaceBoard(
       rows,
       playerTeamId,
       rivals,
+      rivalRef: rivalRef ?? null,
       playerVsRivalS,
       trendS,
       racesConsidered: usableRaces.length,

@@ -132,6 +132,54 @@ describe('buildPersonnel', () => {
     expect(p.warnings).toContain('CONTRACT_DATA_UNAVAILABLE');
     expect(p.assumptions.some((a) => a.text.includes('Staff_Contracts'))).toBe(true);
   });
+
+  it('0.4.1: dedupes contract history to one row per staff (latest started wins)', () => {
+    // Real-save shape: renewals leave 2+ rows per staff. Contract history:
+    // staff 1 → old row (StartDay 100, EndSeason 2026) + renewal (StartDay 350
+    // ≤ current day 400, EndSeason 2028) — the renewal must win.
+    const model = makeModel(duelRaces(), {
+      personnel: {
+        contracts: [
+          { staffId: 1, teamId: 1, contractType: 0, salary: 1_000_000, startDay: 100, endSeason: 2026 },
+          { staffId: 1, teamId: 1, contractType: 0, salary: 2_000_000, startDay: 350, endSeason: 2028 },
+          { staffId: 2, teamId: 1, contractType: 0, salary: 500_000, startDay: 100, endSeason: 2026 },
+          { staffId: 2, teamId: 1, contractType: 0, salary: 800_000, startDay: 100, endSeason: 2027 },
+        ],
+        performance: [],
+        patience: [],
+        tablesPresent: { contracts: true, performance: false, patience: false },
+      },
+    });
+    const p = buildPersonnel(model);
+    const ids = p.data.contracts.map((c) => c.staffId).sort();
+    expect(ids).toEqual([1, 2]); // one row per staff — no duplicates
+    const ace = p.data.contracts.find((c) => c.staffId === 1)!;
+    expect(ace.salary).toBe(2_000_000); // latest started contract
+    // same StartDay → higher EndSeason wins
+    const backup = p.data.contracts.find((c) => c.staffId === 2)!;
+    expect(backup.salary).toBe(800_000);
+  });
+
+  it('0.4.1: patience keeps only the player-team row per staff', () => {
+    // F1M24 stores one patience row per (staff, team) — 11 rows per staff.
+    const model = makeModel(duelRaces(), {
+      personnel: {
+        contracts: [],
+        performance: [],
+        patience: [
+          { staffId: 7, teamId: 2, suitability: 0.1, opinion: 0.2, threshold: 0.9 },
+          { staffId: 7, teamId: 1, suitability: 0.8, opinion: 0.6, threshold: 0.2 },
+          { staffId: 8, teamId: 3, suitability: 0.3, opinion: 0.4, threshold: 0.7 },
+        ],
+        tablesPresent: { contracts: false, performance: false, patience: true },
+      },
+    });
+    const p = buildPersonnel(model);
+    const rows = p.data.patience;
+    expect(rows.map((r) => r.staffId).sort()).toEqual([7]); // staff 8: no player-team row
+    expect(rows[0].threshold).toBe(0.2);
+    expect(rows[0].suitability).toBe(0.8);
+  });
 });
 
 describe('buildDriverDuel', () => {
