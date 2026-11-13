@@ -32,7 +32,8 @@ export function getPracticeResults(db: SqlJsDatabase): RawPracticeResult[] {
     session: Number(row[1] ?? 0),
     driverId: Number(row[2] ?? 0),
     teamId: Number(row[3] ?? 0),
-    bestLapMs: Number(row[4] ?? 0),
+    // BestLapTime stored in seconds (float) — normalized to ms.
+  bestLapMs: Math.round(Number(row[4] ?? 0) * 1000),
     bestLapTyre: Number(row[5] ?? 0),
     raceFormula: Number(row[6] ?? 0),
   }));

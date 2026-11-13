@@ -225,6 +225,7 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
       carId: t.carId,
       tyreSetId: t.tyreSetId,
       weekendTyreType: t.weekendTyreType,
+      frontLeftWear: t.frontLeftWear,
       availabilityState: t.availabilityState,
       estimatedLapLifeRemaining: t.estimatedLapLifeRemaining,
     })),

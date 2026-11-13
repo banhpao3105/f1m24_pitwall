@@ -5,6 +5,8 @@
  *   Races_Tracks: TrackID, Name, Laps, PitLaneTimeLoss
  *   Races_Results: Season, RaceID, FinishingPos, DriverID, TeamID, Laps,
  *          Time, FastestLap, Points, DNF, StartingPos
+ * TIME UNITS: the save stores seconds (float). This repo converts to the
+ * model contract (ms) at the boundary — engines/UI never see raw seconds.
  *
  * NOTE (verified vs planning): Races_Results uses `Season` + `FinishingPos`,
  * Races uses `WeekendType` (planning file 01 flagged these columns as
@@ -78,7 +80,8 @@ export function getRaceResults(db: SqlJsDatabase): RawRaceResult[] {
     points: Number(row[4] ?? 0),
     dnf: Number(row[5] ?? 0),
     laps: row[6] == null ? undefined : Number(row[6]),
-    fastestLap: row[7] == null ? undefined : Number(row[7]),
+    // FastestLap stored in seconds (float) — normalized to ms (model contract).
+    fastestLap: row[7] == null ? undefined : Math.round(Number(row[7]) * 1000),
     startingPos: row[8] == null ? undefined : Number(row[8]),
   }));
 }

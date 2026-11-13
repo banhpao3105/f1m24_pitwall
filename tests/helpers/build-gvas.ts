@@ -151,8 +151,9 @@ export const FIXTURE_SCHEMA_SQL = [
   `INSERT INTO Races_DriverStandings VALUES (2023, 101, 25, 1, 1)`,
   `INSERT INTO Races_DriverStandings VALUES (2023, 102, 18, 2, 1)`,
   // One physical stop spanning two timing rows: MIN(Lap)=12, SUM duration.
-  `INSERT INTO Races_PitStopTimings VALUES (2023, 1, 1, 101, 1, 0, 21000, 12)`,
-  `INSERT INTO Races_PitStopTimings VALUES (2023, 1, 1, 101, 1, 1, 2400, 12)`,
+  // Durations in seconds (real save unit) — repo converts to ms.
+  `INSERT INTO Races_PitStopTimings VALUES (2023, 1, 1, 101, 1, 0, 21.0, 12)`,
+  `INSERT INTO Races_PitStopTimings VALUES (2023, 1, 1, 101, 1, 1, 2.4, 12)`,
   // Practice: soft (tyre=2) best lap faster than medium (tyre=1).
   `INSERT INTO Races_PracticeResults VALUES (2023, 1, 1, 101, 1, 90500, 2, 1)`,
   `INSERT INTO Races_PracticeResults VALUES (2023, 1, 1, 102, 2, 91000, 1, 1)`,

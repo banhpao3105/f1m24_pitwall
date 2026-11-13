@@ -144,7 +144,10 @@ export interface StandingRow {
 export interface TyreAllocation {
   carId: number;
   tyreSetId: number;
+  /** 0=W, 1=I, 2=S, 3=M, 4=H (oracle encoding). */
   weekendTyreType: number;
+  /** 0 = fresh … 1 = worn (oracle: fresh fresh-set filter is >= 0.99). */
+  frontLeftWear: number;
   availabilityState: number;
   estimatedLapLifeRemaining?: number;
 }

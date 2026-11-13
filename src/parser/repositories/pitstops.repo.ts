@@ -35,6 +35,7 @@ export function getPitTimings(db: SqlJsDatabase): RawPitTiming[] {
     pitStopId: Number(row[3] ?? 0),
     stage: Number(row[4] ?? 0),
     lap: Number(row[5] ?? 0),
-    durationMs: Number(row[6] ?? 0),
+    // Duration stored in seconds (float) — normalized to ms.
+  durationMs: Math.round(Number(row[6] ?? 0) * 1000),
   }));
 }
