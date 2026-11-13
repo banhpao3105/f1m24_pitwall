@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildPaceBoard } from '@/engines/pace.engine';
 import type { SaveModel, Race, StandingRow } from '@/domain/types';
+import { emptyPhase2Sections } from '../helpers/model';
 
 function makeModel(races: Race[], teamStandings: StandingRow[]): SaveModel {
   return {
@@ -27,9 +28,7 @@ function makeModel(races: Race[], teamStandings: StandingRow[]): SaveModel {
     races,
     standings: { drivers: [], teams: teamStandings },
     tyres: [],
-    parts: [],
-    regulations: [],
-    finance: {},
+    ...emptyPhase2Sections(),
     availability: [],
   };
 }

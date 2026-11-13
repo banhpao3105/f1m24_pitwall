@@ -15,6 +15,7 @@ import {
   type TyreLab,
 } from '@/engines/tyre.engine';
 import type { SaveModel, Race } from '@/domain/types';
+import { emptyPhase2Sections } from '../helpers/model';
 
 /* ── helpers to build a minimal SaveModel ────────────────────────────────── */
 
@@ -52,9 +53,7 @@ function makeModel(races: Race[], overrides: Partial<SaveModel> = {}): SaveModel
     races,
     standings: { drivers: [], teams: [] },
     tyres: [],
-    parts: [],
-    regulations: [],
-    finance: {},
+    ...emptyPhase2Sections(),
     availability: [],
     ...overrides,
   };

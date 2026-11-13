@@ -10,16 +10,27 @@
 
 import type { SqlJsDatabase } from '../sqlite/sqljs-loader';
 import type { SaveBinaryMeta } from '../parse-save';
-import type { SaveMeta, SaveModel, Team, Race, GameVersionId } from '../../domain/types';
-import { detectSchema, type SchemaInfo } from '../schema';
+import type {
+  SaveMeta,
+  SaveModel,
+  Team,
+  Race,
+  GameVersionId,
+  QualifyingResult,
+} from '../../domain/types';
+import { detectSchema, type SchemaInfo, OPTIONAL_TABLES } from '../schema';
 import { getPlayer, getPlayerState } from '../repositories/player.repo';
 import { getTeams } from '../repositories/teams.repo';
-import { getStaffCount } from '../repositories/staff.repo';
 import { getRaces, getRaceResults } from '../repositories/races.repo';
 import { getDrivers } from '../repositories/drivers.repo';
 import { getPracticeResults } from '../repositories/practice.repo';
 import { getPitTimings } from '../repositories/pitstops.repo';
 import { getTyreAllocations } from '../repositories/tyres.repo';
+import { getQualifyingResults } from '../repositories/quali.repo';
+import { getPartsSnapshot } from '../repositories/parts.repo';
+import { getFinanceSnapshot } from '../repositories/finance.repo';
+import { getStaffDetail } from '../repositories/staff-detail.repo';
+import { getRegulations } from '../repositories/regulations.repo';
 import { computeStandings } from './compute-standings';
 import { SaveParseError, ParseErrorCode } from '../errors';
 
@@ -166,6 +177,73 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
     });
   }
 
+  // Qualifying — keep the LAST stage per driver per race (oracle:
+  // QualifyingStage = MAX(...) is the final classification).
+  const qualiRows = getQualifyingResults(db);
+  const qualiKey = (raceId: number, driverId: number) => `${raceId}:${driverId}`;
+  const qualiFinal = new Map<string, (typeof qualiRows)[number]>();
+  for (const q of qualiRows) {
+    const key = qualiKey(q.raceId, q.driverId);
+    const cur = qualiFinal.get(key);
+    if (!cur || (q.qualifyingStage ?? 0) >= (cur.qualifyingStage ?? 0)) {
+      qualiFinal.set(key, q);
+    }
+  }
+  for (const q of qualiFinal.values()) {
+    const race = raceById.get(q.raceId);
+    if (!race) continue;
+    race.qualifying ??= [];
+    const entry: QualifyingResult = {
+      driverId: q.driverId,
+      driverName: driverName(q.driverId),
+      teamId: q.teamId,
+      finishingPos: q.finishingPos,
+      championshipPoints: q.championshipPoints,
+    };
+    race.qualifying.push(entry);
+  }
+  for (const race of raceModels) {
+    if (race.qualifying) race.qualifying.sort((a, b) => a.finishingPos - b.finishingPos);
+  }
+
+  /* ── Phase 2 sections — schema-adaptive, each isolated (never throws) ── */
+  const phase2Warnings: string[] = [];
+  const safe = <T>(table: string, fn: () => T, fallback: T): T => {
+    try {
+      return fn();
+    } catch (err) {
+      phase2Warnings.push(`REPO_FAILED:${table}:${err instanceof Error ? err.message : 'unknown'}`);
+      return fallback;
+    }
+  };
+
+  const partsModel = safe('Parts_*', () => getPartsSnapshot(db), {
+    designs: [],
+    items: [],
+    loadouts: [],
+    expertise: [],
+    tablesPresent: { designs: false, items: false, statValues: false, loadouts: false, expertise: false },
+  });
+  const financeModel = safe('Finance_*', () => getFinanceSnapshot(db), {
+    latestBalance: [],
+    transactions: [],
+    tablesPresent: { balance: false, transactions: false },
+  });
+  const staffDetail = safe('Staff_*', () => getStaffDetail(db), {
+    contracts: [],
+    performance: [],
+    patience: [],
+    tablesPresent: { contracts: false, performance: false, patience: false },
+  });
+  const regulationsModel = safe('Regulations_*', () => getRegulations(db), {
+    proposals: [],
+    tablesPresent: { proposals: false, votes: false, changeGroups: false },
+  });
+
+  const playerFinance = financeModel.latestBalance.find(
+    (b) => b.teamId === player.teamId,
+  );
+
   const meta: SaveMeta = {
     id: saveId,
     fileName,
@@ -181,10 +259,8 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
     playerTeamId: player.teamId,
     tablesPresent: schema.tablesPresent,
     tablesMissing: schema.tablesMissingOptional,
-    warnings,
+    warnings: [...warnings, ...phase2Warnings],
   };
-
-  const staffCount = getStaffCount(db);
 
   // Standings computed from results (formula verified 0-mismatch on a real
   // F1M24 save vs Races_DriverStandings — see compute-standings.ts).
@@ -231,17 +307,20 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
       availabilityState: t.availabilityState,
       estimatedLapLifeRemaining: t.estimatedLapLifeRemaining,
     })),
-    parts: [],
-    regulations: [],
-    finance: {},
-    availability: schema.tablesMissingOptional.map((t) => ({
+    parts: partsModel,
+    regulations: regulationsModel.proposals,
+    finance: {
+      balance: playerFinance?.balance,
+      budget: playerFinance?.budget,
+      transactions: financeModel.transactions,
+      tablesPresent: financeModel.tablesPresent,
+    },
+    personnel: staffDetail,
+    availability: OPTIONAL_TABLES.map((t) => ({
       table: t,
-      present: false,
+      present: !schema.tablesMissingOptional.includes(t),
     })),
   };
-
-  // staffCount is informational; keep referenced to avoid dead-code lint.
-  void staffCount;
 }
 
 function toGameVersion(v: string): GameVersionId {

@@ -1,5 +1,6 @@
 /**
- * Normalized Model v0 — the single contract between parser and UI. Phase 0.
+ * Normalized Model — the single contract between parser and UI.
+ * v0: Phase 0. v1: Phase 2 adds parts/finance/personnel/regulations.
  *
  * Source: docs/01-AUDIT-DATA.md §4.4 (file 04 — Data Model).
  * Rules:
@@ -152,28 +153,144 @@ export interface TyreAllocation {
   estimatedLapLifeRemaining?: number;
 }
 
-export interface Part {
-  partId: number;
-  teamId: number;
+/* ── Phase 2 sections — schema-adaptive (docs/01 §4.3 degradation) ────────
+ * Columns for Parts_*, Finance_*, Staff_* detail and Regulations_* have NOT
+ * been verified against a real save yet (no introspected fixture captures
+ * them). Repositories map candidate columns at runtime (see
+ * parser/repositories/adaptive.ts); unmapped concepts stay undefined and
+ * engines degrade to confidence LOW with an explicit assumption.
+ */
+
+/** A designed part (Parts_Designs) with its stat values when mapped. */
+export interface PartDesign {
+  designId: number;
+  teamId?: number;
+  /** Part type as stored: string label or numeric FK coerced to string. */
+  partType?: string;
   name?: string;
+  status?: string;
+  /** Design/development points if the column maps. */
+  points?: number;
+  /** Build cost in game currency if the column maps. */
+  cost?: number;
+  /** Build duration in days if the column maps. */
+  buildDays?: number;
+  stats: { name: string; value: number }[];
+}
+
+/** An installed/manufactured part instance (Parts_Items). */
+export interface PartItem {
+  itemId: number;
+  designId?: number;
+  carId?: number;
+  teamId?: number;
+  partType?: string;
+  /** Normalized 0..1 (auto-detected 0..1 vs 0..100 scale at parse time). */
   condition?: number;
+  faultCount?: number;
+}
+
+export interface CarLoadoutRow {
+  carId: number;
+  itemId?: number;
+  slot?: string;
+}
+
+export interface TeamExpertiseRow {
+  teamId: number;
+  partType?: string;
+  expertise?: number;
+  /** Verified column from the old tool (docs/01 §2.1: NextSeasonExpertise). */
+  nextSeasonExpertise?: number;
+}
+
+export interface FinanceTransactionRow {
+  txId: number;
+  teamId?: number;
+  day?: number;
+  amount?: number;
+  category?: string;
+  note?: string;
+}
+
+export interface StaffContractRow {
+  staffId: number;
+  teamId?: number;
+  /** 0 = driver contract (docs/01 §4.2). */
+  contractType?: number;
+  salary?: number;
+  endDay?: number;
+  durationDays?: number;
+}
+
+export interface StaffPerformanceRow {
+  staffId: number;
+  rating?: number;
+  morale?: number;
+}
+
+export interface ContractPatienceRow {
+  staffId: number;
+  suitability?: number;
+  opinion?: number;
+  /** Acceptance threshold 0..1 — lower = easier to sign (docs/03 §5.7). */
+  threshold?: number;
+}
+
+export interface PartsModel {
+  designs: PartDesign[];
+  items: PartItem[];
+  loadouts: CarLoadoutRow[];
+  expertise: TeamExpertiseRow[];
+  tablesPresent: {
+    designs: boolean;
+    items: boolean;
+    statValues: boolean;
+    loadouts: boolean;
+    expertise: boolean;
+  };
+}
+
+export interface FinanceModel {
+  balance?: number;
+  budget?: number;
+  transactions: FinanceTransactionRow[];
+  tablesPresent: { balance: boolean; transactions: boolean };
+}
+
+export interface PersonnelModel {
+  contracts: StaffContractRow[];
+  performance: StaffPerformanceRow[];
+  patience: ContractPatienceRow[];
+  tablesPresent: { contracts: boolean; performance: boolean; patience: boolean };
+}
+
+export interface RegulationVoteRow {
+  teamId: number;
+  /** Raw vote value — encoding not verified; engines treat 1 as YES. */
+  vote?: number;
+}
+
+export interface RegulationChangeRow {
+  groupId?: number;
+  /** Label/loc-key as stored in Regulations_ChangeGroups. */
+  label?: string;
 }
 
 export interface RegulationProposal {
   proposalId: number;
   title?: string;
   state?: number;
-}
-
-export interface FinanceSnapshot {
-  balance?: number;
-  budget?: number;
+  seasonId?: number;
+  votes: RegulationVoteRow[];
+  changes: RegulationChangeRow[];
 }
 
 /**
- * SaveModel v0 — Phase 0 populates meta + player + teams + races summary.
- * Remaining sections fill in during Phase 1+; they are optional so the
- * contract can grow without breaking.
+ * SaveModel v1 — Phase 2 extends the v0 contract with the schema-adaptive
+ * factory/season sections (parts, finance, personnel, regulations) plus
+ * qualifying + sprint results on races. Optional tables degrade via
+ * tablesPresent flags + assumptions — never a crash, never a fake zero.
  */
 export interface SaveModel {
   meta: SaveMeta;
@@ -190,9 +307,10 @@ export interface SaveModel {
   races: Race[];
   standings: { drivers: StandingRow[]; teams: StandingRow[] };
   tyres: TyreAllocation[];
-  parts: Part[];
+  parts: PartsModel;
   regulations: RegulationProposal[];
-  finance: FinanceSnapshot;
+  finance: FinanceModel;
+  personnel: PersonnelModel;
   /** Which optional table groups were present — drives UI degradation. */
   availability: { table: string; present: boolean }[];
   /** Engine results attached later by analytics engines. */
