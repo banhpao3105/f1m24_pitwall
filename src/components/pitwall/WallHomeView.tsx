@@ -18,6 +18,7 @@ import { StintTimeline } from './StintTimeline';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { AlertBanner } from './AlertBanner';
 import { NumberTween } from './NumberTween';
+import { RecentRaceCard, QuickStandingsCard } from './HomeCards';
 
 export function WallHomeView({ model }: { model: SaveModel }) {
   const t = useTranslations('wall');
@@ -118,9 +119,9 @@ export function WallHomeView({ model }: { model: SaveModel }) {
         ))}
       </section>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Next race + tyre quick rec — 2/3 */}
-        <div className="space-y-4 lg:col-span-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        {/* Next race — 7/12 (v0.5.0 row 2) */}
+        <div className="space-y-4 lg:col-span-7">
           {nextRace ? (
             <section aria-label={t('nextRace.label')} className="rounded-lg border border-line bg-panel p-4">
               <header className="mb-3 flex items-center gap-2">
@@ -171,39 +172,10 @@ export function WallHomeView({ model }: { model: SaveModel }) {
               ) : null}
             </section>
           ) : null}
-
-          {/* pace snapshot vs rival */}
-          <section aria-label={t('pace.label')} className="rounded-lg border border-line bg-panel p-4">
-            <header className="mb-3 flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-ink">{t('pace.label')}</h2>
-              {pace ? <ConfidenceBadge confidence={pace.confidence} /> : null}
-            </header>
-            {paceRow && rivalRow && pace?.data.playerVsRivalS != null ? (
-              <div className="flex items-center gap-3">
-                {pace.data.playerVsRivalS <= 0 ? (
-                  <TrendingDown className="h-5 w-5 text-good" aria-hidden="true" />
-                ) : (
-                  <TrendingUp className="h-5 w-5 text-danger" aria-hidden="true" />
-                )}
-                <p className="text-sm text-ink">
-                  {t('pace.vsRival', {
-                    rival: rivalRow.teamName,
-                    gap: `${Math.abs(pace.data.playerVsRivalS).toFixed(3)}s`,
-                    dir: pace.data.playerVsRivalS > 0 ? t('pace.slower') : t('pace.faster'),
-                  })}
-                </p>
-                <p className="ml-auto font-mono text-[11px] text-ink-faint">
-                  {t('pace.rank', { rank: paceRow.rank, total: pace.data.rows.length })}
-                </p>
-              </div>
-            ) : (
-              <p className="text-xs text-ink-faint">{t('pace.noData')}</p>
-            )}
-          </section>
         </div>
 
-        {/* what to do next — 1/3 */}
-        <section aria-label={t('todo.label')} className="space-y-3">
+        {/* what to do next — 5/12 (v0.5.0 row 2) */}
+        <section aria-label={t('todo.label')} className="space-y-3 lg:col-span-5">
           <h2 className="text-sm font-semibold text-ink">{t('todo.label')}</h2>
           {topRecs.length > 0 ? (
             topRecs.map((rec, i) => (
@@ -219,6 +191,46 @@ export function WallHomeView({ model }: { model: SaveModel }) {
               {t('todo.driverLead', { name: driverStanding.name, pos: driverStanding.position, points: driverStanding.points })}
             </p>
           ) : null}
+        </section>
+
+        {/* row 3 — v0.5.0: close the empty left-column gap with real cards */}
+        <div className="lg:col-span-7">
+          <RecentRaceCard model={model} />
+        </div>
+        <div className="lg:col-span-5">
+          <QuickStandingsCard model={model} />
+        </div>
+
+        {/* pace snapshot vs rival — full-width row 4 (chart lands here in step 2) */}
+        <section
+          aria-label={t('pace.label')}
+          className="rounded-lg border border-line bg-panel p-4 lg:col-span-12"
+        >
+          <header className="mb-3 flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-ink">{t('pace.label')}</h2>
+            {pace ? <ConfidenceBadge confidence={pace.confidence} /> : null}
+          </header>
+          {paceRow && rivalRow && pace?.data.playerVsRivalS != null ? (
+            <div className="flex items-center gap-3">
+              {pace.data.playerVsRivalS <= 0 ? (
+                <TrendingDown className="h-5 w-5 text-good" aria-hidden="true" />
+              ) : (
+                <TrendingUp className="h-5 w-5 text-danger" aria-hidden="true" />
+              )}
+              <p className="text-sm text-ink">
+                {t('pace.vsRival', {
+                  rival: rivalRow.teamName,
+                  gap: `${Math.abs(pace.data.playerVsRivalS).toFixed(3)}s`,
+                  dir: pace.data.playerVsRivalS > 0 ? t('pace.slower') : t('pace.faster'),
+                })}
+              </p>
+              <p className="ml-auto font-mono text-[11px] text-ink-faint">
+                {t('pace.rank', { rank: paceRow.rank, total: pace.data.rows.length })}
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-ink-faint">{t('pace.noData')}</p>
+          )}
         </section>
       </div>
     </div>

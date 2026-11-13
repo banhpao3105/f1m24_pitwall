@@ -162,6 +162,37 @@
       "partRisk": "Part {part} nguy cơ hỏng cao — kiểm tra/thay trước chặng tới.",
       "contractExpiry": "Hợp đồng {name} sắp hết hạn ({days} ngày) — mở đàm phán gia hạn."
     },
+    "header": {
+      "gameDay": "Day {day} · Mùa {season} · {done}/{total}",
+      "gameDayTitle": "Ngày trong game",
+      "weatherTitle": "Thời tiết dự kiến chặng tới",
+      "dry": "Khô",
+      "wet": "Mưa"
+    },
+    "sidebar": {
+      "brand": "F1 PIT WALL",
+      "saveActive": "Save đang mở",
+      "changeSave": "Đổi save",
+      "noSave": "Chưa có save nào được mở.",
+      "more": "Thêm",
+      "moreTitle": "Các module khác"
+    },
+    "recent": {
+      "title": "Chặng vừa rồi",
+      "titleWithTrack": "Chặng vừa rồi — {track}",
+      "top3": "Top 3",
+      "you": "Đội bạn",
+      "teamPoints": "+{points} pts đội",
+      "points": "{points} pts",
+      "dnf": "DNF",
+      "noData": "Chưa có chặng nào hoàn thành.",
+      "noPlayerRows": "Đội bạn không có kết quả ở chặng này."
+    },
+    "quick": {
+      "title": "Bảng xếp hạng nhanh",
+      "viewAll": "Mở Season",
+      "noData": "Chưa có dữ liệu standings."
+    },
     "modeN": "TẠP CHÍ"
   },
   "tyres": {

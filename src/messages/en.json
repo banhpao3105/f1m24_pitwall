@@ -162,7 +162,38 @@
       "partRisk": "Part {part} at high failure risk — inspect/replace before the next race.",
       "contractExpiry": "{name}'s contract expires in {days} days — open renewal talks."
     },
-    "modeN": "NARRATIVE"
+    "modeN": "NARRATIVE",
+    "header": {
+      "gameDay": "Day {day} · Season {season} · {done}/{total}",
+      "gameDayTitle": "In-game day",
+      "weatherTitle": "Next race forecast weather",
+      "dry": "Dry",
+      "wet": "Wet"
+    },
+    "sidebar": {
+      "brand": "F1 PIT WALL",
+      "saveActive": "Open save",
+      "changeSave": "Change save",
+      "noSave": "No save open yet.",
+      "more": "More",
+      "moreTitle": "Other modules"
+    },
+    "recent": {
+      "title": "Last time out",
+      "titleWithTrack": "Last time out — {track}",
+      "top3": "Top 3",
+      "you": "Your team",
+      "teamPoints": "+{points} team pts",
+      "points": "{points} pts",
+      "dnf": "DNF",
+      "noData": "No completed races yet.",
+      "noPlayerRows": "Your team has no result in this race."
+    },
+    "quick": {
+      "title": "Quick standings",
+      "viewAll": "Open Season",
+      "noData": "No standings data yet."
+    }
   },
   "tyres": {
     "title": "Tyre Lab",
