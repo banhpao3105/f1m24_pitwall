@@ -17,6 +17,8 @@ import { usePersonnel, useDriverDuel } from '@/lib/engine-hooks';
 import { RecommendationCard } from './RecommendationCard';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { DataUnavailable } from './DataUnavailable';
+import { DriverAvatar } from './TeamIdentity';
+import { teamColour } from '@/lib/team-colours';
 import {
   Select,
   SelectContent,
@@ -50,8 +52,16 @@ function FormChips({ chips }: { chips: DriverCardModel['form'] }) {
   );
 }
 
-function DriverCardItem({ driver }: { driver: DriverCardModel }) {
+function DriverCardItem({
+  driver,
+  model,
+}: {
+  driver: DriverCardModel;
+  model: SaveModel;
+}) {
   const t = useTranslations('drivers');
+  const teamId = model.drivers.find((d) => d.staffId === driver.staffId)?.teamId;
+  const colour = teamColour(model, teamId);
   return (
     <motion.article
       initial={{ opacity: 0, y: 6 }}
@@ -61,9 +71,12 @@ function DriverCardItem({ driver }: { driver: DriverCardModel }) {
         'rounded-lg border bg-panel p-4',
         driver.isPlayer ? 'border-amber/40' : 'border-line',
       )}
+      style={{ borderLeft: `3px solid ${colour}` }}
       data-testid={`driver-card-${driver.staffId}`}
     >
       <header className="flex flex-wrap items-center gap-2">
+        {/* avatar initials on the team livery colour (v0.5.0 step 3) */}
+        <DriverAvatar model={model} teamId={teamId} name={driver.name} />
         <h3 className="text-sm font-semibold text-ink">{driver.name}</h3>
         <span className="font-mono text-[10px] text-ink-faint">{driver.teamName ?? '—'}</span>
         {driver.position != null ? (
@@ -154,11 +167,14 @@ export function DriversView({ model }: { model: SaveModel }) {
         <>
           <section
             aria-label={t('cards')}
-            className="grid grid-cols-1 gap-3 md:grid-cols-2"
+            className="max-h-[480px] overflow-y-auto pitwall-scroll pr-1"
+            data-testid="driver-cards"
           >
-            {playerFirst.map((d) => (
-              <DriverCardItem key={d.staffId} driver={d} />
-            ))}
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {playerFirst.map((d) => (
+                <DriverCardItem key={d.staffId} driver={d} model={model} />
+              ))}
+            </div>
           </section>
 
           {/* duel */}

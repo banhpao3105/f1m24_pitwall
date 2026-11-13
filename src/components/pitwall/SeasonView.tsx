@@ -12,6 +12,7 @@ import { CalendarDays, Download, CloudRain } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
 import { StandingsBarChart } from './charts/StandingsBarChart';
+import { TeamDot } from './TeamIdentity';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -186,6 +187,7 @@ export function SeasonView({ model }: { model: SaveModel }) {
                     data-testid={`sd-${row.position}`}
                   >
                     <span className="w-6 font-mono text-ink-faint">P{row.position}</span>
+                    <TeamDot model={model} teamId={row.teamId} />
                     <span className={cn('truncate', isPlayerDriver ? 'font-medium text-amber' : 'text-ink')}>
                       {row.name}
                     </span>
@@ -220,6 +222,7 @@ export function SeasonView({ model }: { model: SaveModel }) {
                   data-testid={`st-${row.position}`}
                 >
                   <span className="w-6 font-mono text-ink-faint">P{row.position}</span>
+                  <TeamDot model={model} teamId={row.id} />
                   <span className={cn('truncate', row.id === model.player.teamId ? 'font-medium text-amber' : 'text-ink')}>
                     {row.name}
                   </span>

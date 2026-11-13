@@ -9,10 +9,12 @@
 import { useTranslations } from 'next-intl';
 import { Car, Cog } from 'lucide-react';
 import { useCarLab } from '@/lib/engine-hooks';
+import type { SaveModel } from '@/domain/types';
 import type { RiskLevel } from '@/engines/car.engine';
 import { RecommendationCard } from './RecommendationCard';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { DataUnavailable } from './DataUnavailable';
+import { TeamDot } from './TeamIdentity';
 import { CarLeagueChart, PartConditionChart } from './charts/CarLabCharts';
 import { cn } from '@/lib/utils';
 
@@ -47,7 +49,7 @@ function ConditionBar({ value }: { value: number | null }) {
   );
 }
 
-export function CarLabView() {
+export function CarLabView({ model }: { model: SaveModel }) {
   const t = useTranslations('cars');
   const lab = useCarLab();
   if (!lab) return null;
@@ -91,6 +93,7 @@ export function CarLabView() {
               data-testid={`car-league-${row.rank ?? row.teamId}`}
             >
               <span className="w-6 font-mono text-ink-faint">#{row.rank ?? '—'}</span>
+              <TeamDot model={model} teamId={row.teamId} />
               <span className={cn('truncate', row.isPlayer ? 'font-medium text-amber' : 'text-ink')}>
                 {row.teamName}
               </span>
@@ -102,7 +105,7 @@ export function CarLabView() {
         </ul>
         {/* v0.5.0 step 2: real bars on ≥sm — list above stays for tiny screens */}
         <div className="hidden sm:block">
-          <CarLeagueChart rows={league.rows} source={league.source} />
+          <CarLeagueChart rows={league.rows} source={league.source} model={model} />
         </div>
       </section>
 

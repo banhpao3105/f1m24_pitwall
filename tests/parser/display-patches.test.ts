@@ -4,6 +4,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { cleanStaffName, STAFF_NAME_DISPLAY_PATCHES } from '@/parser/normalize/build-model';
+import { cleanDriverCode } from '@/parser/repositories/drivers.repo';
 import { trackDisplay, TRACK_DISPLAY } from '@/lib/track-display';
 
 describe('cleanStaffName display patches (0.4.1)', () => {
@@ -61,5 +62,22 @@ describe('trackDisplay (oracle TRACKS parity)', () => {
 
   it('covers all 26 oracle tracks', () => {
     expect(Object.keys(TRACK_DISPLAY)).toHaveLength(26);
+  });
+});
+
+describe('cleanDriverCode (v0.5.0 timing tower)', () => {
+  it('decodes localization-key codes from real saves', () => {
+    // Real-save rows (Staff_DriverData.DriverCode, verified 1.11.0)
+    expect(cleanDriverCode('[DriverCode_Ver]')).toBe('Ver');
+    expect(cleanDriverCode('[DriverCode_Owa]')).toBe('Owa');
+  });
+
+  it('passes plain codes and edge cases through untouched', () => {
+    expect(cleanDriverCode('VER')).toBe('VER');
+    // trailing-digit strip applies to decoded keys only — plain text passes
+    expect(cleanDriverCode('Mini1')).toBe('Mini1');
+    expect(cleanDriverCode('')).toBeUndefined();
+    expect(cleanDriverCode(null)).toBeUndefined();
+    expect(cleanDriverCode(undefined)).toBeUndefined();
   });
 });

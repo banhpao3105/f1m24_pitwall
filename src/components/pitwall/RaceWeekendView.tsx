@@ -19,6 +19,8 @@ import { ConfidenceBadge } from './ConfidenceBadge';
 import { CompoundBadge, type CompoundKey } from './CompoundBadge';
 import { RecommendationCard } from './RecommendationCard';
 import { PaceBarChart } from './charts/PaceBarChart';
+import { TimingTower } from './TimingTower';
+import { TrackSchematic } from './TrackSchematic';
 import { cn } from '@/lib/utils';
 
 export function RaceWeekendView({
@@ -66,24 +68,30 @@ export function RaceWeekendView({
   return (
     <div className="space-y-5" data-testid="race-weekend">
       <header className="rounded-lg border border-line bg-panel p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Flag className="h-4 w-4 text-teal" aria-hidden="true" />
-          <h2 className="text-sm font-semibold text-ink">{trackDisplay(race.trackName, locale)}</h2>
-          <span className="font-mono text-[11px] text-ink-faint">
-            {race.laps ?? '—'} {t('laps')} · {completed ? t('completed') : t('upcoming')}
-          </span>
-          {race.weather ? (
-            <span className="ml-auto flex items-center gap-3 font-mono text-[11px] text-ink-soft">
-              <span className="flex items-center gap-1">
-                <Thermometer className="h-3 w-3" aria-hidden="true" />
-                {race.weather.raceTempC ?? '—'}°C
+        <div className="flex flex-wrap items-center gap-4">
+          {/* schematic outline — labelled illustrative, no invented data */}
+          <TrackSchematic trackName={race.trackName} className="h-16 w-16 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <Flag className="h-4 w-4 text-teal" aria-hidden="true" />
+              <h2 className="text-sm font-semibold text-ink">{trackDisplay(race.trackName, locale)}</h2>
+              <span className="font-mono text-[11px] text-ink-faint">
+                {race.laps ?? '—'} {t('laps')} · {completed ? t('completed') : t('upcoming')}
               </span>
-              <span className={`flex items-center gap-1 ${race.weather.raceRain ? 'text-info' : ''}`}>
-                <CloudRain className="h-3 w-3" aria-hidden="true" />
-                {race.weather.raceRain ? t('rain') : t('dry')}
+            </div>
+            {race.weather ? (
+              <span className="mt-1 flex flex-wrap items-center gap-3 font-mono text-[11px] text-ink-soft">
+                <span className="flex items-center gap-1">
+                  <Thermometer className="h-3 w-3" aria-hidden="true" />
+                  {race.weather.raceTempC ?? '—'}°C
+                </span>
+                <span className={`flex items-center gap-1 ${race.weather.raceRain ? 'text-info' : ''}`}>
+                  <CloudRain className="h-3 w-3" aria-hidden="true" />
+                  {race.weather.raceRain ? t('rain') : t('dry')}
+                </span>
               </span>
-            </span>
-          ) : null}
+            ) : null}
+          </div>
         </div>
         {lastResult ? (
           <p className="mt-2 text-xs text-ink-soft">
@@ -119,6 +127,9 @@ export function RaceWeekendView({
 
       {tab === 'overview' ? (
         <>
+          {/* broadcast-style tower from the latest completed race (v0.5.0) */}
+          <TimingTower model={model} raceId={race.raceId} />
+
           {fastest ? (
             <section aria-label={t('plan')} className="rounded-lg border border-line bg-panel p-4">
               <header className="mb-3 flex flex-wrap items-center gap-2">
@@ -149,7 +160,7 @@ export function RaceWeekendView({
                 <h3 className="text-sm font-semibold text-ink">{t('pace')}</h3>
                 <ConfidenceBadge confidence={pace.confidence} />
               </header>
-              <PaceBarChart rows={pace.data.rows} testId="race-pace-chart" />
+              <PaceBarChart rows={pace.data.rows} model={model} testId="race-pace-chart" />
               {pace.data.playerVsRivalS != null ? (
                 <p className="mt-2 text-xs text-ink-soft">
                   {t('paceValue', {

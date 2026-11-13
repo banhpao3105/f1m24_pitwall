@@ -16,6 +16,7 @@ import { CalendarCheck2, ListOrdered } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
 import { useWallNav } from './WallNav';
+import { TeamDot } from './TeamIdentity';
 import { cn } from '@/lib/utils';
 
 export function RecentRaceCard({ model }: { model: SaveModel }) {
@@ -82,6 +83,7 @@ export function RecentRaceCard({ model }: { model: SaveModel }) {
                 >
                   P{row.finishingPos}
                 </span>
+                <TeamDot model={model} teamId={row.teamId} />
                 <span className="truncate text-ink">{row.driverName}</span>
                 <span className="ml-auto truncate font-mono text-[10px] text-ink-faint">
                   {row.teamName}
@@ -159,6 +161,7 @@ export function QuickStandingsCard({ model }: { model: SaveModel }) {
                 data-testid={`quick-st-${row.position}`}
               >
                 <span className="w-6 font-mono text-ink-faint">P{row.position}</span>
+                <TeamDot model={model} teamId={row.id} />
                 <span className={cn('truncate', isPlayer ? 'font-medium text-amber' : 'text-ink')}>
                   {row.name}
                 </span>

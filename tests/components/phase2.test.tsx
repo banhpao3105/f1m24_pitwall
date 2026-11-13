@@ -196,7 +196,7 @@ describe('RaceWeekendView — Sim tab', () => {
 
 describe('CarLabView', () => {
   it('shows the explicit degraded state when Parts data is missing', () => {
-    render(withI18n(<CarLabView />));
+    render(withI18n(<CarLabView model={baseModel} />));
     expect(screen.getByTestId('cars-unavailable')).toBeInTheDocument();
     // pace fallback league still renders
     expect(screen.getByText('League xe')).toBeInTheDocument();

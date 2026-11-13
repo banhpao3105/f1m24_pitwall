@@ -20,7 +20,7 @@ import type {
 } from '../../domain/types';
 import { detectSchema, type SchemaInfo, OPTIONAL_TABLES } from '../schema';
 import { getPlayer, getPlayerState } from '../repositories/player.repo';
-import { getTeams } from '../repositories/teams.repo';
+import { getTeams, getTeamColours } from '../repositories/teams.repo';
 import { getRaces, getRaceResults } from '../repositories/races.repo';
 import { getDrivers } from '../repositories/drivers.repo';
 import { getPracticeResults } from '../repositories/practice.repo';
@@ -59,6 +59,8 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
   const races = getRaces(db);
   const results = getRaceResults(db);
   const teams = getTeams(db);
+  // v0.5.0 team identity — optional table, empty map when absent.
+  const teamColours = getTeamColours(db);
 
   const completed = races.filter((r) => r.state === 2).length;
   if (completed === 0) {
@@ -305,6 +307,7 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
         teamName: t.teamName,
         isCustomTeam: t.isCustomTeam === 1,
         formula: t.formula,
+        colourPrimary: teamColours.get(t.teamId),
       }),
     ),
     drivers: driversRaw.map((d) => ({

@@ -20,6 +20,7 @@ import { ConfidenceBadge } from './ConfidenceBadge';
 import { AlertBanner } from './AlertBanner';
 import { NumberTween } from './NumberTween';
 import { RecentRaceCard, QuickStandingsCard } from './HomeCards';
+import { TrackSchematic } from './TrackSchematic';
 
 export function WallHomeView({ model }: { model: SaveModel }) {
   const t = useTranslations('wall');
@@ -150,27 +151,32 @@ export function WallHomeView({ model }: { model: SaveModel }) {
                   {t('nextRace.openRace')}
                 </button>
               </header>
-              {tyre?.data.best ? (
-                <StintTimeline
-                  stints={tyre.data.best.stints}
-                  totalLaps={tyre.data.laps}
-                  pitLaps={tyre.data.best.pitLaps}
-                />
-              ) : (
-                <p className="text-xs text-ink-faint">{t('nextRace.noPlan')}</p>
-              )}
-              {tyre ? (
-                <div className="mt-2 flex items-center gap-2">
-                  <ConfidenceBadge confidence={tyre.confidence} />
-                  <button
-                    type="button"
-                    onClick={() => setView('tyres', nextRace.raceId)}
-                    className="cursor-pointer text-[11px] text-ink-faint hover:text-teal focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-                  >
-                    {t('nextRace.openTyres')}
-                  </button>
+              <div className="flex items-start gap-4">
+                <TrackSchematic trackName={nextRace.trackName} className="h-20 w-20 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  {tyre?.data.best ? (
+                    <StintTimeline
+                      stints={tyre.data.best.stints}
+                      totalLaps={tyre.data.laps}
+                      pitLaps={tyre.data.best.pitLaps}
+                    />
+                  ) : (
+                    <p className="text-xs text-ink-faint">{t('nextRace.noPlan')}</p>
+                  )}
+                  {tyre ? (
+                    <div className="mt-2 flex items-center gap-2">
+                      <ConfidenceBadge confidence={tyre.confidence} />
+                      <button
+                        type="button"
+                        onClick={() => setView('tyres', nextRace.raceId)}
+                        className="cursor-pointer text-[11px] text-ink-faint hover:text-teal focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                      >
+                        {t('nextRace.openTyres')}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
+              </div>
             </section>
           ) : null}
         </div>
@@ -213,7 +219,7 @@ export function WallHomeView({ model }: { model: SaveModel }) {
           </header>
           {pace && pace.data.rows.length > 0 ? (
             <>
-              <PaceBarChart rows={pace.data.rows} />
+              <PaceBarChart rows={pace.data.rows} model={model} />
               {paceRow && rivalRow && pace.data.playerVsRivalS != null ? (
                 <p className="mt-2 text-sm text-ink">
                   {t('pace.vsRival', {

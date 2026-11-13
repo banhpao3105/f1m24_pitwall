@@ -24,9 +24,20 @@ import {
   YAxis,
 } from 'recharts';
 import type { CarLeagueRow, PartConditionRow } from '@/engines/car.engine';
+import type { SaveModel } from '@/domain/types';
+import { teamColour, FALLBACK_TEAM_COLOUR } from '@/lib/team-colours';
 import { CHART_COLORS, TICK_STYLE, useChartAnimation } from './chart-theme';
 
-export function CarLeagueChart({ rows, source }: { rows: CarLeagueRow[]; source: 'designs' | 'pace' }) {
+export function CarLeagueChart({
+  rows,
+  source,
+  model,
+}: {
+  rows: CarLeagueRow[];
+  source: 'designs' | 'pace';
+  /** Team identity (v0.5.0 step 3) — real liveries when available. */
+  model?: SaveModel;
+}) {
   const t = useTranslations('charts.car');
   const anim = useChartAnimation();
 
@@ -74,14 +85,22 @@ export function CarLeagueChart({ rows, source }: { rows: CarLeagueRow[]; source:
             }}
           />
           <Bar dataKey="value" barSize={14} radius={[0, 3, 3, 0]} {...anim}>
-            {ordered.map((row) => (
-              <Cell
-                key={row.teamId}
-                fill={row.isPlayer ? CHART_COLORS.player : CHART_COLORS.bar}
-                stroke={row.isPlayer ? CHART_COLORS.playerStroke : undefined}
-                strokeWidth={row.isPlayer ? 1 : 0}
-              />
-            ))}
+            {ordered.map((row) => {
+              const livery = model ? teamColour(model, row.teamId) : FALLBACK_TEAM_COLOUR;
+              const fill = row.isPlayer
+                ? CHART_COLORS.player
+                : livery === FALLBACK_TEAM_COLOUR
+                  ? CHART_COLORS.bar
+                  : livery;
+              return (
+                <Cell
+                  key={row.teamId}
+                  fill={fill}
+                  stroke={row.isPlayer ? CHART_COLORS.playerStroke : undefined}
+                  strokeWidth={row.isPlayer ? 1 : 0}
+                />
+              );
+            })}
             <LabelList
               dataKey="value"
               position="right"

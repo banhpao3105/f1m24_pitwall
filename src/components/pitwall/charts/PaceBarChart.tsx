@@ -24,9 +24,20 @@ import {
   YAxis,
 } from 'recharts';
 import type { PaceTeamRow } from '@/engines/pace.engine';
+import type { SaveModel } from '@/domain/types';
+import { teamColour, FALLBACK_TEAM_COLOUR } from '@/lib/team-colours';
 import { CHART_COLORS, TICK_STYLE, useChartAnimation } from './chart-theme';
 
-export function PaceBarChart({ rows, testId }: { rows: PaceTeamRow[]; testId?: string }) {
+export function PaceBarChart({
+  rows,
+  model,
+  testId,
+}: {
+  rows: PaceTeamRow[];
+  /** Team identity (v0.5.0 step 3): real liveries when Teams_Colours exists. */
+  model?: SaveModel;
+  testId?: string;
+}) {
   const t = useTranslations('charts.pace');
   const anim = useChartAnimation();
 
@@ -78,14 +89,27 @@ export function PaceBarChart({ rows, testId }: { rows: PaceTeamRow[]; testId?: s
             }}
           />
           <Bar dataKey="delta" barSize={14} radius={[0, 3, 3, 0]} {...anim}>
-            {data.map((row) => (
-              <Cell
-                key={row.teamId}
-                fill={row.isPlayer ? CHART_COLORS.player : row.isRival ? CHART_COLORS.rival : CHART_COLORS.bar}
-                stroke={row.isPlayer ? CHART_COLORS.playerStroke : row.isRival ? CHART_COLORS.rivalStroke : undefined}
-                strokeWidth={row.isPlayer || row.isRival ? 1 : 0}
-              />
-            ))}
+            {data.map((row) => {
+              // Real livery colour when the save carries Teams_Colours;
+              // teal/amber highlights keep the player + rivalRef legible.
+              const livery = model ? teamColour(model, row.teamId) : FALLBACK_TEAM_COLOUR;
+              const fill =
+                row.isPlayer
+                  ? CHART_COLORS.player
+                  : row.isRival
+                    ? CHART_COLORS.rival
+                    : livery === FALLBACK_TEAM_COLOUR
+                      ? CHART_COLORS.bar
+                      : livery;
+              return (
+                <Cell
+                  key={row.teamId}
+                  fill={fill}
+                  stroke={row.isPlayer ? CHART_COLORS.playerStroke : row.isRival ? CHART_COLORS.rivalStroke : undefined}
+                  strokeWidth={row.isPlayer || row.isRival ? 1 : 0}
+                />
+              );
+            })}
             <LabelList
               dataKey="delta"
               position="right"

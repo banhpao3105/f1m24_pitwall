@@ -30,7 +30,7 @@ export function WallViews() {
     case 'race':
       return <RaceWeekendView model={model} raceId={raceId} />;
     case 'cars':
-      return <CarLabView />;
+      return <CarLabView model={model} />;
     case 'drivers':
       return <DriversView model={model} />;
     case 'season':

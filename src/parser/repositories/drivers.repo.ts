@@ -47,9 +47,27 @@ export function getDrivers(db: SqlJsDatabase): RawDriver[] {
     staffId: Number(row[0] ?? 0),
     firstName: String(row[1] ?? ''),
     lastName: String(row[2] ?? ''),
-    code: row[3] == null || String(row[3]).length === 0 ? undefined : String(row[3]),
+    code: cleanDriverCode(row[3]),
     contractTeamId: contracts.get(Number(row[0] ?? 0)),
   }));
+}
+
+/**
+ * v0.5.0: real saves store DriverCode as a localization key —
+ * "[DriverCode_Ver]" — while user-created drivers carry plain text ("VER").
+ * Decode mirrors cleanStaffName: strip the brackets + the DriverCode_
+ * prefix and keep the readable tail. Plain codes pass through untouched.
+ */
+export function cleanDriverCode(raw: unknown): string | undefined {
+  if (raw == null) return undefined;
+  const token = String(raw).trim();
+  if (token.length === 0) return undefined;
+  const m = token.match(/^\[([^\]]+)\]$/);
+  if (!m) return token; // plain code ("VER") — already displayable
+  const key = m[1];
+  const tail = key.startsWith('DriverCode_') ? key.slice('DriverCode_'.length) : key;
+  const decoded = tail.replace(/\d+$/, ''); // "Mini1" → "Mini" (oracle parity)
+  return decoded.length > 0 ? decoded : undefined;
 }
 
 function hasTable(db: SqlJsDatabase, table: string): boolean {

@@ -283,7 +283,25 @@
     "recs": "Khuyến nghị",
     "noRace": "Không có chặng nào để hiển thị.",
     "tabOverview": "Overview",
-    "tabsLabel": "Tab Race Weekend"
+    "tabsLabel": "Tab Race Weekend",
+    "tower": {
+      "title": "Timing Tower",
+      "noData": "Chưa có chặng nào hoàn thành — tower sẽ hiện sau chặng đầu tiên.",
+      "referenceNote": "kết quả chặng trước — tham khảo",
+      "colPos": "Pos",
+      "colDriver": "Tay đua",
+      "colTeam": "Đội",
+      "colGap": "Gap",
+      "colTyre": "Lốp",
+      "colPits": "Pit",
+      "dnf": "DNF",
+      "winner": "người thắng",
+      "tyreHint": "Lốp: “—” vì save không lưu dữ liệu stint theo vòng — không đoán số liệu."
+    },
+    "schematic": {
+      "label": "Sơ đồ minh họa — không theo tỉ lệ",
+      "generic": "Sơ đồ tổng quát — track chưa có hình chuẩn"
+    }
   },
   "sim": {
     "tab": "Sim",

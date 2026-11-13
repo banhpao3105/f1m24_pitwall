@@ -283,7 +283,25 @@
     "recs": "Recommendations",
     "noRace": "No race to display.",
     "tabOverview": "Overview",
-    "tabsLabel": "Race Weekend tabs"
+    "tabsLabel": "Race Weekend tabs",
+    "tower": {
+      "title": "Timing Tower",
+      "noData": "No completed race yet — the tower appears after round 1.",
+      "referenceNote": "last race result — for reference",
+      "colPos": "Pos",
+      "colDriver": "Driver",
+      "colTeam": "Team",
+      "colGap": "Gap",
+      "colTyre": "Tyre",
+      "colPits": "Pits",
+      "dnf": "DNF",
+      "winner": "winner",
+      "tyreHint": "Tyre: “—” because the save has no per-lap stint data — never invented."
+    },
+    "schematic": {
+      "label": "Schematic — not to scale",
+      "generic": "Generic outline — no verified shape for this track"
+    }
   },
   "sim": {
     "tab": "Sim",
