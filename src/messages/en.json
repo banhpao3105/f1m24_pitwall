@@ -94,6 +94,40 @@
     "yes": "Yes",
     "no": "No"
   },
+  "charts": {
+    "pace": {
+      "noData": "Not enough pace data — reload the save after the next race.",
+      "deltaVsFastest": "+{delta}s/lap vs the fastest team",
+      "median": "median {median}s",
+      "samples": "{count} sample races",
+      "baseline": "fastest",
+      "hint": "Bar length = median per-race gap to that race's fastest lap (pace.engine)."
+    },
+    "deg": {
+      "lapAxis": "Lap",
+      "pitLine": "Optimal pit: lap {lap}",
+      "capLine": "{compound} life cap: lap {lap}",
+      "hint": "Curves reuse the tyre.engine model constants — LOW confidence when the save lacks practice/allocation data."
+    },
+    "car": {
+      "noLeague": "No league data yet.",
+      "noCondition": "No condition data yet.",
+      "rankInverted": "longer bar = faster",
+      "byDesigns": "Bar length = design points (Parts_Designs).",
+      "byPace": "Bar length = inverted pace rank (long = faster) — source: pace engine.",
+      "watchLine": "WATCH 70%",
+      "parts": "parts"
+    },
+    "season": {
+      "noData": "No standings data yet.",
+      "points": "pts",
+      "teamsChart": "Team points — top 8",
+      "driversChart": "Driver points — top 8",
+      "countdown": "in {days} days",
+      "raceWeek": "race week",
+      "yourPoints": "+{points} team pts"
+    }
+  },
   "confidence": {
     "HIGH": "HIGH confidence — measured directly from the save",
     "MEDIUM": "MEDIUM confidence — derived from historical data inside the save",
@@ -206,6 +240,7 @@
     "expectedStops": "Field average stops: ~{stops} (source: {source})",
     "stopsReconcile": "Why they differ: ~{expected} stops is the field average (reference from {source}); your {plan}-stop plan is the total-time optimum (pace + degradation + pit cost) for your tyres.",
     "alternatives": "Alternatives",
+    "degTitle": "Degradation curves",
     "fastest": "Fastest",
     "lives": "Compound lives",
     "wet": "Rain possible ({rain}) — Inter/Wet plans appear once this weekend's allocation data exists.",

@@ -18,6 +18,7 @@ import { PitWindowBar } from './PitWindowBar';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { CompoundBadge, type CompoundKey } from './CompoundBadge';
 import { RecommendationCard } from './RecommendationCard';
+import { PaceBarChart } from './charts/PaceBarChart';
 import { cn } from '@/lib/utils';
 
 export function RaceWeekendView({
@@ -142,21 +143,24 @@ export function RaceWeekendView({
             </section>
           ) : null}
 
-          {pace && pace.data.playerVsRivalS != null ? (
+          {pace && pace.data.rows.length > 0 ? (
             <section aria-label={t('pace')} className="rounded-lg border border-line bg-panel p-4">
               <header className="mb-2 flex items-center gap-2">
                 <h3 className="text-sm font-semibold text-ink">{t('pace')}</h3>
                 <ConfidenceBadge confidence={pace.confidence} />
               </header>
-              <p className="text-xs text-ink-soft">
-                {t('paceValue', {
-                  gap: `${Math.abs(pace.data.playerVsRivalS).toFixed(3)}s`,
-                  dir: pace.data.playerVsRivalS > 0 ? t('paceSlower') : t('paceFaster'),
-                  // 0.4.1 bug fix: quote the reference rival of playerVsRivalS
-                  // (closest pace), never rivals[0] (which is the fastest rival).
-                  rival: pace.data.rivalRef?.teamName ?? '—',
-                })}
-              </p>
+              <PaceBarChart rows={pace.data.rows} testId="race-pace-chart" />
+              {pace.data.playerVsRivalS != null ? (
+                <p className="mt-2 text-xs text-ink-soft">
+                  {t('paceValue', {
+                    gap: `${Math.abs(pace.data.playerVsRivalS).toFixed(3)}s`,
+                    dir: pace.data.playerVsRivalS > 0 ? t('paceSlower') : t('paceFaster'),
+                    // 0.4.1 bug fix: quote the reference rival of playerVsRivalS
+                    // (closest pace), never rivals[0] (which is the fastest rival).
+                    rival: pace.data.rivalRef?.teamName ?? '—',
+                  })}
+                </p>
+              ) : null}
             </section>
           ) : null}
 

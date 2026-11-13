@@ -94,6 +94,40 @@
     "yes": "Có",
     "no": "Không"
   },
+  "charts": {
+    "pace": {
+      "noData": "Chưa đủ dữ liệu pace — nạp save sau chặng kế tiếp.",
+      "deltaVsFastest": "+{delta}s/vòng so với đội nhanh nhất",
+      "median": "median {median}s",
+      "samples": "{count} chặng mẫu",
+      "baseline": "nhanh nhất",
+      "hint": "Chiều thanh = median gap mỗi chặng so với lap nhanh nhất của chặng đó (pace.engine)."
+    },
+    "deg": {
+      "lapAxis": "Vòng",
+      "pitLine": "Pit tối ưu: vòng {lap}",
+      "capLine": "Trần đời lốp {compound}: vòng {lap}",
+      "hint": "Đường cong dùng đúng hằng số mô hình của tyre.engine — độ tin cậy LOW khi save thiếu practice/allocation."
+    },
+    "car": {
+      "noLeague": "Chưa có dữ liệu league.",
+      "noCondition": "Chưa có dữ liệu condition.",
+      "rankInverted": "thanh dài = nhanh hơn",
+      "byDesigns": "Chiều thanh = design points (Parts_Designs).",
+      "byPace": "Chiều thanh = vị trí pace đảo ngược (dài = nhanh hơn) — nguồn: pace engine.",
+      "watchLine": "WATCH 70%",
+      "parts": "part"
+    },
+    "season": {
+      "noData": "Chưa có dữ liệu standings.",
+      "points": "điểm",
+      "teamsChart": "Điểm đội — top 8",
+      "driversChart": "Điểm tay đua — top 8",
+      "countdown": "còn {days} ngày",
+      "raceWeek": "tuần race",
+      "yourPoints": "+{points} pts đội"
+    }
+  },
   "confidence": {
     "HIGH": "Độ tin cậy CAO — đo trực tiếp từ save",
     "MEDIUM": "Độ tin cậy TRUNG BÌNH — suy ra từ dữ liệu lịch sử trong save",
@@ -206,6 +240,7 @@
     "expectedStops": "Trung bình pit của cánh quân: ~{stops} (nguồn: {source})",
     "stopsReconcile": "Vì sao khác: ~{expected} pit là trung bình cả cánh quân (tham khảo từ {source}), còn plan {plan} pit là kết quả tối ưu tổng thời gian (pace + degradation + chi phí pit) trên lốp của đội bạn.",
     "alternatives": "Phương án thay thế",
+    "degTitle": "Đường cong degradation",
     "fastest": "Nhanh nhất",
     "lives": "Đời lốp từng compound",
     "wet": "Mưa có thể xảy ra ({rain}) — plan Inter/Wet sẽ hiện khi có dữ liệu allocation của tuần lễ này.",

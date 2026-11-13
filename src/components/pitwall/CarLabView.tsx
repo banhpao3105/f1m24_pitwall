@@ -13,6 +13,7 @@ import type { RiskLevel } from '@/engines/car.engine';
 import { RecommendationCard } from './RecommendationCard';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { DataUnavailable } from './DataUnavailable';
+import { CarLeagueChart, PartConditionChart } from './charts/CarLabCharts';
 import { cn } from '@/lib/utils';
 
 const RISK_TONE: Record<RiskLevel, string> = {
@@ -79,7 +80,7 @@ export function CarLabView() {
             {league.source === 'designs' ? t('leagueByDesigns') : t('leagueByPace')}
           </span>
         </header>
-        <ul className="space-y-1">
+        <ul className="space-y-1 sm:hidden">
           {league.rows.map((row) => (
             <li
               key={row.teamId}
@@ -99,12 +100,19 @@ export function CarLabView() {
             </li>
           ))}
         </ul>
+        {/* v0.5.0 step 2: real bars on ≥sm — list above stays for tiny screens */}
+        <div className="hidden sm:block">
+          <CarLeagueChart rows={league.rows} source={league.source} />
+        </div>
       </section>
 
       {/* part grid + durability */}
       {lab.data.parts.length > 0 ? (
         <section aria-label={t('durability')} className="rounded-lg border border-line bg-panel p-4">
           <h3 className="mb-3 text-sm font-semibold text-ink">{t('durability')}</h3>
+          <div className="mb-4">
+            <PartConditionChart rows={lab.data.parts} />
+          </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {lab.data.parts.map((p) => (
               <div key={p.partType} className="rounded border border-line bg-surface p-3" data-testid={`part-${p.partType}`}>

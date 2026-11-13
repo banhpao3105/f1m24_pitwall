@@ -11,6 +11,7 @@ import { motion } from 'framer-motion';
 import { CalendarDays, Download, CloudRain } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
+import { StandingsBarChart } from './charts/StandingsBarChart';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -32,6 +33,7 @@ function exportCsv(filename: string, header: string[], rows: (string | number)[]
 
 export function SeasonView({ model }: { model: SaveModel }) {
   const t = useTranslations('season');
+  const tChart = useTranslations('charts.season');
   const locale = useLocale() as 'vi' | 'en';
   const seasonId = model.meta.seasonId;
   const races = model.races
@@ -42,6 +44,19 @@ export function SeasonView({ model }: { model: SaveModel }) {
     model.races
       .find((r) => r.raceId === raceId)
       ?.results.find((res) => res.finishingPos === 1)?.driverName ?? '—';
+
+  // v0.5.0 step 2: per-race card extras — points the player team scored
+  // (completed) or a day countdown (upcoming). Both straight from the model.
+  const playerPointsIn = (raceId: number): number =>
+    model.races
+      .find((r) => r.raceId === raceId)
+      ?.results.filter((res) => res.teamId === model.player.teamId)
+      .reduce((sum, res) => sum + res.points, 0) ?? 0;
+  const countdownOf = (race: { day: number; state: number }): number | null => {
+    if (race.state === 2) return null;
+    const diff = race.day - model.meta.day;
+    return diff > 0 ? diff : 0;
+  };
 
   const exportRaceData = () => {
     exportCsv(
@@ -125,59 +140,104 @@ export function SeasonView({ model }: { model: SaveModel }) {
                   </span>
                 ) : null}
               </span>
+              {/* v0.5.0 step 2: team points scored / day countdown */}
+              {r.state === 2 ? (
+                <span
+                  className="pl-5 font-mono text-[10px] text-good"
+                  data-testid={`race-pts-${r.raceId}`}
+                >
+                  {tChart('yourPoints', { points: playerPointsIn(r.raceId) })}
+                </span>
+              ) : (
+                <span
+                  className="pl-5 font-mono text-[10px] text-teal"
+                  data-testid={`race-eta-${r.raceId}`}
+                >
+                  {(() => {
+                    const days = countdownOf(r);
+                    return days != null && days > 0
+                      ? tChart('countdown', { days })
+                      : tChart('raceWeek');
+                  })()}
+                </span>
+              )}
             </motion.li>
           ))}
         </ol>
       </section>
 
-      {/* standings */}
+      {/* standings — list + points bars side by side (v0.5.0 step 2) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section aria-label={t('standingsDrivers')} className="rounded-lg border border-line bg-panel p-4">
           <h3 className="mb-3 text-sm font-semibold text-ink">{t('standingsDrivers')}</h3>
-          <ul className="space-y-1">
-            {model.standings.drivers.map((row) => {
-              const isPlayerDriver = model.drivers.some(
-                (d) => d.staffId === row.id && d.teamId === model.player.teamId,
-              );
-              return (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <ul className="space-y-1">
+              {model.standings.drivers.map((row) => {
+                const isPlayerDriver = model.drivers.some(
+                  (d) => d.staffId === row.id && d.teamId === model.player.teamId,
+                );
+                return (
+                  <li
+                    key={row.id}
+                    className={cn(
+                      'flex items-center gap-2 rounded px-2 py-1 text-xs',
+                      isPlayerDriver ? 'bg-amber/10' : '',
+                    )}
+                    data-testid={`sd-${row.position}`}
+                  >
+                    <span className="w-6 font-mono text-ink-faint">P{row.position}</span>
+                    <span className={cn('truncate', isPlayerDriver ? 'font-medium text-amber' : 'text-ink')}>
+                      {row.name}
+                    </span>
+                    <span className="ml-auto font-mono text-ink-soft">{row.points}</span>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="min-w-0">
+              <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+                {tChart('driversChart')}
+              </p>
+              <StandingsBarChart
+                rows={model.standings.drivers}
+                highlightIds={model.drivers.filter((d) => d.teamId === model.player.teamId).map((d) => d.staffId)}
+                testId="drivers-points-chart"
+              />
+            </div>
+          </div>
+        </section>
+        <section aria-label={t('standingsTeams')} className="rounded-lg border border-line bg-panel p-4">
+          <h3 className="mb-3 text-sm font-semibold text-ink">{t('standingsTeams')}</h3>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <ul className="space-y-1">
+              {model.standings.teams.map((row) => (
                 <li
                   key={row.id}
                   className={cn(
                     'flex items-center gap-2 rounded px-2 py-1 text-xs',
-                    isPlayerDriver ? 'bg-amber/10' : '',
+                    row.id === model.player.teamId ? 'bg-amber/10' : '',
                   )}
-                  data-testid={`sd-${row.position}`}
+                  data-testid={`st-${row.position}`}
                 >
                   <span className="w-6 font-mono text-ink-faint">P{row.position}</span>
-                  <span className={cn('truncate', isPlayerDriver ? 'font-medium text-amber' : 'text-ink')}>
+                  <span className={cn('truncate', row.id === model.player.teamId ? 'font-medium text-amber' : 'text-ink')}>
                     {row.name}
                   </span>
                   <span className="ml-auto font-mono text-ink-soft">{row.points}</span>
                 </li>
-              );
-            })}
-          </ul>
-        </section>
-        <section aria-label={t('standingsTeams')} className="rounded-lg border border-line bg-panel p-4">
-          <h3 className="mb-3 text-sm font-semibold text-ink">{t('standingsTeams')}</h3>
-          <ul className="space-y-1">
-            {model.standings.teams.map((row) => (
-              <li
-                key={row.id}
-                className={cn(
-                  'flex items-center gap-2 rounded px-2 py-1 text-xs',
-                  row.id === model.player.teamId ? 'bg-amber/10' : '',
-                )}
-                data-testid={`st-${row.position}`}
-              >
-                <span className="w-6 font-mono text-ink-faint">P{row.position}</span>
-                <span className={cn('truncate', row.id === model.player.teamId ? 'font-medium text-amber' : 'text-ink')}>
-                  {row.name}
-                </span>
-                <span className="ml-auto font-mono text-ink-soft">{row.points}</span>
-              </li>
-            ))}
-          </ul>
+              ))}
+            </ul>
+            <div className="min-w-0">
+              <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+                {tChart('teamsChart')}
+              </p>
+              <StandingsBarChart
+                rows={model.standings.teams}
+                highlightIds={[model.player.teamId]}
+                testId="teams-points-chart"
+              />
+            </div>
+          </div>
         </section>
       </div>
 

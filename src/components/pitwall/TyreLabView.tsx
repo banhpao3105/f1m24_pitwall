@@ -17,6 +17,7 @@ import { RecommendationCard } from './RecommendationCard';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { StintTimeline } from './StintTimeline';
 import { PitWindowBar } from './PitWindowBar';
+import { DegCurveChart } from './charts/DegCurveChart';
 import { CompoundBadge, type CompoundKey } from './CompoundBadge';
 import type { StrategyResult } from '@/engines/tyre.engine';
 import { Slider } from '@/components/ui/slider';
@@ -128,6 +129,25 @@ export function TyreLabView({
                 />
               </div>
             ) : null}
+          </section>
+
+          {/* degradation curves — engine constants visualised (v0.5.0 step 2) */}
+          <section aria-label={t('degTitle')} className="rounded-lg border border-line bg-panel p-4">
+            <header className="mb-3 flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-semibold text-ink">{t('degTitle')}</h3>
+              <span className="rounded bg-raised px-1.5 py-0.5 font-mono text-[9px] uppercase text-ink-faint">
+                {t(`source.${tyre.data.lifeSource.S}`)}
+              </span>
+            </header>
+            <DegCurveChart
+              data={{
+                laps: tyre.data.laps,
+                deltas: tyre.data.deltas,
+                lives: tyre.data.lives,
+                pitLap: tyre.data.best.pitLaps[0],
+                firstCompound: tyre.data.best.stints[0]?.compound as CompoundKey | undefined,
+              }}
+            />
           </section>
 
           {/* what-if (Phase 2) */}
