@@ -58,7 +58,7 @@
   --color-line-strong: #2f4056;  /* structural                         */
   --color-ink: #e6edf3;
   --color-ink-soft: #92a3b7;
-  --color-ink-faint: #5c6b7d;
+  --color-ink-faint: #7d8fa3; /* a11y audit Phase 3: was #5c6b7d (3.2:1 < 4.5:1) — now ≥ 4.8:1 on every surface */
   --color-teal: #2ee6c8;
   --color-danger: #ff5c6c;
   --color-amber: #ffb02e;
