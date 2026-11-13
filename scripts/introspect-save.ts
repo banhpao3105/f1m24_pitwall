@@ -44,6 +44,12 @@ interface Introspection {
   optionalTables: TableSchema[];
   coreTableRowCounts: Record<string, number>;
   missingOptional: string[];
+  /**
+   * Phase 2: columns of EVERY table (name only, no row data — personal
+   * data stays local). This is the verification source for the adaptive
+   * repo candidate columns (src/parser/repositories/adaptive.ts).
+   */
+  allTableColumns?: Record<string, string[]>;
 }
 
 function safeCount(db: SqlJsDatabase, table: string): number | null {
@@ -82,6 +88,14 @@ async function main() {
     }
   }
 
+  // Phase 2 — dump every table's columns so the adaptive candidate lists
+  // (Parts_*, Finance_*, Staff_*, Regulations_*) can be verified and locked.
+  const allTableColumns: Record<string, string[]> = {};
+  for (const t of tables) {
+    const cols = tableColumns(db, t);
+    if (cols.length > 0) allTableColumns[t] = cols;
+  }
+
   const introspection: Introspection = {
     fixtureId: OUT_NAME,
     gameVersion: binary.metadata.gameVersion,
@@ -96,6 +110,7 @@ async function main() {
     optionalTables,
     coreTableRowCounts,
     missingOptional,
+    allTableColumns,
   };
 
   mkdirSync('tests/fixtures/schema', { recursive: true });
@@ -103,7 +118,7 @@ async function main() {
   writeFileSync(outPath, JSON.stringify(introspection, null, 2) + '\n');
   console.log(`written: ${outPath}`);
   console.log(`game=${introspection.gameVersion} build=${introspection.gameVersionWithBuild}`);
-  console.log(`tables+views=${tables.length} core=${coreTables.length} optional=${optionalTables.length} missingOptional=${missingOptional.length}`);
+  console.log(`tables+views=${tables.length} core=${coreTables.length} optional=${optionalTables.length} missingOptional=${missingOptional.length} allColumns=${Object.keys(allTableColumns).length}`);
 }
 
 main().catch((err) => {
