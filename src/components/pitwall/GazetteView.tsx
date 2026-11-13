@@ -105,7 +105,6 @@ export function GazetteView({ model, raceId }: { model: SaveModel; raceId: numbe
   const t = useTranslations('gazette');
   const locale = useLocale();
   const { setView } = useWallNav();
-  const gazette = useGazette(raceId);
   const isVi = locale !== 'en';
 
   const seasons = useMemo(
@@ -113,6 +112,8 @@ export function GazetteView({ model, raceId }: { model: SaveModel; raceId: numbe
     [model.races],
   );
   const activeRaceId = raceId ?? seasons[0]?.raceId ?? null;
+  // Engine keys on the ACTIVE race (query param → latest completed race).
+  const gazette = useGazette(activeRaceId);
 
   if (raceId == null && activeRaceId == null) {
     return (
@@ -327,7 +328,6 @@ export function GazetteView({ model, raceId }: { model: SaveModel; raceId: numbe
           {t('masthead.round')} {issue.round}/{issue.totalRounds}
         </p>
         <h3 className="text-xl font-bold leading-tight text-ink sm:text-2xl">{headline}</h3>
-        {subhead != null ? <p className="mt-2 text-sm text-ink-soft">{subhead}</p> : null}
         <div className="mt-2 flex items-center gap-2 text-[11px] text-ink-faint">
           <span>{issue.trackName}</span>
           <span aria-hidden="true">·</span>

@@ -78,7 +78,7 @@
   },
   "footer": {
     "note": "F1 Pit Wall — a save analysis tool that runs entirely on your machine. Not affiliated with Frontier Developments or F1.",
-    "phase": "Phase 2 · Factory & Season"
+    "phase": "PHASE 3 · GAZETTE & POLISH"
   },
   "locale": {
     "vi": "Tiếng Việt",
@@ -514,5 +514,19 @@
       "title": "Data provenance",
       "locally": "Generated locally — no data leaves your device."
     }
+  },
+  "palette": {
+    "title": "Command palette",
+    "placeholder": "Jump to a module, race or action…",
+    "empty": "No matching results.",
+    "groupNav": "Navigate",
+    "groupRaces": "Races",
+    "groupActions": "Actions",
+    "completed": "run",
+    "upcoming": "upcoming",
+    "gazetteFor": "Gazette — {track}",
+    "switchToEn": "Switch to Vietnamese",
+    "switchToVi": "Chuyển sang tiếng Việt",
+    "hint": "toggle open · 1–9 jump to module · Esc closes"
   }
 }

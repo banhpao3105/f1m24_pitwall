@@ -78,7 +78,7 @@
   },
   "footer": {
     "note": "F1 Pit Wall — công cụ phân tích save chạy hoàn toàn trên máy bạn. Không liên kết chính thức với Frontier Developments hay F1.",
-    "phase": "Phase 2 · Factory & Season"
+    "phase": "PHASE 3 · TẠP CHÍ & HOÀN THIỆN"
   },
   "locale": {
     "vi": "Tiếng Việt",
@@ -514,5 +514,19 @@
       "title": "Nguồn dữ liệu",
       "locally": "Generated locally — no data leaves your device."
     }
+  },
+  "palette": {
+    "title": "Bảng điều khiển lệnh",
+    "placeholder": "Nhảy tới module, chặng đua hoặc hành động…",
+    "empty": "Không tìm thấy kết quả nào.",
+    "groupNav": "Điều hướng",
+    "groupRaces": "Chặng đua",
+    "groupActions": "Hành động",
+    "completed": "đã đua",
+    "upcoming": "chưa đua",
+    "gazetteFor": "Gazette — {track}",
+    "switchToEn": "Chuyển sang tiếng Anh",
+    "switchToVi": "Switch to Vietnamese",
+    "hint": "mở/đóng · số 1–9 nhảy nhanh module · Esc đóng"
   }
 }

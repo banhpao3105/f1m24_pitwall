@@ -15,7 +15,7 @@ import { useTranslations } from 'next-intl';
 import { NextIntlClientProvider } from 'next-intl';
 import { Suspense, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Flag } from 'lucide-react';
+import { Command as CommandIcon, Flag } from 'lucide-react';
 import { messages } from '@/lib/i18n/config';
 import { useUiStore } from '@/store/ui.store';
 import { useSaveStore } from '@/store/save.store';
@@ -32,6 +32,7 @@ import { WallViews } from '@/components/pitwall/WallViews';
 import { WallHomeView } from '@/components/pitwall/WallHomeView';
 import { TyreLabView } from '@/components/pitwall/TyreLabView';
 import { RaceWeekendView } from '@/components/pitwall/RaceWeekendView';
+import { CommandPalette } from '@/components/pitwall/CommandPalette';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
@@ -64,11 +65,13 @@ export default function PitWallPage() {
 
 function PitWallSurface() {
   const t = useTranslations();
+  const tPalette = useTranslations('palette');
   const status = useSaveStore((s) => s.status);
   const model = useSaveStore((s) => s.model);
   const progress = useSaveStore((s) => s.progress);
   const error = useSaveStore((s) => s.error);
   const reset = useSaveStore((s) => s.reset);
+  const togglePalette = useUiStore((s) => s.togglePalette);
 
   return (
     <div className="pitwall-grid-bg flex min-h-screen flex-col bg-void text-ink">
@@ -92,12 +95,29 @@ function PitWallSurface() {
             >
               {t('app.phaseBadge')}
             </Badge>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={togglePalette}
+              aria-label={tPalette('title')}
+              aria-keyshortcuts="Meta+K Control+K"
+              data-testid="open-palette"
+              className="cursor-pointer gap-1.5 border-line bg-surface text-ink-soft hover:text-ink"
+            >
+              <CommandIcon className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">K</span>
+            </Button>
             <LocaleSwitch />
           </div>
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-6xl flex-1 space-y-6 px-4 py-6">
+        {/* Command palette — mounted once; races are passed when a save is ready. */}
+        <Suspense fallback={null}>
+          <CommandPalette races={model?.races ?? []} />
+        </Suspense>
+
         {status === 'idle' || status === 'error' ? (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
