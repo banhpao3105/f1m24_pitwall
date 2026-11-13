@@ -15,5 +15,8 @@ server.log
 # game save files — local-only by design (LOCAL-FIRST rule)
 *.sav
 
+# typescript incremental build info
+tsconfig.tsbuildinfo
+
 # browser automation artifacts
 workspace/
