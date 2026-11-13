@@ -6,10 +6,11 @@
  * — docs/03 §5.3), compound lives, observed data, provenance.
  */
 
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { Waves, SlidersHorizontal, CloudRain } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
+import { trackDisplay } from '@/lib/track-display';
 import { useTyreLab } from '@/lib/engine-hooks';
 import { whatIfPitShift, buildWetPlan } from '@/engines/tyre.engine';
 import { RecommendationCard } from './RecommendationCard';
@@ -31,6 +32,7 @@ export function TyreLabView({
 }) {
   const t = useTranslations('tyres');
   const tWhat = useTranslations('whatif');
+  const locale = useLocale() as 'vi' | 'en';
   const tyre = useTyreLab(raceId);
 
   // what-if local state (docs/03 §5.3: pit sớm/muộn ±, toggle mưa)
@@ -70,7 +72,7 @@ export function TyreLabView({
       <header className="flex flex-wrap items-center gap-2">
         <Waves className="h-4 w-4 text-teal" aria-hidden="true" />
         <h2 className="text-sm font-semibold text-ink">{t('title')}</h2>
-        <span className="font-mono text-xs text-teal">{race.trackName}</span>
+        <span className="font-mono text-xs text-teal">{trackDisplay(race.trackName, locale)}</span>
         <span className="font-mono text-[11px] text-ink-faint">
           {tyre?.data.laps ?? race.laps ?? '—'} {t('laps')} · {tyre?.data.pitCostS.toFixed(1) ?? '—'}s {t('pitCost')}
         </span>
@@ -96,6 +98,18 @@ export function TyreLabView({
                 <span className="rounded bg-raised px-2 py-0.5 font-mono text-[10px] text-ink-soft">
                   {t('expectedStops', { stops: tyre.data.expectedStops, source: t(`source.${tyre.data.expectedSource ?? 'model'}`) })}
                 </span>
+              ) : null}
+              {/* 0.4.1: reconcile the two numbers when they differ — the field
+                  average is reference data, the plan is the time optimum. */}
+              {tyre.data.expectedStops != null &&
+              tyre.data.expectedStops !== tyre.data.best.stops ? (
+                <p className="mt-2 text-[11px] leading-relaxed text-ink-faint" data-testid="tyre-stops-reconcile">
+                  {t('stopsReconcile', {
+                    expected: tyre.data.expectedStops,
+                    source: t(`source.${tyre.data.expectedSource ?? 'model'}`),
+                    plan: tyre.data.best.stops,
+                  })}
+                </p>
               ) : null}
             </div>
             <StintTimeline

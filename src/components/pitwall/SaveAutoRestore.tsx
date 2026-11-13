@@ -14,6 +14,14 @@ import { getLastActiveSaveId, getSave, setLastActiveSaveId } from '@/lib/save-db
 import { toast } from '@/hooks/use-toast';
 import { useTranslations } from 'next-intl';
 
+/**
+ * 0.4.1: the restore toast must appear at most ONCE per page load, even if
+ * this component remounts (StrictMode double-mount, Fast Refresh, locale
+ * provider re-render) — repeated toasts on every view switch were reported
+ * as noise. Restore itself stays idempotent.
+ */
+let restoreToastShown = false;
+
 export function SaveAutoRestore() {
   const t = useTranslations('library');
 
@@ -28,10 +36,14 @@ export function SaveAutoRestore() {
         // Race guard: the user may have started a parse while we were reading.
         if (useSaveStore.getState().status !== 'idle') return;
         useSaveStore.getState().setReady(stored.model);
-        toast({
-          title: t('restoredTitle'),
-          description: t('restoredDesc', { name: stored.model.meta.fileName }),
-        });
+        if (!restoreToastShown) {
+          restoreToastShown = true;
+          toast({
+            title: t('restoredTitle'),
+            description: t('restoredDesc', { name: stored.model.meta.fileName }),
+            duration: 2500,
+          });
+        }
       } catch {
         // Degraded (private mode / quota) → normal onboarding flow. Best
         // effort only: clear the dangling pointer so we don't retry forever.

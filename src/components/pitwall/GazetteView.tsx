@@ -30,6 +30,7 @@ import {
   Trophy,
 } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
+import { trackDisplay } from '@/lib/track-display';
 import { useGazette } from '@/lib/engine-hooks';
 import { useWallNav } from './WallNav';
 import { ConfidenceBadge } from './ConfidenceBadge';
@@ -133,6 +134,8 @@ export function GazetteView({ model, raceId }: { model: SaveModel; raceId: numbe
   }
 
   const issue = gazette.data;
+  // Display name for the raw Races_Tracks key (oracle TRACKS map).
+  const track = trackDisplay(issue.trackName, locale as 'vi' | 'en');
   const winner = issue.winner;
   const p2 = issue.results.find((r) => r.finishPos === 2);
 
@@ -143,12 +146,12 @@ export function GazetteView({ model, raceId }: { model: SaveModel; raceId: numbe
       : issue.wireToWire
         ? t('headline.wireToWire', {
             driver: winner.driverName.toUpperCase(),
-            track: issue.trackName.toUpperCase(),
+            track: track.toUpperCase(),
           })
         : t('headline.fromPos', {
             driver: winner.driverName.toUpperCase(),
             pos: issue.results[0]?.startPos ?? '—',
-            track: issue.trackName.toUpperCase(),
+            track: track.toUpperCase(),
           });
 
   const gapP2 = p2?.gapS != null ? `+${p2.gapS.toFixed(3)}s` : null;
@@ -221,7 +224,7 @@ export function GazetteView({ model, raceId }: { model: SaveModel; raceId: numbe
             driver: fl.driverName,
             team: fl.teamName,
             time: formatLapTime(fl.lapMs),
-            track: issue.trackName,
+            track: track,
             year: issue.trackFirstRaceYear,
           })
         : t('narrative.fl', {
@@ -320,7 +323,7 @@ export function GazetteView({ model, raceId }: { model: SaveModel; raceId: numbe
         <p className="mt-1 text-xs text-ink-soft">{t('masthead.tagline')}</p>
         <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-ink-soft">
           <span className="font-medium text-ink">
-            {t('masthead.round')} {issue.round} · {issue.trackName}
+            {t('masthead.round')} {issue.round} · {track}
           </span>
           {w?.raceTempC != null ? (
             <span>
@@ -344,7 +347,7 @@ export function GazetteView({ model, raceId }: { model: SaveModel; raceId: numbe
         </p>
         <h3 className="text-xl font-bold leading-tight text-ink sm:text-2xl">{headline}</h3>
         <div className="mt-2 flex items-center gap-2 text-[11px] text-ink-faint">
-          <span>{issue.trackName}</span>
+          <span>{track}</span>
           <span aria-hidden="true">·</span>
           <ConfidenceBadge confidence={gazette.confidence} />
         </div>
@@ -567,7 +570,7 @@ export function GazetteView({ model, raceId }: { model: SaveModel; raceId: numbe
         ) : (
           <div className="space-y-4">
             <div className="flex flex-wrap items-baseline gap-2">
-              <span className="text-lg font-semibold text-ink">{nr.trackName}</span>
+              <span className="text-lg font-semibold text-ink">{trackDisplay(nr.trackName, locale as 'vi' | 'en')}</span>
               {trackTypeLabel(nr.trackType) != null ? (
                 <span className="rounded bg-raised px-1.5 py-0.5 font-mono text-[10px] uppercase text-ink-soft">
                   {trackTypeLabel(nr.trackType)}

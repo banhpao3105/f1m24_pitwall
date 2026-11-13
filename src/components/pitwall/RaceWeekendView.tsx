@@ -7,10 +7,11 @@
  * (docs/03 §5.2 — logic ported to sim.engine, UI rebuilt).
  */
 
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { useState } from 'react';
 import { Flag, CloudRain, Thermometer, CircleAlert, Gauge, Timer } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
+import { trackDisplay } from '@/lib/track-display';
 import { useTyreLab, usePaceBoard, useSim } from '@/lib/engine-hooks';
 import { StintTimeline } from './StintTimeline';
 import { PitWindowBar } from './PitWindowBar';
@@ -28,6 +29,7 @@ export function RaceWeekendView({
 }) {
   const t = useTranslations('race');
   const tSim = useTranslations('sim');
+  const locale = useLocale() as 'vi' | 'en';
   const [tab, setTab] = useState<'overview' | 'sim'>('overview');
   const seasonRaces = model.races.filter((r) => r.seasonId === model.meta.seasonId);
   const race =
@@ -65,7 +67,7 @@ export function RaceWeekendView({
       <header className="rounded-lg border border-line bg-panel p-4">
         <div className="flex flex-wrap items-center gap-2">
           <Flag className="h-4 w-4 text-teal" aria-hidden="true" />
-          <h2 className="text-sm font-semibold text-ink">{race.trackName}</h2>
+          <h2 className="text-sm font-semibold text-ink">{trackDisplay(race.trackName, locale)}</h2>
           <span className="font-mono text-[11px] text-ink-faint">
             {race.laps ?? '—'} {t('laps')} · {completed ? t('completed') : t('upcoming')}
           </span>
@@ -150,7 +152,9 @@ export function RaceWeekendView({
                 {t('paceValue', {
                   gap: `${Math.abs(pace.data.playerVsRivalS).toFixed(3)}s`,
                   dir: pace.data.playerVsRivalS > 0 ? t('paceSlower') : t('paceFaster'),
-                  rival: pace.data.rivals[0]?.teamName ?? '—',
+                  // 0.4.1 bug fix: quote the reference rival of playerVsRivalS
+                  // (closest pace), never rivals[0] (which is the fastest rival).
+                  rival: pace.data.rivalRef?.teamName ?? '—',
                 })}
               </p>
             </section>

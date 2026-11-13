@@ -6,10 +6,11 @@
  * detail lives in Tyre Lab / Race Weekend.
  */
 
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { motion } from 'framer-motion';
 import { Trophy, Timer, Waves, TrendingDown, TrendingUp, Car } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
+import { trackDisplay } from '@/lib/track-display';
 import { usePaceBoard, useTyreLab, useCarLab, useFinance } from '@/lib/engine-hooks';
 import { useWallNav } from './WallNav';
 import { RecommendationCard } from './RecommendationCard';
@@ -20,6 +21,7 @@ import { NumberTween } from './NumberTween';
 
 export function WallHomeView({ model }: { model: SaveModel }) {
   const t = useTranslations('wall');
+  const locale = useLocale() as 'vi' | 'en';
   const seasonId = model.meta.seasonId;
   const seasonRaces = model.races.filter((r) => r.seasonId === seasonId);
   const nextRace =
@@ -43,7 +45,9 @@ export function WallHomeView({ model }: { model: SaveModel }) {
   );
 
   const paceRow = pace?.data.rows.find((r) => r.isPlayer) ?? null;
-  const rivalRow = pace?.data.rivals.slice().sort((a, b) => Math.abs(a.paceDeltaS - (paceRow?.paceDeltaS ?? 0)) - Math.abs(b.paceDeltaS - (paceRow?.paceDeltaS ?? 0)))[0] ?? null;
+  // 0.4.1: use the engine's reference rival (same team playerVsRivalS is
+  // measured against) instead of re-deriving it locally.
+  const rivalRow = pace?.data.rivalRef ?? null;
   const carLeagueRow = carLab?.data.league.rows.find((r) => r.isPlayer) ?? null;
 
   const kpis: { icon: React.ReactNode; label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: 'good' | 'bad' | 'neutral' }[] = [
@@ -59,7 +63,7 @@ export function WallHomeView({ model }: { model: SaveModel }) {
       icon: <Timer className="h-3.5 w-3.5" />,
       label: t('kpi.season'),
       value: `${completedCount}/${seasonRaces.length}`,
-      sub: nextRace ? nextRace.trackName : undefined,
+      sub: nextRace ? trackDisplay(nextRace.trackName, locale) : undefined,
     },
     {
       icon: <Waves className="h-3.5 w-3.5" />,
@@ -130,7 +134,7 @@ export function WallHomeView({ model }: { model: SaveModel }) {
                     {t('nextRace.live')}
                   </span>
                 ) : null}
-                <span className="font-mono text-xs text-teal">{nextRace.trackName}</span>
+                <span className="font-mono text-xs text-teal">{trackDisplay(nextRace.trackName, locale)}</span>
                 {nextRace.weather?.raceRain ? (
                   <span className="rounded bg-info/10 px-1.5 py-0.5 text-[10px] text-info">
                     {t('nextRace.rain')}

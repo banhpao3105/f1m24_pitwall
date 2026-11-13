@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useMemo } from 'react';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import {
   Car,
   CalendarDays,
@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/command';
 import { useUiStore } from '@/store/ui.store';
 import { useSaveStore } from '@/store/save.store';
+import { trackDisplay } from '@/lib/track-display';
 import { useWallNav, type WallView } from './WallNav';
 import type { Race } from '@/domain/types';
 
@@ -79,6 +80,7 @@ export function CommandPalette({ races }: { races: Race[] }) {
   const setOpen = useUiStore((s) => s.setPaletteOpen);
   const toggle = useUiStore((s) => s.togglePalette);
   const { setView } = useWallNav();
+  const lang: 'vi' | 'en' = locale ?? 'vi';
 
   const seasonId = useSaveStore((s) => s.model?.meta.seasonId ?? 0);
   const seasonRaces = useMemo(
@@ -165,13 +167,13 @@ export function CommandPalette({ races }: { races: Race[] }) {
               {seasonRaces.map((r) => (
                 <CommandItem
                   key={`race-${r.raceId}`}
-                  value={`race weekend ${r.trackName} ${r.raceId}`}
+                  value={`race weekend ${trackDisplay(r.trackName, lang)} ${r.raceId}`}
                   onSelect={() => run(() => setView('race', r.raceId))}
                   className="cursor-pointer gap-2.5 text-ink-soft data-[selected=true]:bg-raised data-[selected=true]:text-ink"
                 >
                   <Flag className="h-4 w-4" aria-hidden="true" />
                   <span className="flex-1 truncate">
-                    {r.trackName}
+                    {trackDisplay(r.trackName, lang)}
                     <span className="ml-2 font-mono text-[10px] text-ink-faint">
                       {r.state === 2 ? tPalette('completed') : tPalette('upcoming')}
                     </span>
@@ -184,13 +186,13 @@ export function CommandPalette({ races }: { races: Race[] }) {
                 .map((r) => (
                   <CommandItem
                     key={`gaz-${r.raceId}`}
-                    value={`gazette narrative ${r.trackName} ${r.raceId}`}
+                    value={`gazette narrative ${trackDisplay(r.trackName, lang)} ${r.raceId}`}
                     onSelect={() => run(() => setView('gazette', r.raceId))}
                     className="cursor-pointer gap-2.5 text-ink-soft data-[selected=true]:bg-raised data-[selected=true]:text-ink"
                   >
                     <Newspaper className="h-4 w-4" aria-hidden="true" />
                     <span className="flex-1 truncate">
-                      {tPalette('gazetteFor', { track: r.trackName })}
+                      {tPalette('gazetteFor', { track: trackDisplay(r.trackName, lang) })}
                     </span>
                   </CommandItem>
                 ))}

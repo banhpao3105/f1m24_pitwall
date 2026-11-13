@@ -6,10 +6,11 @@
  * from the Normalized Model (standings formula verified on a real save).
  */
 
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { motion } from 'framer-motion';
 import { CalendarDays, Download, CloudRain } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
+import { trackDisplay } from '@/lib/track-display';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -31,6 +32,7 @@ function exportCsv(filename: string, header: string[], rows: (string | number)[]
 
 export function SeasonView({ model }: { model: SaveModel }) {
   const t = useTranslations('season');
+  const locale = useLocale() as 'vi' | 'en';
   const seasonId = model.meta.seasonId;
   const races = model.races
     .filter((r) => r.seasonId === seasonId)
@@ -49,7 +51,7 @@ export function SeasonView({ model }: { model: SaveModel }) {
         t('colRain'), t('colTemp'), t('colLaps'), t('colWinner'),
       ],
       races.map((r) => [
-        r.trackName,
+        trackDisplay(r.trackName, locale),
         r.day,
         r.state === 2 ? t('completed') : t('upcoming'),
         r.isSprint ? t('yes') : t('no'),
@@ -100,7 +102,7 @@ export function SeasonView({ model }: { model: SaveModel }) {
             >
               <span className="flex items-center gap-1.5 text-xs font-medium text-ink">
                 <span className="w-4 font-mono text-[10px] text-ink-faint">{i + 1}</span>
-                <span className="truncate" title={r.trackName}>{r.trackName}</span>
+                <span className="truncate" title={trackDisplay(r.trackName, locale)}>{trackDisplay(r.trackName, locale)}</span>
               </span>
               <span className="flex flex-wrap items-center gap-1 pl-5">
                 <span
@@ -198,7 +200,7 @@ export function SeasonView({ model }: { model: SaveModel }) {
               {races.map((r) => (
                 <tr key={r.raceId} className="border-t border-line/60">
                   <td className="px-2 py-1.5 text-ink">
-                    {r.trackName}
+                    {trackDisplay(r.trackName, locale)}
                     {r.isSprint ? <span className="ml-1 font-mono text-[9px] text-gold">{t('sprint')}</span> : null}
                   </td>
                   <td className="px-2 py-1.5 font-mono text-ink-soft">{r.day}</td>
