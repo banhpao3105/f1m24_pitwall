@@ -2,6 +2,45 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.5.0] — Polish UI: pit wall thật — sidebar, biểu đồ, bản sắc đội đua
+
+Đợt polish giao diện v0.4.1 → v0.5.0 theo prompt chủ dự án: **không đổi bất kỳ engine/parser logic số liệu nào** — chỉ nâng cách trình bày (riêng parser *đọc thêm* 2 bảng hiển thị: `Teams_Colours` + decode `DriverCode`, không đụng số liệu). 5 bước, 1 bước = 1 commit Conventional, push sau mỗi bước.
+
+### Added — Bước 1: khung wall (`7e88156`)
+- Sidebar trái 240px (desktop ≥lg) nhóm theo mode (RACE WEEKEND / FACTORY·SEASON / TẠP CHÍ), active vạch teal, phím tắt 1–9 khớp Cmd+K, footer hiện save đang mở (tên file · Day · mùa · tiến độ · nút Đổi save). Mobile: bottom tab 5 mục + sheet "Thêm" (4 module còn lại), tôn trọng safe-area.
+- Main rộng 1440px/gutters 24px; Home lưới 12 cột: Chặng tới (7) + Nên làm gì tiếp (5); thêm 2 card lấp chỗ trống: **Chặng vừa rồi** (podium + tay đua đội mình + điểm đội) và **Bảng xếp hạng nhanh** (top 5, highlight đội mình).
+- Header: bỏ badge Phase (chuyển xuống footer), thêm đồng hồ game "Day {n} · Mùa {y} · x/21" + chip thời tiết chặng tới.
+- Toast chuyển **top-center** — không che list dữ liệu nữa.
+
+### Added — Bước 2: biểu đồ thật bằng Recharts (`0388e8d`)
+- **Pace bar chart ngang 11 đội** (Home + Race Weekend): chiều thanh = median gap so với đội nhanh nhất (chính `paceDeltaS` của pace.engine trừ min bảng); đội mình teal + viền sáng, rivalRef amber, còn lại xám xanh; tooltip ghi median + số mẫu; giữ 1 dòng kết luận dưới chart, bỏ mũi tên trend mơ hồ.
+- **Đường cong degradation S/M/H** (Tyre Lab): mirror đúng công thức đóng của tyre.engine (`deltas[c] + DEG_FINAL[c]·(lap/lives[c])^DEG_EXP`) — vạch pit tối ưu teal, vùng mờ đỏ sau trần đời lốp, line dừng ở cap (không bịa hiệu năng sau trần).
+- **Car Lab**: league thành bar chart (designs = điểm thật; pace fallback = vị trí đảo, ghi rõ nguồn) + bars condition 9 nhóm part với vạch ngưỡng WATCH 0.7.
+- **Season**: standings bar chart top 8 cạnh 2 bảng; card chặng đã đua hiện điểm đội ghi được, chặng chưa đua hiện countdown Day.
+- Mọi chart: token màu, animation ≤400ms, tôn trọng `prefers-reduced-motion`, fallback chữ khi thiếu dữ liệu (không vẽ chart rỗng). +6 test mới.
+
+### Added — Bước 3: bản sắc đội đua (`14d2d22`)
+- Parser đọc **`Teams_Colours`** (oracle parity: `Colour >>> 0 & 0xFFFFFF`, ColourID thấp nhất thắng, bảng thiếu → rỗng an toàn) → `Team.colourPrimary`. Chấm màu đội ở mọi standings/list, màu thanh pace + league chart (mình/rival vẫn teal/amber), viền trái + avatar initials trên card tay đua.
+- **Timing Tower** (Race Weekend — Overview): P1–P22 từ chặng hoàn thành gần nhất — mã 3 chữ cái, đội, gap (parity `Races_Results.Time`), số pit; cột lốp để "—" trung thực (model không có stint theo vòng); nhãn "kết quả chặng trước — tham khảo".
+- **TrackSchematic**: outline SVG đơn giản cho 26 track + fallback có nhãn — vạch xuất phát + mũi tên hướng suy từ đoạn thẳng đầu path; ghi rõ "sơ đồ minh họa — không theo tỉ lệ".
+- Decode **`[DriverCode_Ver]` → `Ver`** (loc-key → mã hiển thị, parity `cleanStaffName`). +5 test mới.
+
+### Added — Bước 4: typography, hierarchy & motion (`be4efaa`)
+- KPI: số 32px JetBrains Mono `tabular-nums`, label 11px uppercase, dòng delta trung thực dưới KPI xếp hạng — tính từ standings **trước** chặng cuối (dữ liệu lưu sẵn, ví dụ "giữ P3"); không bịa chuyển bậc.
+- Kicker mono teal 11px + tiêu đề 15px semibold thống nhất mọi view (namespace `sec`).
+- **PitWindowBar**: label pit tối ưu trên thanh, tick 1/25/50, chú giải đầy đủ (cửa sổ tối ưu / sớm–muộn / muộn / ngoài trần đời lốp); chuỗi hardcoded tiếng Việt chuyển sang next-intl.
+- RecommendationCard gọn: why clamp 2 dòng (hover xem đủ), nút 👍/👎 thành 1 hàng icon nhỏ có aria-label; skeleton ~180ms khi đổi view (ViewShell, render-phase derived state, reduced-motion bỏ qua); live-pulse chấm teal ở card Chặng tới.
+
+### Added — Bước 5: Gazette dạng báo + mobile (`ef1814e`)
+- Bài chính 2 cột (desktop), **drop cap** chữ đầu, **pull quote** là quote tay đua thắng (dời khỏi box awards — không trùng lặp); bảng kết quả thêm chấm màu đội.
+- Sidebar phải: **Odds + Dark horse + Trivia** thành các box riêng (collapses khi in/mobile); OddsTable scroll ngang trong hộp — sửa tràn 5px của trang.
+- Mobile 390px: stint timeline cuộn ngang, KPI 2×2, **0 tràn ngang ở mọi view**.
+
+### Verified trên save thật (autosave.sav F1M24, browser 1440×900 + 390×844)
+- Số engine không đổi qua 5 bước: nhanh hơn Alpine **0.090s/vòng** (pace rank 9/11, +1.731s so với đội dẫn đầu), plan lốp **S(23)→M(33)** 1 pit, standings đội **CustomTeam P3 · 20 pts** (khớp "+20 pts đội" card chặng vừa rồi), tower 22 dòng với gap O'Ward **+25.718s** P4.
+- Lỗi phát hiện khi verify: sau khi dịch vụ sandbox restart giữa chừng, working tree bị reset về `9fb113d` — đã `git reset --hard origin/main` phục hồi Bước 1+2 (đã push đầy đủ) và làm lại Bước 3 từ context; không mất dữ liệu trên origin.
+- Lighthouse production không đo được trong sandbox (cấm `next build`) — đã đối chiếu bằng self-check `lint + typecheck + test` và verify browser thật.
+
 ## [0.4.1] — Bugfix: pace đối trọng, dedupe nhân sự, khôi phục Parts/Finance, hiển thị tên
 
 Báo cáo lỗi từ chủ dự án sau Phase 3 + điều tra trên save thật (F1M24 1.11.0.498643).
