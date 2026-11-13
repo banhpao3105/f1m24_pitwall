@@ -99,7 +99,9 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
   const driverById = new Map(driversRaw.map((d) => [d.staffId, d]));
   const driverName = (id: number): string => {
     const d = driverById.get(id);
-    const name = d ? `${d.firstName} ${d.lastName}`.trim() : '';
+    const name = d
+      ? `${cleanStaffName(d.firstName)} ${cleanStaffName(d.lastName)}`.trim()
+      : '';
     return name.length > 0 ? name : `Driver ${id}`;
   };
   for (const race of raceModels) {
@@ -245,4 +247,24 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
 function toGameVersion(v: string): GameVersionId {
   if (v === 'F1M22' || v === 'F1M23' || v === 'F1M24') return v;
   return 'UNKNOWN';
+}
+
+/**
+ * Generated staff names arrive as localization keys, e.g.
+ * "[StaffName_Forename_Male_Pato]" / "[StaffName_Surname_OWard]". The
+ * readable name is embedded in the key — extracting it is faithful to the
+ * save (the game localizes the very same string at runtime). Plain names
+ * (real drivers, user input) pass through untouched.
+ */
+export function cleanStaffName(raw: string): string {
+  const token = raw.trim();
+  const m = token.match(/^\[([^\]]+)\]$/);
+  if (!m) return token;
+  const key = m[1];
+  const PREFIXES = ['StaffName_Forename_Male_', 'StaffName_Forename_Female_', 'StaffName_Surname_'];
+  for (const p of PREFIXES) {
+    if (key.startsWith(p)) return key.slice(p.length);
+  }
+  // Unknown key shape — keep the tail segment, still readable.
+  return key.split('_').pop() ?? token;
 }

@@ -2,7 +2,7 @@
   "app": {
     "title": "F1 PIT WALL",
     "tagline": "Trợ lý chiến thuật cho F1 Manager — đọc save, gợi ý hành động.",
-    "phaseBadge": "PHASE 0 — FOUNDATION",
+    "phaseBadge": "PHASE 1 — PIT WALL MVP",
     "modeA": "RACE WEEKEND",
     "modeB": "FACTORY / SEASON"
   },
@@ -78,7 +78,7 @@
   },
   "footer": {
     "note": "F1 Pit Wall — công cụ phân tích save chạy hoàn toàn trên máy bạn. Không liên kết chính thức với Frontier Developments hay F1.",
-    "phase": "Phase 0 · Foundation"
+    "phase": "Phase 1 · Pit Wall MVP"
   },
   "locale": {
     "vi": "Tiếng Việt",
@@ -90,5 +90,93 @@
     "close": "Đóng",
     "yes": "Có",
     "no": "Không"
+  },
+  "confidence": {
+    "HIGH": "Độ tin cậy CAO — đo trực tiếp từ save",
+    "MEDIUM": "Độ tin cậy TRUNG BÌNH — suy ra từ dữ liệu lịch sử trong save",
+    "LOW": "Độ tin cậy THẤP — dùng hằng số mô hình vì save thiếu dữ liệu",
+    "semantics": "Mọi con số đều có nguồn trong phần bằng chứng."
+  },
+  "recommendation": {
+    "evidence": "Xem bằng chứng",
+    "evidenceList": "Bằng chứng",
+    "assumptions": "Giả định"
+  },
+  "wall": {
+    "nav": {
+      "label": "Điều hướng Pit Wall",
+      "home": "Pit Wall",
+      "tyres": "Tyre Lab",
+      "race": "Race Weekend"
+    },
+    "kpi": {
+      "label": "KPI",
+      "standings": "Xếp hạng đội",
+      "season": "Tiến độ mùa",
+      "tyreRec": "Khuyến nghị lốp"
+    },
+    "nextRace": {
+      "label": "Chặng tới",
+      "rain": "Có mưa dự kiến",
+      "openRace": "Mở Race Weekend",
+      "openTyres": "Mở Tyre Lab",
+      "noPlan": "Chưa xây được kế hoạch lốp cho chặng này."
+    },
+    "pace": {
+      "label": "Pace vs đối thủ trực tiếp",
+      "vsRival": "{gap}/vòng {dir} so với {rival} (median các chặng gần nhất)",
+      "slower": "chậm",
+      "faster": "nhanh",
+      "rank": "Pace rank {rank}/{total}",
+      "noData": "Chưa đủ dữ liệu pace — nạp save sau chặng kế tiếp."
+    },
+    "todo": {
+      "label": "Nên làm gì tiếp",
+      "empty": "Chưa có khuyến nghị nào — nạp save đủ dữ liệu để engines chạy.",
+      "driverLead": "Tay đua đội bạn: {name} — P{pos}, {points} pts"
+    },
+    "alerts": {
+      "noRaces": "Save chưa có chặng hoàn thành — các khuyến nghị race sẽ rỗng cho tới khi đua chặng đầu tiên.",
+      "missingTables": "Thiếu bảng: {tables} — các module liên quan dùng fallback và ghi confidence LOW."
+    }
+  },
+  "tyres": {
+    "title": "Tyre Lab",
+    "laps": "vòng",
+    "pitCost": "/pit",
+    "noRace": "Không có chặng nào để phân tích.",
+    "noPlan": "Không xây được kế hoạch lốp hợp lệ cho chặng này.",
+    "hero": "Kế hoạch đề xuất",
+    "heroPlan": "{plan} — {stops} pit",
+    "expectedStops": "Số pit kỳ vọng của cánh quân: ~{stops} (nguồn: {source})",
+    "alternatives": "Phương án thay thế",
+    "fastest": "Nhanh nhất",
+    "lives": "Đời lốp từng compound",
+    "wet": "Mưa có thể xảy ra ({rain}) — plan Inter/Wet sẽ hiện khi có dữ liệu allocation của tuần lễ này.",
+    "provenance": "Nguồn dữ liệu & giả định",
+    "source": {
+      "allocation": "allocation",
+      "track": "track",
+      "model": "model",
+      "practice": "practice",
+      "meta": "meta",
+      "baseline": "baseline"
+    }
+  },
+  "race": {
+    "laps": "vòng",
+    "completed": "Đã đua",
+    "upcoming": "Chưa đua",
+    "rain": "Mưa",
+    "dry": "Khô",
+    "lastResult": "Kết quả đội bạn: P{pos} ({points} pts){dnf}",
+    "plan": "Kế hoạch lốp đề xuất",
+    "pace": "Pace vs đối thủ",
+    "paceValue": "{gap}/vòng {dir} so với {rival}",
+    "paceSlower": "chậm",
+    "paceFaster": "nhanh",
+    "alreadyDone": "Chặng này đã đua xong — kế hoạch dưới đây mang tham chiếu.",
+    "recs": "Khuyến nghị",
+    "noRace": "Không có chặng nào để hiển thị."
   }
 }

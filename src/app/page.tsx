@@ -1,18 +1,21 @@
 'use client';
 
 /**
- * F1 Pit Wall — Phase 0 (Foundation) single-surface page.
+ * F1 Pit Wall — Phase 1 single-surface page.
  *
- * Planning deviation (documented in src/lib/i18n/config.ts): the sandbox
- * preview exposes only `/`, so Phase 0 ships the Upload + Library flow on
- * this route. `/wall/*` routes follow in Phase 1 per docs/04-UX-UI-ROUTES.md.
+ * Planning deviations (documented in src/lib/i18n/config.ts):
+ *   - The sandbox preview exposes only `/`, so Phase 1 views live on this
+ *     route with query-param deep-links (`/?view=tyres&race=12`) instead of
+ *     the `/wall/*` route map in docs/04 §7.2. The view switch is a
+ *     component swap — the route map applies unchanged once routing exists.
+ *   - next-intl without locale prefixes; locale persisted in Zustand.
  */
 
-import { useTransition } from 'react';
 import { useTranslations } from 'next-intl';
 import { NextIntlClientProvider } from 'next-intl';
+import { Suspense } from 'react';
 import { motion } from 'framer-motion';
-import { Flag, Gauge } from 'lucide-react';
+import { Flag } from 'lucide-react';
 import { messages } from '@/lib/i18n/config';
 import { useUiStore } from '@/store/ui.store';
 import { useSaveStore } from '@/store/save.store';
@@ -24,14 +27,16 @@ import { ParseProgress } from '@/components/pitwall/ParseProgress';
 import { ErrorAlert } from '@/components/pitwall/ErrorAlert';
 import { SaveMetaCard } from '@/components/pitwall/SaveMetaCard';
 import { SaveLibrary } from '@/components/pitwall/SaveLibrary';
+import { WallNav } from '@/components/pitwall/WallNav';
+import { WallViews } from '@/components/pitwall/WallViews';
+import { WallHomeView } from '@/components/pitwall/WallHomeView';
+import { TyreLabView } from '@/components/pitwall/TyreLabView';
+import { RaceWeekendView } from '@/components/pitwall/RaceWeekendView';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
-export default function Phase0Page() {
+export default function PitWallPage() {
   const locale = useUiStore((s) => s.locale);
-  const [, startTransition] = useTransition();
-  // Locale comes from the persisted store; re-render on switch is instant.
-  void startTransition;
   const activeLocale = locale ?? 'vi';
 
   return (
@@ -41,12 +46,12 @@ export default function Phase0Page() {
       now={new Date()}
       timeZone="Asia/Shanghai"
     >
-      <Phase0Surface />
+      <PitWallSurface />
     </NextIntlClientProvider>
   );
 }
 
-function Phase0Surface() {
+function PitWallSurface() {
   const t = useTranslations();
   const status = useSaveStore((s) => s.status);
   const model = useSaveStore((s) => s.model);
@@ -81,27 +86,25 @@ function Phase0Surface() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 space-y-6 px-4 py-8">
+      <main className="mx-auto w-full max-w-6xl flex-1 space-y-6 px-4 py-6">
         {status === 'idle' || status === 'error' ? (
-          <>
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
-              className="space-y-6"
-            >
-              {status === 'error' && error ? (
-                <ErrorAlert
-                  code={error.code}
-                  message={error.message}
-                  details={error.details ?? error.message}
-                  onRetry={reset}
-                />
-              ) : null}
-              <SaveDropzone />
-              <PrivacyNote />
-            </motion.div>
-          </>
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+            className="space-y-6"
+          >
+            {status === 'error' && error ? (
+              <ErrorAlert
+                code={error.code}
+                message={error.message}
+                details={error.details ?? error.message}
+                onRetry={reset}
+              />
+            ) : null}
+            <SaveDropzone />
+            <PrivacyNote />
+          </motion.div>
         ) : null}
 
         {status === 'parsing' ? (
@@ -117,22 +120,25 @@ function Phase0Surface() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
-            className="space-y-6"
-            data-testid="save-meta"
+            className="space-y-5"
+            data-testid="wall-shell"
           >
-            <SaveMetaCard model={model} />
-            <div className="mx-auto flex w-full max-w-3xl items-center gap-3 rounded-lg border border-line bg-surface px-4 py-3">
-              <Gauge className="h-4 w-4 shrink-0 text-info" aria-hidden="true" />
-              <p className="flex-1 text-xs text-ink-soft">{t('meta.nextPhase')}</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <WallNav races={model.races} />
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={reset}
-                className="cursor-pointer text-ink-soft hover:text-ink"
+                className="ml-auto cursor-pointer text-ink-soft hover:text-ink"
               >
                 {t('upload.title')}
               </Button>
             </div>
+
+            <Suspense fallback={null}>
+              <WallViews />
+            </Suspense>
+
             <SaveLibrary />
           </motion.div>
         ) : null}

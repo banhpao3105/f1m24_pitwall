@@ -2,7 +2,7 @@
   "app": {
     "title": "F1 PIT WALL",
     "tagline": "Strategy assistant for F1 Manager — reads your save, suggests actions.",
-    "phaseBadge": "PHASE 0 — FOUNDATION",
+    "phaseBadge": "PHASE 1 — PIT WALL MVP",
     "modeA": "RACE WEEKEND",
     "modeB": "FACTORY / SEASON"
   },
@@ -78,7 +78,7 @@
   },
   "footer": {
     "note": "F1 Pit Wall — a save analysis tool that runs entirely on your machine. Not affiliated with Frontier Developments or F1.",
-    "phase": "Phase 0 · Foundation"
+    "phase": "Phase 1 · Pit Wall MVP"
   },
   "locale": {
     "vi": "Tiếng Việt",
@@ -90,5 +90,93 @@
     "close": "Close",
     "yes": "Yes",
     "no": "No"
+  },
+  "confidence": {
+    "HIGH": "HIGH confidence — measured directly from the save",
+    "MEDIUM": "MEDIUM confidence — derived from historical data in the save",
+    "LOW": "LOW confidence — model constants used because the save lacks data",
+    "semantics": "Every number has its source in the evidence section."
+  },
+  "recommendation": {
+    "evidence": "View evidence",
+    "evidenceList": "Evidence",
+    "assumptions": "Assumptions"
+  },
+  "wall": {
+    "nav": {
+      "label": "Pit Wall navigation",
+      "home": "Pit Wall",
+      "tyres": "Tyre Lab",
+      "race": "Race Weekend"
+    },
+    "kpi": {
+      "label": "KPI",
+      "standings": "Team standing",
+      "season": "Season progress",
+      "tyreRec": "Tyre recommendation"
+    },
+    "nextRace": {
+      "label": "Next race",
+      "rain": "Rain forecast",
+      "openRace": "Open Race Weekend",
+      "openTyres": "Open Tyre Lab",
+      "noPlan": "No tyre plan could be built for this race yet."
+    },
+    "pace": {
+      "label": "Pace vs direct rival",
+      "vsRival": "{gap}/lap {dir} than {rival} (median of recent races)",
+      "slower": "slower",
+      "faster": "faster",
+      "rank": "Pace rank {rank}/{total}",
+      "noData": "Not enough pace data — load a save after the next race."
+    },
+    "todo": {
+      "label": "What to do next",
+      "empty": "No recommendations yet — load a save with enough data for the engines.",
+      "driverLead": "Your driver: {name} — P{pos}, {points} pts"
+    },
+    "alerts": {
+      "noRaces": "No completed races in this save — race recommendations stay empty until the first race is done.",
+      "missingTables": "Missing tables: {tables} — related modules use fallbacks and state confidence LOW."
+    }
+  },
+  "tyres": {
+    "title": "Tyre Lab",
+    "laps": "laps",
+    "pitCost": "/pit",
+    "noRace": "No race to analyse.",
+    "noPlan": "No valid tyre plan for this race.",
+    "hero": "Recommended plan",
+    "heroPlan": "{plan} — {stops} stop(s)",
+    "expectedStops": "Expected field stops: ~{stops} (source: {source})",
+    "alternatives": "Alternatives",
+    "fastest": "Fastest",
+    "lives": "Compound life",
+    "wet": "Rain likely ({rain}) — Inter/Wet plan appears once this weekend's allocation data exists.",
+    "provenance": "Data sources & assumptions",
+    "source": {
+      "allocation": "allocation",
+      "track": "track",
+      "model": "model",
+      "practice": "practice",
+      "meta": "meta",
+      "baseline": "baseline"
+    }
+  },
+  "race": {
+    "laps": "laps",
+    "completed": "Completed",
+    "upcoming": "Upcoming",
+    "rain": "Rain",
+    "dry": "Dry",
+    "lastResult": "Your team: P{pos} ({points} pts){dnf}",
+    "plan": "Recommended tyre plan",
+    "pace": "Pace vs rival",
+    "paceValue": "{gap}/lap {dir} than {rival}",
+    "paceSlower": "slower",
+    "paceFaster": "faster",
+    "alreadyDone": "This race is completed — the plan below is reference only.",
+    "recs": "Recommendations",
+    "noRace": "No race to show."
   }
 }

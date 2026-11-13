@@ -1,0 +1,141 @@
+'use client';
+
+/**
+ * Race Weekend view (minimal v1) — docs/04 §7.3.2: header (track, laps,
+ * weather), pit window + hero plan, pace snapshot vs rival, last result
+ * summary. Sim tabs (quali/race sim) are Phase 2.
+ */
+
+import { useTranslations } from 'next-intl';
+import { Flag, CloudRain, Thermometer, CircleAlert } from 'lucide-react';
+import type { SaveModel } from '@/domain/types';
+import { useTyreLab, usePaceBoard } from '@/lib/engine-hooks';
+import { StintTimeline } from './StintTimeline';
+import { PitWindowBar } from './PitWindowBar';
+import { ConfidenceBadge } from './ConfidenceBadge';
+import { CompoundBadge, type CompoundKey } from './CompoundBadge';
+import { RecommendationCard } from './RecommendationCard';
+
+export function RaceWeekendView({
+  model,
+  raceId,
+}: {
+  model: SaveModel;
+  raceId: number | null;
+}) {
+  const t = useTranslations('race');
+  const seasonRaces = model.races.filter((r) => r.seasonId === model.meta.seasonId);
+  const race =
+    seasonRaces.find((r) => r.raceId === raceId) ??
+    seasonRaces.find((r) => r.state !== 2) ??
+    seasonRaces.at(-1) ??
+    null;
+
+  const tyre = useTyreLab(race?.raceId ?? null);
+  const pace = usePaceBoard();
+
+  if (!race) {
+    return (
+      <p className="rounded-lg border border-line bg-panel p-6 text-sm text-ink-faint">
+        {t('noRace')}
+      </p>
+    );
+  }
+
+  const completed = race.state === 2;
+  const lastResult = completed
+    ? race.results.filter((r) => r.teamId === model.player.teamId).sort((a, b) => a.finishingPos - b.finishingPos)[0] ?? null
+    : null;
+  const fastest = tyre?.data.best ?? null;
+  const firstStintCompound = fastest?.stints[0]?.compound as CompoundKey | undefined;
+
+  return (
+    <div className="space-y-5" data-testid="race-weekend">
+      <header className="rounded-lg border border-line bg-panel p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Flag className="h-4 w-4 text-teal" aria-hidden="true" />
+          <h2 className="text-sm font-semibold text-ink">{race.trackName}</h2>
+          <span className="font-mono text-[11px] text-ink-faint">
+            {race.laps ?? '—'} {t('laps')} · {completed ? t('completed') : t('upcoming')}
+          </span>
+          {race.weather ? (
+            <span className="ml-auto flex items-center gap-3 font-mono text-[11px] text-ink-soft">
+              <span className="flex items-center gap-1">
+                <Thermometer className="h-3 w-3" aria-hidden="true" />
+                {race.weather.raceTempC ?? '—'}°C
+              </span>
+              <span className={`flex items-center gap-1 ${race.weather.raceRain ? 'text-info' : ''}`}>
+                <CloudRain className="h-3 w-3" aria-hidden="true" />
+                {race.weather.raceRain ? t('rain') : t('dry')}
+              </span>
+            </span>
+          ) : null}
+        </div>
+        {lastResult ? (
+          <p className="mt-2 text-xs text-ink-soft">
+            {t('lastResult', {
+              pos: lastResult.finishingPos,
+              points: lastResult.points,
+              dnf: String(lastResult.dnf),
+            })}
+          </p>
+        ) : null}
+      </header>
+
+      {fastest ? (
+        <section aria-label={t('plan')} className="rounded-lg border border-line bg-panel p-4">
+          <header className="mb-3 flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold text-ink">{t('plan')}</h3>
+            <span className="font-mono text-xs text-teal">
+              {fastest.stints.map((s) => `${s.compound}(${s.laps})`).join(' → ')}
+            </span>
+            {tyre ? <span className="ml-auto"><ConfidenceBadge confidence={tyre.confidence} /></span> : null}
+          </header>
+          <StintTimeline stints={fastest.stints} totalLaps={tyre?.data.laps ?? race.laps ?? 0} pitLaps={fastest.pitLaps} />
+          {fastest.pitLaps.length > 0 && firstStintCompound ? (
+            <div className="mt-4">
+              <PitWindowBar
+                optimalLap={fastest.pitLaps[0]}
+                windowLo={Math.max(2, fastest.pitLaps[0] - 2)}
+                windowHi={fastest.pitLaps[0] + 2}
+                totalLaps={tyre?.data.laps ?? race.laps ?? 0}
+                lifeCap={firstStintCompound ? tyre?.data.lives[firstStintCompound] : undefined}
+              />
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {pace && pace.data.playerVsRivalS != null ? (
+        <section aria-label={t('pace')} className="rounded-lg border border-line bg-panel p-4">
+          <header className="mb-2 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-ink">{t('pace')}</h3>
+            <ConfidenceBadge confidence={pace.confidence} />
+          </header>
+          <p className="text-xs text-ink-soft">
+            {t('paceValue', {
+              gap: `${Math.abs(pace.data.playerVsRivalS).toFixed(3)}s`,
+              dir: pace.data.playerVsRivalS > 0 ? t('paceSlower') : t('paceFaster'),
+              rival: pace.data.rivals[0]?.teamName ?? '—',
+            })}
+          </p>
+        </section>
+      ) : null}
+
+      {tyre?.warnings.includes('RACE_ALREADY_COMPLETED') ? (
+        <div className="flex items-start gap-2 rounded-lg border border-amber/40 bg-amber/10 px-3 py-2">
+          <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber" aria-hidden="true" />
+          <p className="text-xs text-amber">{t('alreadyDone')}</p>
+        </div>
+      ) : null}
+
+      {tyre && tyre.recommendations.length > 0 ? (
+        <section aria-label={t('recs')} className="space-y-3">
+          {tyre.recommendations.map((rec) => (
+            <RecommendationCard key={rec.id} recommendation={rec} />
+          ))}
+        </section>
+      ) : null}
+    </div>
+  );
+}
