@@ -1,0 +1,474 @@
+{
+  "fixtureId": "f1m24-volta24-1.11.0-multiseason",
+  "gameVersion": "F1M24",
+  "gameVersionWithBuild": "1.11.0.498643",
+  "saveGameVersion": 3,
+  "engineVersion": "5.1.1",
+  "saveGameClassName": "/Script/RaceGame.CareerSaveGame",
+  "sourceFileName": "autosave.sav",
+  "introspectedAt": "2026-11-13T08:16:19.840Z",
+  "totalTablesAndViews": 326,
+  "coreTables": [
+    {
+      "name": "Races",
+      "columns": [
+        "RaceID",
+        "SeasonID",
+        "Day",
+        "TrackID",
+        "State",
+        "RainPractice",
+        "TemperaturePractice",
+        "WeatherStatePractice",
+        "RainQualifying",
+        "TemperatureQualifying",
+        "WeatherStateQualifying",
+        "RainRace",
+        "TemperatureRace",
+        "WeatherStateRace",
+        "WeekendType"
+      ]
+    },
+    {
+      "name": "Races_Tracks",
+      "columns": [
+        "TrackID",
+        "Name",
+        "CountryID",
+        "Laps",
+        "FirstRace",
+        "ProfileText",
+        "TrackLength",
+        "TypeOfTrack",
+        "FastestLap",
+        "FastestLapDriverID",
+        "LastWinner",
+        "LastPolePosition",
+        "MostWins",
+        "FastestLapYear",
+        "SafetyCarChance",
+        "PitLaneTimeLoss",
+        "GreenFlagTimeLoss",
+        "SafetyCarTimeLoss",
+        "StartFinishLineOffset",
+        "SprintLaps",
+        "IsF2Race",
+        "IsF3Race"
+      ]
+    },
+    {
+      "name": "Races_Results",
+      "columns": [
+        "Season",
+        "RaceID",
+        "FinishingPos",
+        "DriverID",
+        "TeamID",
+        "Laps",
+        "Time",
+        "FastestLap",
+        "Points",
+        "DNF",
+        "SuccessfulOvertakes",
+        "FailedOvertakes",
+        "SuccessfulDefends",
+        "FailedDefends",
+        "SafetyCarDeployments",
+        "VirtualSafetyCarDeployments",
+        "StartingPos",
+        "FuelUsed",
+        "Performance"
+      ]
+    },
+    {
+      "name": "Teams",
+      "columns": [
+        "Formula",
+        "PredictedRanking",
+        "TeamID",
+        "TeamName",
+        "TeamNameLocKey",
+        "Location",
+        "ProfileText",
+        "SeasonsEnteredBeforeGameStart",
+        "FirstYearWithCurrentBranding",
+        "IsCustomTeam",
+        "CountryID"
+      ]
+    },
+    {
+      "name": "Staff_BasicData",
+      "columns": [
+        "StaffID",
+        "FirstName",
+        "LastName",
+        "CountryID",
+        "DOB",
+        "DOB_ISO",
+        "Gender",
+        "IsGeneratedStaff",
+        "PhotoDay",
+        "FaceType",
+        "FaceIndex",
+        "AgeType",
+        "IsGeneratedForCustomTeam"
+      ]
+    },
+    {
+      "name": "Player",
+      "columns": [
+        "FirstName",
+        "LastName",
+        "TeamID",
+        "UniqueSeed",
+        "FirstGameDay",
+        "TeamPrincipalRating",
+        "PreviousTeamPrincipalRating",
+        "CustomTeamEnabled",
+        "CustomTeamLogoBase64",
+        "CustomTeamCarLiveryBase64"
+      ]
+    },
+    {
+      "name": "Player_State",
+      "columns": [
+        "Day",
+        "CurrentSeason"
+      ]
+    }
+  ],
+  "optionalTables": [
+    {
+      "name": "Races_QualifyingResults",
+      "columns": [
+        "SeasonID",
+        "RaceID",
+        "QualifyingStage",
+        "SprintShootout",
+        "FinishingPos",
+        "DriverID",
+        "TeamID",
+        "FastestLap",
+        "DNF",
+        "LapCount",
+        "GridPenalty",
+        "RaceFormula",
+        "ChampionshipPoints"
+      ]
+    },
+    {
+      "name": "Races_SprintResults",
+      "columns": [
+        "SeasonID",
+        "RaceID",
+        "FinishingPos",
+        "DriverID",
+        "TeamID",
+        "FastestLap",
+        "DNF",
+        "LapCount",
+        "TimeDeltaFromLead",
+        "GridPenalty",
+        "AverageLap",
+        "RaceScore",
+        "RaceTime",
+        "IncidentSeverity",
+        "RaceFormula",
+        "ChampionshipPoints",
+        "Performance"
+      ]
+    },
+    {
+      "name": "Races_PitStopResults",
+      "columns": [
+        "SeasonID",
+        "RaceID",
+        "TeamID",
+        "FinishPosition",
+        "FastestPitStopID",
+        "FastestPitStopTime",
+        "DriverID",
+        "Points"
+      ]
+    },
+    {
+      "name": "Races_PitStopTimings",
+      "columns": [
+        "SeasonID",
+        "RaceID",
+        "TeamID",
+        "DriverID",
+        "PitStopID",
+        "PitStopStage",
+        "Duration",
+        "IncidentDelay",
+        "Lap"
+      ]
+    },
+    {
+      "name": "Races_PracticeResults",
+      "columns": [
+        "SeasonID",
+        "RaceID",
+        "PracticeSession",
+        "DriverID",
+        "TeamID",
+        "TimeOnTrack",
+        "SessionDuration",
+        "BestLapTime",
+        "BestLapTyre",
+        "LapCount",
+        "GridPenalty",
+        "RaceFormula"
+      ]
+    },
+    {
+      "name": "Races_DriverStandings",
+      "columns": [
+        "SeasonID",
+        "DriverID",
+        "Points",
+        "Position",
+        "LastPointsChange",
+        "LastPositionChange",
+        "RaceFormula"
+      ]
+    },
+    {
+      "name": "Races_TeamStandings",
+      "columns": [
+        "SeasonID",
+        "TeamID",
+        "Points",
+        "Position",
+        "LastPointsChange",
+        "LastPositionChange",
+        "RaceFormula"
+      ]
+    },
+    {
+      "name": "Save_CarTyreAllocation",
+      "columns": [
+        "CarID",
+        "TyreSetID",
+        "WeekendTyreType",
+        "FrontLeftWear",
+        "FrontRightWear",
+        "BackLeftWear",
+        "BackRightWear",
+        "AvailabilityState",
+        "EstimatedLapTime",
+        "EstimatedLapLifeRemaining",
+        "LapsCompleted",
+        "SessionLastUsedIn",
+        "LapsUsedForInSession"
+      ]
+    },
+    {
+      "name": "Staff_PerformanceStats",
+      "columns": [
+        "StaffID",
+        "StatID",
+        "Val",
+        "Max"
+      ]
+    },
+    {
+      "name": "Staff_DriverData",
+      "columns": [
+        "StaffID",
+        "Improvability",
+        "Aggression",
+        "DriverCode",
+        "WantsChampionDriverNumber",
+        "LastKnownDriverNumber",
+        "AssignedCarNumber",
+        "HasSuperLicense",
+        "HasWonF2",
+        "HasWonF3",
+        "HasRacedEnoughToJoinF1",
+        "PerformanceEvaluationDay",
+        "Marketability",
+        "TargetMarketability",
+        "MarketabilityProgress",
+        "FeederSeriesAssignedCarNumber"
+      ]
+    },
+    {
+      "name": "Staff_Contracts",
+      "columns": [
+        "StaffID",
+        "ContractType",
+        "TeamID",
+        "PosInTeam",
+        "StartDay",
+        "EndSeason",
+        "Salary",
+        "StartingBonus",
+        "RaceBonus",
+        "RaceBonusTargetPos",
+        "BreakoutClause",
+        "AffiliateDualRoleClause"
+      ]
+    },
+    {
+      "name": "Staff_ContractPatience",
+      "columns": [
+        "StaffID",
+        "TeamID",
+        "Patience",
+        "LastNegotiationDay",
+        "SuitabilityRating",
+        "TeamOpinionRating",
+        "OptimalAppealRangeMin",
+        "OptimalAppealRangeMax",
+        "PreviousAppealRangeMin",
+        "PreviousAppealRangeMax",
+        "ContractAcceptanceThreshold"
+      ]
+    },
+    {
+      "name": "Teams_Colours",
+      "columns": [
+        "ColourID",
+        "TeamID",
+        "Colour"
+      ]
+    },
+    {
+      "name": "Countries",
+      "columns": [
+        "CountryID",
+        "Name",
+        "NationalityWeight",
+        "StaffNameLocale",
+        "Population",
+        "EnumName",
+        "MarketAppetite"
+      ]
+    },
+    {
+      "name": "Parts_TeamExpertise",
+      "columns": [
+        "TeamID",
+        "PartType",
+        "PartStat",
+        "Expertise",
+        "NextSeasonExpertise",
+        "SeasonStartExpertise"
+      ]
+    },
+    {
+      "name": "Parts_Designs",
+      "columns": [
+        "DesignID",
+        "PartType",
+        "DesignWork",
+        "DesignWorkMax",
+        "DayCreated",
+        "DayCompleted",
+        "ChiefDesignerID",
+        "WindTunnelTime",
+        "CFD",
+        "DesignCost",
+        "BuildCost",
+        "BuildWorkMax",
+        "ValidFrom",
+        "DesignSpeed",
+        "PartKnowledge",
+        "ManufactureCount",
+        "DesignNumber",
+        "DesignType",
+        "TeamID",
+        "LastCompletedProjectManufactureCount"
+      ]
+    },
+    {
+      "name": "Parts_Items",
+      "columns": [
+        "ItemID",
+        "DesignID",
+        "BuildWork",
+        "Condition",
+        "ManufactureNumber",
+        "ProjectID",
+        "AssociatedCar",
+        "InspectionState",
+        "LastEquippedCar"
+      ]
+    },
+    {
+      "name": "Parts_CarLoadout",
+      "columns": [
+        "TeamID",
+        "LoadoutID",
+        "PartType",
+        "DesignID",
+        "ItemID"
+      ]
+    },
+    {
+      "name": "Regulations_Proposals",
+      "columns": [
+        "ProposalID",
+        "ChangeType",
+        "VoteDay",
+        "TargetSeason"
+      ]
+    },
+    {
+      "name": "Finance_Transactions",
+      "columns": [
+        "TeamID",
+        "Day",
+        "Value",
+        "TransactionType",
+        "Reference",
+        "AffectsCostCap"
+      ]
+    },
+    {
+      "name": "Finance_TeamBalance",
+      "columns": [
+        "TeamID",
+        "Balance"
+      ]
+    },
+    {
+      "name": "Seasons",
+      "columns": [
+        "SeasonID",
+        "PrizePool",
+        "EntryBaseFee",
+        "EntryPerPointFirst",
+        "EntryPerPointOther"
+      ]
+    },
+    {
+      "name": "Board_SeasonObjectives",
+      "columns": [
+        "TeamID",
+        "SeasonID",
+        "TargetPos",
+        "State"
+      ]
+    },
+    {
+      "name": "Board_Confidence",
+      "columns": [
+        "Season",
+        "Confidence"
+      ]
+    }
+  ],
+  "coreTableRowCounts": {
+    "Races": 106,
+    "Races_Tracks": 26,
+    "Races_Results": 798,
+    "Teams": 32,
+    "Staff_BasicData": 403,
+    "Player": 1,
+    "Player_State": 1
+  },
+  "missingOptional": []
+}
