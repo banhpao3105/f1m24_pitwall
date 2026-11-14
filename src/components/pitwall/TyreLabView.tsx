@@ -71,7 +71,10 @@ export function TyreLabView({
   }, [trackId]);
   const prior = priorRecord && priorRecord.trackId === trackId ? priorRecord.prior : null;
 
-  const tyre = useTyreLab(raceId, prior ? { prior } : undefined);
+  /* v0.6.2 (B2): run the lab on the RESOLVED race, not the raw URL param —
+     ?view=tyres without &race= resolved `race` above but passed null here,
+     rendering an empty lab on direct links/bookmarks. */
+  const tyre = useTyreLab(race?.raceId ?? null, prior ? { prior } : undefined);
 
   /* v0.5.1 P2 — record the correction after a completed race: what the
      engine advised vs what the field actually did. Once per race+plan. */

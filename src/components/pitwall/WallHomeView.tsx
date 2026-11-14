@@ -125,6 +125,7 @@ export function WallHomeView({ model }: { model: SaveModel }) {
     sd && sd.racesConsidered > 0
       ? t('charts.gainedVerdict', {
           total: formatSigned(gainedTotal),
+          races: sd.racesConsidered,
           best: formatSigned(gainedBest),
           track: gainedBestIdx >= 0 ? trackDisplay(sd.races[gainedBestIdx]?.trackName ?? '', locale) : '—',
         })

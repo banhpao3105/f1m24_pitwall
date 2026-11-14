@@ -861,6 +861,8 @@ describe('v0.6.1 confidence + tie rule (Silverstone)', () => {
   it('why names the tie and the game plan carries its modelled total', () => {
     const rec = lab.recommendations[0];
     expect(rec.why).toContain('hòa');
+    // v0.6.2: "chậm hơn 0.0s" must never appear — a 0.0s alternative is a tie
+    expect(rec.why).not.toContain('chậm hơn 0.0s');
     const data = lab.data;
     expect(data.gamePlan).not.toBeNull();
     expect(data.gamePlan!.totalTimeS).toBeGreaterThan(0);
@@ -879,6 +881,36 @@ describe('v0.6.1 confidence + tie rule (Silverstone)', () => {
     const rec = lab.recommendations[0];
     expect(rec.title).toContain('S(15)'); // the web's optimal split, not the game's 15/20/17
     expect(rec.why).toContain('ưu tiên');
+  });
+});
+
+/* ── v0.6.2: the alternative sentence never says "chậm hơn 0.0s" ───────────
+ * Real-save Silverstone: the ranked #2 is S→S→M — a permutation of the
+ * suggested S→M→S with vsBestS exactly 0.0 — so the why read
+ * "kế hoạch kế tiếp (S→S→M) chậm hơn 0.0s". isTie stays false there (the
+ * first DIFFERENT plan, S→M 1-stop, is 4.2s behind) so the tieNote does
+ * not cover it. The fixture itself ties at 1.7s, so this block widens
+ * the gap (H allocation estimate 90.00s → H delta +1.09) to reproduce
+ * the real-save shape: permutations on top, first different plan ≥ 2s. */
+
+describe('v0.6.2 why wording — exact-tie alternative (real-save shape)', () => {
+  const model = buildSilverstoneModel();
+  model.tyres = model.tyres.map((t) =>
+    t.weekendTyreType === 0 && t.estimatedLapTimeS != null
+      ? { ...t, estimatedLapTimeS: 90.0 }
+      : t,
+  );
+  const lab = buildTyreLab(model, SILVERSTONE_RACE_ID);
+
+  it('writes "hòa (cùng tổng thời gian mô hình)" for the 0.0s permutation', () => {
+    const rec = lab.recommendations[0];
+    const data = lab.data;
+    // the scenario really is: permutation at 0.0 on top, different plan ≥ 2s
+    expect(data.best!.order.join('→')).toBe('S→M→S');
+    expect(data.strategies[1].vsBestS).toBe(0);
+    expect(rec.why).toContain('hòa (cùng tổng thời gian mô hình)');
+    expect(rec.why).not.toContain('chậm hơn 0.0s');
+    expect(rec.why).not.toContain('chậm hơn 0.0');
   });
 });
 

@@ -1352,6 +1352,15 @@ export function buildTyreLab(
       }
     }
     const alt = top.find((s) => s !== recommended) ?? null;
+    /* v0.6.2: an alternative whose vsBestS rounds to 0.0 is an exact-tie
+       permutation (same stint multiset), not a "slower" plan — saying
+       "chậm hơn 0.0s" is self-contradictory. Name it a tie instead.
+       isTie logic, tieNote and the ranking order stay untouched. */
+    const altTail = alt
+      ? alt.vsBestS != null && Math.abs(alt.vsBestS) < 0.05
+        ? `; kế hoạch kế tiếp (${alt.stints.map((s) => s.compound).join('→')}) hòa (cùng tổng thời gian mô hình)`
+        : `; kế hoạch kế tiếp (${alt.stints.map((s) => s.compound).join('→')}) chậm hơn ${alt.vsBestS?.toFixed(1) ?? '?'}s`
+      : '';
     const pitWindow = (pitLap: number, life: number): string => {
       const lo = Math.max(minStintLaps, pitLap - 2, 2);
       const hi = Math.min(laps - 2, pitLap + 2, Math.max(life, pitLap));
@@ -1365,7 +1374,7 @@ export function buildTyreLab(
       id: `tyre-plan-${race.raceId}`,
       title: `Chiến thuật đề xuất: ${recommended.stints.map((s) => `${s.compound}(${s.laps})`).join(' → ')} — ${recommended.stops} pit`,
       action,
-      why: `Tổng thời gian mô hình ${recommended === best ? 'thấp nhất' : 'thấp nhất (cùng lâu)'} (${recommended.timeS.toFixed(1)}s: pace delta + deg + ${recommended.stops}×pit ${pitCostS.toFixed(1)}s). Lốp ${first.compound} sống ${lives[first.compound]} vòng (nguồn: ${lifeSource[first.compound]})${alt && !isTie ? `; kế hoạch kế tiếp (${alt.stints.map((s) => s.compound).join('→')}) chậm hơn ${alt.vsBestS?.toFixed(1) ?? '?'}s` : ''}.${tieNote}${gamePlan ? ` Plan của game (${gamePlan.compounds.join('→')}, pit ${gamePlan.pitLaps.join(', ') || '—'}) tốn ${gamePlan.totalTimeS.toFixed(1)}s theo mô hình web.` : ''}`,
+      why: `Tổng thời gian mô hình ${recommended === best ? 'thấp nhất' : 'thấp nhất (cùng lâu)'} (${recommended.timeS.toFixed(1)}s: pace delta + deg + ${recommended.stops}×pit ${pitCostS.toFixed(1)}s). Lốp ${first.compound} sống ${lives[first.compound]} vòng (nguồn: ${lifeSource[first.compound]})${alt && !isTie ? altTail : ''}.${tieNote}${gamePlan ? ` Plan của game (${gamePlan.compounds.join('→')}, pit ${gamePlan.pitLaps.join(', ') || '—'}) tốn ${gamePlan.totalTimeS.toFixed(1)}s theo mô hình web.` : ''}`,
       confidence,
       evidence,
       assumptions,
