@@ -2,6 +2,31 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.5.1] — Fix engine lốp: delta cross-session, lives trung thực, plan của game + đồng hồ bằng chứng
+
+Đợt fix theo báo cáo bug của chủ dự án (Suzuka 2027, engine tái hiện được trên đúng file save): engine từng xếp hằng số model H (+1.05s) cạnh M đo được (+1.09s) và đề xuất S→H / H→S→H vô nghĩa (117.7s trên view sau chặng); lives sụp xuống S12/M18/H22 vì lấy số pit của chính chặng vừa xong làm "độ bền lốp". 3 bước, 1 bước = 1 commit Conventional.
+
+### Fixed — Bước 1 (P0): cấm trộn nguồn số liệu delta (`caf4985`)
+- **Quy tắc 1 — đo cross-session**: compound thiếu mẫu trong TỪNG session riêng lẻ nhưng đủ ≥3 driver khác nhau cộng dồn cả tuần lễ được đo cross-session — best toàn cục mỗi loại so với Soft, đánh dấu tier riêng (độ tin cậy thấp hơn). Kiểm chứng trên save thật: H nhanh nhất 92.214s vs S 90.450s → **+1.76s**, khớp chính xác phép tay của chủ dự án; M giữ nguyên đo theo session (median gap 2 session = +1.09).
+- **Quy tắc 2 — cùng tầng bằng chứng**: không bao giờ xếp hạng compound đo được với hằng số model — trộn nguồn thì cả M/H dùng hằng số model khi xếp hạng, giá trị đo được vẫn hiện trong evidence kèm nguồn từng loại + assumption + warning `SAME_TIER_PACE_FALLBACK`.
+- Fixture số chủ dự án: best **S→S→M 80.9s pit [18,36]**; S→M 85.3s; S→H 97.6s (không còn best ở bất kỳ đâu); test riêng Quy tắc 2: best **S→M 68.2s**, S→H 74.4s.
+
+### Fixed — Bước 2 (P1): độ bền lốp không suy từ số lần pit + confidence trung thực (`d2122fa`)
+- Lives = allocation caps khi có tuần lễ active, không thì envelope vật lý (53 vòng → **S27/M40/H48**) — stintFactor KHÔNG còn nhân vào lives (nguyên nhân sụp 12/18/22); durability clamp fresh-set giữ nguyên.
+- **Leave-one-out**: `getStintFactor`/`getObservedStops` nhận `excludeRaceId`; engine luôn loại chính chặng đang dự báo khỏi stintFactor. Pit stops quan sát được vẫn là dữ liệu tham chiếu hiển thị (expectedStops, guard rule c) — không còn kênh nào để một chặng "tự dạy" model về lives của chính nó.
+- **Confidence trung thực**: HIGH chỉ khi đủ cả 4 trụ — lives từ allocation + M&H đều đo được từ practice + ≥3 mẫu stint-factor + plan không ít pit hơn mặt bằng cả giải; vi phạm thì cap MEDIUM kèm assumption nói rõ lý do. Warning mới `PLAN_BELOW_FIELD_STOPS`.
+- Kiểm chứng save sau chặng: lives 27/40/48 (không còn 12/18/22), best S→M 64.7s, expectedStops 2 (track), confidence MEDIUM.
+
+### Added — Bước 3 (P2): plan của game + đồng hồ bằng chứng + hiệu chỉnh theo track (`877d2d6`)
+- Parser normalize **`Save_PlayerStrategyStints`** (TyreType 0=H/1=M/2=S xác minh qua TyreDurability: H=1.0, M=0.7845, S=0.5638) → `SaveModel.playerStrategy`; engine decode plan SELECTED (pit từ AverageStartingLap, OptimalPitLap khi >0, cửa sổ PitWindowStart/End) gắn vào chặng đầu chưa đua **của mùa hiện tại** (save thật chứa placeholder lịch các mùa tương lai). Bảng rỗng trước quali/sau chặng → null. LoadoutID→xe chưa xác minh được → hiển thị mức đội + assumption ghi rõ.
+- **Đồng hồ bằng chứng** trong Tyre Lab (add-only, không redesign): chip nguồn từng compound (practice / cross-session / model / baseline), nguồn lives, nguồn pit cả giải, cảnh báo đỏ khi plan dùng compound chưa đo, dòng prior local.
+- **Bảng hiệu chỉnh theo track, local-only** (IndexedDB `pitwall/track-corrections`, record v1): sau mỗi chặng ghi {trackId, predictedStops, predictedPitLap, fieldAvgStops, playerPitLaps}; quay lại track đó hiện prior và cap MEDIUM tới khi số pit của plan ≥ mặt bằng (`PLAN_BELOW_FIELD_STOPS_PRIOR`). Chỉ warning + confidence — không override optimizer.
+
+### Verified trên save thật save1.sav (F1M24 1.11.0 — sau Suzuka 2027, giữa tuần lễ Bahrain)
+- Tyre Lab Suzuka 192 (view sau chặng): H→S→H 117.7s → **S→S→M 78.0s pit [18,37]**; lives 12/18/22 → **27/40/48**; deltas M +1.09s (practice) / H +1.76s (cross-session); confidence HIGH → MEDIUM.
+- Game plan Bahrain 193 (sau quali): **S→S→M pit [20,37]** cửa sổ 17–23 · 34–40, 2 xe chọn plan khác nhau (loadoutsAgree=false) — đặt cạnh plan của web.
+- lint + typecheck + 169 tests xanh ở cả 3 commit; `next build` không chạy được trong sandbox (hạn chế môi trường đã ghi nhận từ Phase 1) — CI là cổng kiểm build.
+
 ## [0.5.0] — Polish UI: pit wall thật — sidebar, biểu đồ, bản sắc đội đua
 
 Đợt polish giao diện v0.4.1 → v0.5.0 theo prompt chủ dự án: **không đổi bất kỳ engine/parser logic số liệu nào** — chỉ nâng cách trình bày (riêng parser *đọc thêm* 2 bảng hiển thị: `Teams_Colours` + decode `DriverCode`, không đụng số liệu). 5 bước, 1 bước = 1 commit Conventional, push sau mỗi bước.
