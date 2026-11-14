@@ -2,6 +2,108 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.6.1] — Engine lốp trung thực: delta bị ép lộ mặt, vách mòn, confidence siết
+
+Đợt sửa engine lốp theo prompt v0.6.1 của chủ dự án, khởi nguồn từ Silverstone
+2027 (chặng 10/21, race 199, 52 vòng, save pre-race Day 46579): web gợi ý
+S(17)→H(35) 1 pit (69.2s, confidence HIGH), Ricciardo nghe theo → P16→P21,
+trung bình 93.60s/vòng, bị quay vòng 2 lần; O'Ward chạy plan của game
+S→M→S → P19→P13 (91.72s/vòng). Ba lỗi khác nhau, sửa ở 3 bước, mỗi bước 1
+commit; **số đo practice thô không bị sửa** — lỗi nằm ở cách engine xử lý.
+Số liệu pace/sim/finance/results không đổi; UI v0.6.0 không vỡ (chỉ thêm
+field vào TyreLab, không rename field nào, không sửa layout).
+
+### Added — Bước 1: delta H bị ép phải lộ mặt + cross-check allocation (`5fb9eb0`)
+- **Nguyên nhân:** practice Silverstone chỉ có 1 session, mỗi tay đua F1 chỉ
+  chạy đúng 1 hợp chất (22 tay đua: S 8 / M 7 / H 7) — vòng H "nhanh nhất"
+  (+0.606 thô) là của Russell chạy long-run, không so được với vòng M
+  (+0.711). Quy tắc đơn điệu cũ ép H thành +0.861 nhưng vẫn ghi
+  `paceSource.H = 'practice'` và evidence viết "H +0.86s (practice)" — một
+  con số bịa mang nhãn số đo.
+- `getPracticePace` trả thêm `rawDeltas` (trước khi ép) + cờ `clamped`;
+  `PaceMeasuredEntry` thêm `rawDelta`.
+- Nguồn mới trong `paceSource`: **`'allocation'`** — khi practice cho ra
+  H ≤ M, delta xếp hạng H lấy từ allocation `EstimatedLapTime` của game
+  (fresh sets, giống nhau mọi xe; Silverstone: S 88.91 / M 89.48 / H 89.80
+  → +0.57 / +0.89), kèm assumption ghi rõ cả hai; nếu save không có
+  EstimatedLapTime thì giữ giá trị ép nhưng gán nhãn **`'clamped'`**.
+  Không xây "same-driver gaps" — dữ liệu không có (mỗi tay đua 1 hợp chất).
+- Evidence không bao giờ ghi "(practice)" cho delta đã qua ép; ví dụ:
+  `H +0.89s (allocation — practice đo được H nhanh hơn M nên không dùng
+  được; giá trị thô +0.606s)`. Warning mới `PACE_DELTA_FORCED`.
+- Parser đọc cột `EstimatedLapTime` (schema-adaptive, verified trên probe
+  save thật); `TyreAllocation` thêm `estimatedLapTimeS` (additive).
+- UI: chip đồng hồ bằng chứng thêm ghi chú "đo được +0.61s — bị ép, xếp
+  hạng bằng allocation/model" (additive, không đổi layout).
+
+### Changed — Bước 2: vách mòn (cliff) cho stint dài (`d92786e`)
+- **Nguyên nhân:** stint H 35 vòng của Ricciardo chạy ~94.5s/vòng (chậm hơn
+  S khoảng 3s/vòng cuối stint) trong khi mô hình tính toàn bộ stint chỉ
+  9.2s deg — `DEG_FINAL.H = 1.8` là thấp nhất trong 3 hợp chất và không có
+  vách. "Còn sống được" (đời H 53 vòng từ allocation) không có nghĩa là
+  "còn nhanh".
+- **Cơ chế chung cho cả 3 hợp chất** (như DEG_FINAL): stint vượt
+  `DEG_CLIFF_THRESHOLD = 0.6` × đời lốp chịu thêm
+  `DEG_CLIFF[c] × (số vòng vượt ngưỡng)²`.
+- **Hằng số tune bằng backtest** (`scripts/tune-deg-cliff.ts`, grid 3136
+  combo trên 2 save đã verify — không đoán mò):
+  `DEG_CLIFF = { S 0.03, M 0.02, H 5.0 }` (mới) và
+  `DEG_FINAL.H: 1.8 → 3.0`. Một hằng số cliff duy nhất mâu thuẫn toán học
+  với 2 save: stint S23/M34 của Bahrain vượt ngưỡng 3.2/4 vòng mà phải gần
+  như miễn phí (S→M 61.1s phải giữ top 1, pit 23), trong khi H35
+  Silverstone vượt đúng 3.2 vòng mà phải mất ≥ 31s — chỉ tách hằng số theo
+  hợp chất mới giải được. DEG_FINAL.H gánh phần còn lại vì optimizer luôn
+  re-split để né vách (20-21 S + 31-32 H vừa dưới 0.6×53).
+- Backtest kết quả: Silverstone — deg stint H35 = 66.5s (was 9.2), plan
+  S(17)→H(35) = 127.9s ≥ 100, **plan gợi ý = S→M→S (đúng thứ tự plan của
+  game) 75.7s, S→H 77.3s không còn được gợi ý**; Bahrain — S→M giữ top 1
+  pit 23 (61.7s), S→H 74.5s, S→S→M 66.1s (thứ hạng nguyên vẹn); Suzuka —
+  S→S→M vẫn thắng S→H (81.2 vs 102.6, hướng v0.5.1 giữ nguyên).
+- Công thức pace delta, pit cost, đời lốp: không đổi. Hook backtest
+  `TyreLabOptions.degOverride` chỉ dùng cho script/verify, production
+  không set.
+- Exact ties giữa các plan hoán vị thứ tự (cùng multiset stint, cùng thời
+  gian) nay ưu tiên thứ tự plan của game khi xếp hạng — mô hình không phân
+  biệt thứ tự, among equals nên đề xuất cái game đang chạy.
+
+### Changed — Bước 3: confidence siết, luật hòa, bất đồng với game (`96b5f7c`)
+- **Nguyên nhân:** HIGH ở Silverstone dựa trên 4 trụ giả tạo: delta bị ép
+  vẫn tính là "đo được"; check số pit bỏ qua hoàn toàn khi save không có
+  observed/prior (dù engine biết `expectedStops = 2` từ meta); 2 plan đầu
+  HÒA 0.0s nhưng why viết như thắng ("kế hoạch kế tiếp chậm hơn 0.0s");
+  1 session practice được tính là đủ sâu.
+- **Trụ HIGH mới** (thiếu 1 trụ → MEDIUM; thiếu ≥ 2 trụ hoặc có delta bị
+  ép → LOW; mọi trụ thiếu được nêu tên trong assumption tóm tắt
+  `Confidence …:`):
+  (e) không delta nào mang nhãn `clamped`;
+  (f) practice ≥ 2 session HOẶC allocation đồng thuận với practice trong
+  0.2s (hoàn toàn không có practice thì trụ (b) đã trừ điểm — giúp save
+  Bahrain không practice giữ MEDIUM, không bị LOW oan);
+  (g) plan tốt nhất hơn plan khác đầu tiên (không tính hoán vị thứ tự của
+  cùng multiset stint — đó là hòa tuyệt đối) ≥ 2.0s;
+  (h) số pit của plan tốt nhất ≥ mặt bằng tham chiếu
+  `observed ?? prior ?? expectedStops` (meta giờ nằm trong chuỗi).
+- **Luật hòa:** plan khác đầu tiên chậm < 2.0s → why viết rõ "hai phương
+  án đầu chênh nhau <2s — coi như hòa" và ưu tiên plan của game (hoặc,
+  không có plan game, plan có stint dài nhất ngắn hơn); plan còn lại vẫn
+  hiện làm phương án thay thế.
+- **gamePlan thêm `totalTimeS`** (additive): plan của game mô hình bằng
+  đúng toán của web (pace + deg gồm cliff + pit), luôn hiện cạnh plan web
+  kèm chênh lệch giây — thấy ngay web bất đồng với game bao nhiêu
+  (Silverstone: game S→M→S 15/20/17 tốn 76.0s theo mô hình web vs 75.7s
+  của split tối ưu cùng thứ tự — chỉ lệch cách chia stint).
+- Re-grade trung thực ở fixture cũ (ghi chú ngay trong test): post-race
+  lives MEDIUM→LOW (4 trụ thiếu), rule-c MEDIUM→LOW (2 trụ thiếu), prior
+  2.5 MEDIUM→LOW (2 trụ thiếu) — các claim cốt lõi của test giữ nguyên;
+  Suzuka HIGH gate tái xác minh vẫn HIGH với đủ trụ mới.
+
+### Verified
+- Đủ 3 bước: `bun run lint` + `bun run typecheck` + `bun run test`
+  (273 tests) xanh sau mỗi bước; backtest verify
+  (`bun scripts/tune-deg-cliff.ts --verify`) xanh.
+- Chờ chủ dự án chạy lại engine trên save Silverstone pre-race thật:
+  S→H phải rớt khỏi vị trí gợi ý và confidence không còn HIGH.
+
 ## [0.6.0] — Đại tu dashboard-first: biểu đồ thay văn bản ở 6 view
 
 Đợt đại tu lớn nhất từ Phase 2, theo prompt v0.6.0 của chủ dự án (kiểm chứng
