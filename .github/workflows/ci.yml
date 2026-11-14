@@ -1,6 +1,7 @@
-# F1 Pit Wall — CI (docs/05-ROADMAP-STANDARDS.md Phase 0:
-# "CI: lint + typecheck + unit test chạy được")
-# Build/Playwright E2E joins in later phases; keep Phase 0 scope tight.
+# F1 Pit Wall — CI
+# Every push/PR into main runs the full gate: lint + typecheck + unit tests
+# + production build (next build — catches prerender errors like the v0.5.0
+# Vercel failure). Playwright E2E stays out of scope for now.
 
 name: CI
 
@@ -31,3 +32,6 @@ jobs:
 
       - name: Unit tests
         run: bun run test
+
+      - name: Build
+        run: bun run build
