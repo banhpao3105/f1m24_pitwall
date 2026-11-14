@@ -1,18 +1,23 @@
 'use client';
 
 /**
- * Pit Wall Home — docs/04 §7.3.1: KPI strip + alerts + next race + tyre
- * quick rec + pace snapshot + top recommendations. No long tables here —
- * detail lives in Tyre Lab / Race Weekend.
+ * Pit Wall Home — docs/04 §7.3.1. v0.6.0 dashboard-first (prompt §2):
+ * KPI strip → (a) cumulative points area → (b) pace-gap lines → (c) gained
+ * bars, all engine-fed via buildSeasonSeries + ChartCard. Everything textual
+ * (next race, todo recs, pace conclusion) stays below the charts.
  */
 
 import { useTranslations, useLocale } from 'next-intl';
-import { motion } from 'framer-motion';
 import { Trophy, Timer, Waves, Car } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
-import { usePaceBoard, useRacePaceBoard, useTyreLab, useCarLab, useFinance } from '@/lib/engine-hooks';
+import { usePaceBoard, useRacePaceBoard, useTyreLab, useCarLab, useFinance, useSeasonSeries } from '@/lib/engine-hooks';
 import { PaceBarChart } from './charts/PaceBarChart';
+import { PointsAreaChart } from './charts/PointsAreaChart';
+import { PaceGapLineChart } from './charts/PaceGapLineChart';
+import { GainedBarChart } from './charts/GainedBarChart';
+import { ChartCard } from './charts/ChartCard';
+import { KpiCard } from './KpiCard';
 import { useWallNav } from './WallNav';
 import { RecommendationCard } from './RecommendationCard';
 import { StintTimeline } from './StintTimeline';
@@ -21,7 +26,7 @@ import { AlertBanner } from './AlertBanner';
 import { NumberTween } from './NumberTween';
 import { RecentRaceCard, QuickStandingsCard } from './HomeCards';
 import { TrackSchematic } from './TrackSchematic';
-import { SectionTitle } from './SectionTitle';
+import { formatSigned } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
 export function WallHomeView({ model }: { model: SaveModel }) {
@@ -38,6 +43,7 @@ export function WallHomeView({ model }: { model: SaveModel }) {
   const racePace = useRacePaceBoard();
   const carLab = useCarLab();
   const finance = useFinance();
+  const series = useSeasonSeries();
   const { setView } = useWallNav();
 
   // Player's best-placed driver (contract team → fallback player team name).
@@ -89,7 +95,42 @@ export function WallHomeView({ model }: { model: SaveModel }) {
   );
   const fmtSigned = (n: number): string => `${n >= 0 ? '+' : ''}${n}`;
 
-  const kpis: { icon: React.ReactNode; label: string; value: React.ReactNode; sub?: React.ReactNode; delta?: React.ReactNode }[] = [
+  /* v0.6.0 — chart verdicts (1 line each, engine-derived numbers only) */
+  const sd = series?.data ?? null;
+  const playerCumRow = sd?.pointsCumulative.find((r) => r.isPlayer) ?? null;
+  const playerCumRank = sd ? sd.pointsCumulative.findIndex((r) => r.isPlayer) + 1 : 0;
+  const leaderRow = sd?.pointsCumulative[0] ?? null;
+  const pointsVerdict =
+    sd && playerCumRow && playerCumRank > 0 && leaderRow
+      ? t('charts.pointsVerdict', {
+          races: sd.racesConsidered,
+          points: playerCumRow.values.at(-1) ?? 0,
+          rank: playerCumRank,
+          leader: leaderRow.teamName,
+          leaderPoints: leaderRow.values.at(-1) ?? 0,
+        })
+      : undefined;
+  const paceVerdict =
+    sd && paceRow && racePaceRow
+      ? t('charts.paceVerdict', {
+          races: sd.racesConsidered,
+          peak: paceRow.paceDeltaS.toFixed(3),
+          race: racePaceRow.paceDeltaS.toFixed(3),
+        })
+      : undefined;
+  const gainedTotal = sd ? sd.positionsGainedPerRace.reduce((a, b) => a + b, 0) : 0;
+  const gainedBest = sd && sd.positionsGainedPerRace.length > 0 ? Math.max(...sd.positionsGainedPerRace) : 0;
+  const gainedBestIdx = sd ? sd.positionsGainedPerRace.indexOf(gainedBest) : -1;
+  const gainedVerdict =
+    sd && sd.racesConsidered > 0
+      ? t('charts.gainedVerdict', {
+          total: formatSigned(gainedTotal),
+          best: formatSigned(gainedBest),
+          track: gainedBestIdx >= 0 ? trackDisplay(sd.races[gainedBestIdx]?.trackName ?? '', locale) : '—',
+        })
+      : undefined;
+
+  const kpis: { icon: React.ReactNode; label: string; value: React.ReactNode; sub?: React.ReactNode; delta?: React.ReactNode; testId?: string }[] = [
     {
       icon: <Trophy className="h-3.5 w-3.5" />,
       label: t('kpi.standings'),
@@ -109,12 +150,14 @@ export function WallHomeView({ model }: { model: SaveModel }) {
             : `${t('kpi.posBefore', { pos: positionDelta.before, track: positionDelta.track })} → P${positionDelta.after}`}
         </span>
       ) : undefined,
+      testId: 'kpi-standings',
     },
     {
       icon: <Timer className="h-3.5 w-3.5" />,
       label: t('kpi.season'),
       value: `${completedCount}/${seasonRaces.length}`,
       sub: nextRace ? trackDisplay(nextRace.trackName, locale) : undefined,
+      testId: 'kpi-season',
     },
     {
       icon: <Waves className="h-3.5 w-3.5" />,
@@ -123,6 +166,7 @@ export function WallHomeView({ model }: { model: SaveModel }) {
         ? tyre.data.best.stints.map((s) => `${s.compound}(${s.laps})`).join('→')
         : '—',
       sub: tyre ? `${tyre.data.best?.stops ?? 0} pit` : undefined,
+      testId: 'kpi-tyre',
     },
     {
       icon: <Car className="h-3.5 w-3.5" />,
@@ -133,6 +177,7 @@ export function WallHomeView({ model }: { model: SaveModel }) {
         '—'
       ),
       sub: t('kpi.carByPace'),
+      testId: 'kpi-car',
     },
   ];
 
@@ -143,6 +188,9 @@ export function WallHomeView({ model }: { model: SaveModel }) {
     ...(finance?.recommendations ?? []),
   ].slice(0, 3);
 
+  const seriesBadge = series ? <ConfidenceBadge confidence={series.confidence} /> : undefined;
+  const hasSeries = sd != null && sd.races.length > 0;
+
   return (
     <div className="space-y-6" data-testid="wall-home">
       <AlertBanner model={model} />
@@ -151,25 +199,56 @@ export function WallHomeView({ model }: { model: SaveModel }) {
           numerals + honest position delta under the first tile */}
       <section aria-label={t('kpi.label')} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {kpis.map((kpi, i) => (
-          <motion.div
+          <KpiCard
             key={kpi.label}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, delay: i * 0.04 }}
-            className="rounded-lg border border-line bg-panel p-4"
-          >
-            <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-ink-faint">
-              <span className="text-ink-faint" aria-hidden="true">{kpi.icon}</span>
-              {kpi.label}
-            </p>
-            <p className="mt-1 truncate font-mono text-[32px] font-bold leading-none tabular-nums text-ink" title={typeof kpi.value === 'string' ? kpi.value : undefined}>
-              {kpi.value}
-            </p>
-            {kpi.sub ? <p className="mt-1.5 truncate text-[13px] text-ink-soft">{kpi.sub}</p> : null}
-            {kpi.delta ? <p className="mt-0.5 truncate font-mono text-[10px]">{kpi.delta}</p> : null}
-          </motion.div>
+            icon={kpi.icon}
+            label={kpi.label}
+            value={kpi.value}
+            sub={kpi.sub}
+            delta={kpi.delta}
+            testId={kpi.testId}
+            index={i}
+          />
         ))}
       </section>
+
+      {/* v0.6.0 dashboard-first row — the three season charts, in order */}
+      {series && hasSeries && sd ? (
+        <div className="space-y-4">
+          <ChartCard
+            title={t('charts.points')}
+            badge={seriesBadge}
+            verdict={pointsVerdict}
+            evidence={series.evidence}
+            assumptions={series.assumptions}
+            testId="home-points-chart"
+          >
+            <PointsAreaChart series={sd} model={model} />
+          </ChartCard>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <ChartCard
+              title={t('charts.pace')}
+              badge={seriesBadge}
+              verdict={paceVerdict}
+              evidence={series.evidence}
+              assumptions={series.assumptions}
+              testId="home-pace-chart"
+            >
+              <PaceGapLineChart series={sd} />
+            </ChartCard>
+            <ChartCard
+              title={t('charts.gained')}
+              badge={seriesBadge}
+              verdict={gainedVerdict}
+              evidence={series.evidence}
+              assumptions={series.assumptions}
+              testId="home-gained-chart"
+            >
+              <GainedBarChart series={sd} />
+            </ChartCard>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         {/* Next race — 7/12 (v0.5.0 row 2) */}

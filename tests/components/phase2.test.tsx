@@ -128,9 +128,11 @@ describe('RecommendationCard — local feedback', () => {
     fireEvent.click(screen.getByTestId('fb-down-rec-p2'));
     expect(screen.getByTestId('fb-down-rec-p2')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('fb-up-rec-p2')).toHaveAttribute('aria-pressed', 'false');
-    // compact icon-only buttons keep their accessible names (i18n'd)
-    expect(screen.getByTestId('fb-up-rec-p2')).toHaveAttribute('aria-label', 'Hữu ích');
-    expect(screen.getByTestId('fb-down-rec-p2')).toHaveAttribute('aria-label', 'Không hữu ích');
+    // compact icon-only buttons keep their accessible names (i18n'd);
+    // v0.6.0: the tooltip names it a suggestion rating, not an in-game vote
+    expect(screen.getByTestId('fb-up-rec-p2').getAttribute('aria-label')).toContain('Hữu ích');
+    expect(screen.getByTestId('fb-down-rec-p2').getAttribute('aria-label')).toContain('Không hữu ích');
+    expect(screen.getByTestId('fb-up-rec-p2').getAttribute('aria-label')).toContain('không phải vote trong game');
   });
 });
 

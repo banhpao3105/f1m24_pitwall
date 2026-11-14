@@ -101,6 +101,11 @@ describe('RaceWeekendView — board next to pace + h2h evidence in recs', () => 
   it('pace recommendations carry the head-to-head sentences (engine-composed)', () => {
     render(withI18n(<RaceWeekendView model={model} raceId={6} />));
     const recs = screen.getByTestId('race-pace-recs');
+    // v0.6.0 compact rule: the h2h sentence (part of the why text) lives
+    // behind the "Xem bằng chứng" toggle — expand every card first.
+    for (const btn of within(recs).getAllByRole('button', { name: /Xem bằng chứng/ })) {
+      fireEvent.click(btn);
+    }
     // race-pace rec — slower pace, better results → contradiction "nhưng"
     expect(
       within(recs).getByText(/Pace đua \(vòng trung bình\) chậm hơn Alpine 0\.105s\/vòng, nhưng trên kết quả bạn hơn: đối đầu thắng 5–1 \(5\/6 chặng\), hơn 40 điểm \(51 vs 11\), DNF 1 vs 5\./),

@@ -50,21 +50,32 @@ describe('ConfidenceBadge', () => {
 });
 
 describe('RecommendationCard', () => {
-  it('renders action, why, risk and expected gain', () => {
+  it('shows only title + action before the evidence toggle (v0.6.0 compact rule)', () => {
     render(withI18n(<RecommendationCard recommendation={sampleRec} />));
     expect(screen.getByText(sampleRec.action)).toBeInTheDocument();
-    expect(screen.getByText(sampleRec.riskIfIgnored)).toBeInTheDocument();
-    expect(screen.getByText(sampleRec.expectedGain)).toBeInTheDocument();
     expect(screen.getByTestId('confidence-medium')).toBeInTheDocument();
+    // v0.6.0: why / risk / expected gain are hidden until the toggle opens
+    expect(screen.queryByText(sampleRec.why)).toBeNull();
+    expect(screen.queryByText(sampleRec.riskIfIgnored)).toBeNull();
+    expect(screen.queryByText(sampleRec.expectedGain)).toBeNull();
   });
 
-  it('hides evidence until expanded, then shows sources + assumptions', () => {
+  it('hides evidence until expanded, then shows why + risk + sources + assumptions', () => {
     render(withI18n(<RecommendationCard recommendation={sampleRec} />));
     expect(screen.queryByTestId('evidence-list')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Xem bằng chứng/ }));
     expect(screen.getByTestId('evidence-list')).toBeInTheDocument();
+    expect(screen.getByText(sampleRec.why)).toBeInTheDocument();
+    expect(screen.getByText(sampleRec.riskIfIgnored)).toBeInTheDocument();
+    expect(screen.getByText(sampleRec.expectedGain)).toBeInTheDocument();
     expect(screen.getByText(/Races_PitStopTimings/)).toBeInTheDocument();
     expect(screen.getByText(/Thời tiết khô/)).toBeInTheDocument();
+  });
+
+  it('feedback tooltip states it rates the suggestion, not an in-game vote', () => {
+    render(withI18n(<RecommendationCard recommendation={sampleRec} />));
+    const up = screen.getByTestId(`fb-up-${sampleRec.id}`);
+    expect(up.getAttribute('title')).toContain('không phải vote trong game');
   });
 });
 

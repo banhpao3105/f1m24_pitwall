@@ -117,6 +117,13 @@
       "watchLine": "WATCH 70%",
       "parts": "part"
     },
+    "series": {
+      "peak": "Pace đỉnh (fastest lap)",
+      "race": "Pace đua (vòng TB)",
+      "zero": "Đội nhanh nhất",
+      "gained": "Leo vị trí",
+      "noData": "Chưa đủ dữ liệu chuỗi mùa giải."
+    },
     "season": {
       "noData": "Chưa có dữ liệu standings.",
       "points": "điểm",
@@ -165,8 +172,10 @@
     "evidence": "Xem bằng chứng",
     "evidenceList": "Bằng chứng",
     "assumptions": "Giả định",
+    "whyLabel": "Vì sao",
     "feedbackUp": "Hữu ích",
     "feedbackDown": "Không hữu ích",
+    "feedbackHint": "Đánh giá gợi ý này (không phải vote trong game)",
     "feedbackSaved": "Đã lưu trên máy"
   },
   "unavailable": {
@@ -263,6 +272,14 @@
       "title": "Bảng xếp hạng nhanh",
       "viewAll": "Mở Season",
       "noData": "Chưa có dữ liệu standings."
+    },
+    "charts": {
+      "points": "Điểm constructors tích lũy",
+      "pointsVerdict": "Sau {races} chặng: {points} điểm tích lũy, hạng {rank} — {leader} dẫn {leaderPoints} điểm.",
+      "pace": "Gap pace theo chặng",
+      "paceVerdict": "Median {races} chặng: pace đỉnh {peak}s · pace đua {race}s — vòng trung bình phản ánh điều kiện đua tốt hơn fastest lap.",
+      "gained": "Vị trí leo được từng chặng",
+      "gainedVerdict": "Tổng {total} vị trí sau {races} chặng; tốt nhất {best} ở {track}."
     },
     "modeN": "TẠP CHÍ"
   },

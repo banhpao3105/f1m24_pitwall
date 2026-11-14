@@ -117,6 +117,13 @@
       "watchLine": "WATCH 70%",
       "parts": "parts"
     },
+    "series": {
+      "peak": "Peak pace (fastest lap)",
+      "race": "Race pace (avg lap)",
+      "zero": "Fastest team",
+      "gained": "Positions gained",
+      "noData": "Not enough season-series data."
+    },
     "season": {
       "noData": "No standings data yet.",
       "points": "pts",
@@ -165,8 +172,10 @@
     "evidence": "Show evidence",
     "evidenceList": "Evidence",
     "assumptions": "Assumptions",
+    "whyLabel": "Why",
     "feedbackUp": "Useful",
     "feedbackDown": "Not useful",
+    "feedbackHint": "Rate this suggestion (not an in-game vote)",
     "feedbackSaved": "Saved locally"
   },
   "unavailable": {
@@ -264,6 +273,14 @@
       "title": "Quick standings",
       "viewAll": "Open Season",
       "noData": "No standings data yet."
+    },
+    "charts": {
+      "points": "Cumulative constructors points",
+      "pointsVerdict": "After {races} races: {points} cumulative points, P{rank} — {leader} leads on {leaderPoints}.",
+      "pace": "Pace gap per race",
+      "paceVerdict": "Median of {races} races: peak pace {peak}s · race pace {race}s — the average lap reflects race conditions better than the fastest lap.",
+      "gained": "Positions gained per race",
+      "gainedVerdict": "{total} positions over {races} races; best {best} at {track}."
     }
   },
   "tyres": {

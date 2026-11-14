@@ -1,10 +1,13 @@
 'use client';
 
 /**
- * RecommendationCard — the standard recommendation surface (docs/04 §6.5):
- * action + why + ConfidenceBadge + evidence list (collapsible) + risk.
- * Every engine recommendation renders through this card; a module without
- * recommendations is not done (docs golden rule 3).
+ * RecommendationCard — the standard recommendation surface (docs/04 §6.5).
+ *
+ * v0.6.0 compact rule (prompt §2, applies app-wide): the closed card shows
+ * ONLY title (1 line) + action (1 line) + confidence badge. Everything else
+ * — why, expected gain, risk, evidence, assumptions — lives behind the
+ * "Xem bằng chứng" toggle. The feedback buttons keep their place but carry
+ * an explicit tooltip: rating the suggestion, NOT an in-game vote.
  */
 
 import { useTranslations } from 'next-intl';
@@ -34,6 +37,7 @@ export function RecommendationCard({
   const [showEvidence, setShowEvidence] = useState(false);
   const vote = useFeedbackStore((s) => s.votes[recommendation.id]);
   const toggleVote = useFeedbackStore((s) => s.toggleVote);
+  const hint = t('feedbackHint');
 
   return (
     <motion.article
@@ -45,44 +49,31 @@ export function RecommendationCard({
     >
       <header className="mb-2 flex flex-wrap items-center gap-2">
         <Lightbulb className="h-4 w-4 shrink-0 text-amber" aria-hidden="true" />
-        <h3 className="text-sm font-semibold text-ink">{recommendation.title}</h3>
-        <span className="ml-auto">
+        <h3 className="line-clamp-1 min-w-0 flex-1 text-sm font-semibold text-ink" title={recommendation.title}>
+          {recommendation.title}
+        </h3>
+        <span className="ml-auto shrink-0">
           <ConfidenceBadge confidence={recommendation.confidence} />
         </span>
       </header>
 
-      <p className="rounded border border-teal/30 bg-teal/5 px-3 py-2 text-sm font-medium text-teal">
+      <p
+        className="line-clamp-1 rounded border border-teal/30 bg-teal/5 px-3 py-2 text-sm font-medium text-teal"
+        title={recommendation.action}
+      >
         {recommendation.action}
       </p>
 
-      {/* v0.5.0 step 4: why capped at two lines — full text stays on hover
-          and in the evidence drawer. */}
-      <p className="mt-2 line-clamp-2 text-[13px] leading-relaxed text-ink-soft" title={recommendation.why}>
-        {recommendation.why}
-      </p>
-
-      {recommendation.expectedGain ? (
-        <p className="mt-2 inline-block rounded bg-raised px-2 py-1 font-mono text-[11px] text-good">
-          {recommendation.expectedGain}
-        </p>
-      ) : null}
-
-      {recommendation.riskIfIgnored ? (
-        <p className="mt-2 flex items-start gap-1.5 text-xs text-danger">
-          <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          <span>{recommendation.riskIfIgnored}</span>
-        </p>
-      ) : null}
-
       <footer className="mt-3 flex flex-wrap items-center gap-1.5">
-        {/* v0.5.0 step 4: compact icon-only feedback row (labels kept for
-            screen readers + tooltips). Local-only loop (docs/03 §5.11). */}
+        {/* v0.6.0: icon-only feedback with an explicit tooltip — this rates
+            the suggestion, it is NOT a vote inside the game. Local-only loop
+            (docs/03 §5.11). */}
         <button
           type="button"
           onClick={() => toggleVote(recommendation.id, 'up')}
           aria-pressed={vote === 'up'}
-          aria-label={t('feedbackUp')}
-          title={t('feedbackUp')}
+          aria-label={`${t('feedbackUp')} — ${hint}`}
+          title={`${t('feedbackUp')} — ${hint}`}
           data-testid={`fb-up-${recommendation.id}`}
           className={cn(
             'inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded border transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring',
@@ -97,8 +88,8 @@ export function RecommendationCard({
           type="button"
           onClick={() => toggleVote(recommendation.id, 'down')}
           aria-pressed={vote === 'down'}
-          aria-label={t('feedbackDown')}
-          title={t('feedbackDown')}
+          aria-label={`${t('feedbackDown')} — ${hint}`}
+          title={`${t('feedbackDown')} — ${hint}`}
           data-testid={`fb-down-${recommendation.id}`}
           className={cn(
             'inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded border transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring',
@@ -132,18 +123,37 @@ export function RecommendationCard({
         <div className="mt-2 space-y-2 rounded bg-surface p-3" data-testid="evidence-list">
           <div>
             <p className="mb-1 text-[10px] uppercase tracking-wide text-ink-faint">
-              {t('evidenceList')}
+              {t('whyLabel')}
             </p>
-            <ul className="space-y-1">
-              {recommendation.evidence.map((e, i) => (
-                <li key={i} className="text-xs text-ink-soft">
-                  <span className="font-mono text-[10px] text-ink-faint">[{e.source}]</span>{' '}
-                  {e.label}
-                  {e.detail ? <span className="text-ink-faint"> — {e.detail}</span> : null}
-                </li>
-              ))}
-            </ul>
+            <p className="text-xs leading-relaxed text-ink-soft">{recommendation.why}</p>
           </div>
+          {recommendation.expectedGain ? (
+            <p className="inline-block rounded bg-raised px-2 py-1 font-mono text-[11px] text-good">
+              {recommendation.expectedGain}
+            </p>
+          ) : null}
+          {recommendation.riskIfIgnored ? (
+            <p className="flex items-start gap-1.5 text-xs text-danger">
+              <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>{recommendation.riskIfIgnored}</span>
+            </p>
+          ) : null}
+          {recommendation.evidence.length > 0 ? (
+            <div>
+              <p className="mb-1 text-[10px] uppercase tracking-wide text-ink-faint">
+                {t('evidenceList')}
+              </p>
+              <ul className="space-y-1">
+                {recommendation.evidence.map((e, i) => (
+                  <li key={i} className="text-xs text-ink-soft">
+                    <span className="font-mono text-[10px] text-ink-faint">[{e.source}]</span>{' '}
+                    {e.label}
+                    {e.detail ? <span className="text-ink-faint"> — {e.detail}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {recommendation.assumptions.length > 0 ? (
             <div>
               <p className="mb-1 text-[10px] uppercase tracking-wide text-ink-faint">

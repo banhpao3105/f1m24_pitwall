@@ -10,6 +10,7 @@ import { useMemo } from 'react';
 import { buildTyreLab, type TyreLab, type TyreLabOptions } from '@/engines/tyre.engine';
 import { buildPaceBoard, buildRacePaceBoard, type PaceBoard } from '@/engines/pace.engine';
 import { buildResultsBoard, type ResultsBoard } from '@/engines/results.engine';
+import { buildSeasonSeries, type SeasonSeries } from '@/engines/dashboard.engine';
 import { buildSim, type SimBoard, type SimOptions } from '@/engines/sim.engine';
 import { buildCarLab, type CarLab } from '@/engines/car.engine';
 import { buildFinance, type FinanceBoard } from '@/engines/finance.engine';
@@ -61,6 +62,16 @@ export function useResultsBoard(): EngineResult<ResultsBoard> | null {
   return useMemo(() => {
     if (!model) return null;
     return buildResultsBoard(model);
+  }, [model]);
+}
+
+/** v0.6.0 — per-race season series for the dashboard charts (same window as
+ * the pace boards; pace gaps consumed verbatim from raceDeltasS). */
+export function useSeasonSeries(): EngineResult<SeasonSeries> | null {
+  const model = useSaveStore((s) => s.model);
+  return useMemo(() => {
+    if (!model) return null;
+    return buildSeasonSeries(model);
   }, [model]);
 }
 
