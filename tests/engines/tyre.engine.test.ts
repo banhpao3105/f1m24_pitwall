@@ -10,6 +10,7 @@ import {
   evaluateStrategy,
   stintDegPenalty,
   getStintFactor,
+  getObservedStops,
   getPracticePace,
   getCompoundCaps,
   type TyreLab,
@@ -403,5 +404,133 @@ describe('v0.5.1 same-tier fallback (Rule 2)', () => {
     const lab = buildTyreLab(makeModel([target], { tyres: allocLives25_38_58() }), 302);
     expect(lab.data.sameTierFallback).toBe(false);
     expect(lab.warnings).not.toContain('SAME_TIER_PACE_FALLBACK');
+  });
+});
+
+/* ── v0.5.1 P1: honest lives, leave-one-out, strict confidence ──────────── */
+
+describe('v0.5.1 leave-one-out', () => {
+  const raceWithStops = makeRace({
+    raceId: 400,
+    trackId: 17,
+    state: 2,
+    laps: 53,
+    results: fieldResults(400, 22),
+    pitStops: Array.from({ length: 44 }, (_, i) => ({
+      driverId: (i % 22) + 1,
+      teamId: 1,
+      lap: 15 + (i % 10),
+      durationMs: 23000,
+      pitStopId: i + 1,
+    })),
+  });
+  const model = makeModel([raceWithStops]);
+
+  it('getObservedStops can exclude the race being forecast', () => {
+    expect(getObservedStops(model, 17)?.avgStopsPerDriver).toBeCloseTo(2.0, 6);
+    expect(getObservedStops(model, 17, 400)).toBeNull();
+  });
+
+  it('getStintFactor can exclude the race being forecast', () => {
+    const self = getStintFactor(model, 17);
+    expect(self.source).toBe('track');
+    expect(self.samples).toBe(1);
+    const excluded = getStintFactor(model, 17, 400);
+    expect(excluded.source).toBe('model');
+    expect(excluded.samples).toBe(0);
+  });
+});
+
+describe('v0.5.1 post-race lives (P1 autosave-2 bug)', () => {
+  it('envelope lives 27/40/48 on a completed race — no pit-count collapse', () => {
+    // The real bug: opening Tyre Lab for the just-completed race shrank
+    // lives to S12/M18/H22 (stintFactor 1/(2+1) × envelope). Lives must
+    // come from the physical envelope when no weekend allocation applies.
+    const completed = makeRace({
+      raceId: 410,
+      trackId: 17,
+      trackName: 'Suzuka',
+      state: 2,
+      laps: 53,
+      practice: [
+        // M measured in 2 sessions; H only 2 distinct drivers → unmeasured
+        prow(1, 1, 91671, 2), prow(2, 1, 91721, 2), prow(3, 1, 91771, 2),
+        prow(4, 1, 92394, 1), prow(5, 1, 92444, 1), prow(6, 1, 92494, 1), prow(7, 1, 92544, 1),
+        prow(8, 2, 90450, 2), prow(9, 2, 90500, 2), prow(10, 2, 90550, 2),
+        prow(11, 2, 91917, 1), prow(12, 2, 91967, 1), prow(13, 2, 92017, 1),
+        prow(100, 1, 92214, 0), prow(101, 3, 92355, 0), // H: 2 distinct total
+      ],
+      results: fieldResults(410, 22),
+      pitStops: Array.from({ length: 44 }, (_, i) => ({
+        driverId: (i % 22) + 1,
+        teamId: 1,
+        lap: 14 + (i % 12),
+        durationMs: 23000,
+        pitStopId: 500 + i,
+      })),
+    });
+    const lab = buildTyreLab(makeModel([completed]), 410);
+    const data = lab.data;
+
+    expect(data.lives).toEqual({ S: 27, M: 40, H: 48 }); // 53 × shape × 0.75
+    expect(data.lifeSource).toEqual({ S: 'model', M: 'model', H: 'model' });
+    expect(data.sameTierFallback).toBe(true); // M measured, H unmeasured
+    expect(data.deltas).toEqual({ S: 0, M: 0.55, H: 1.05 });
+    expect(data.expectedStops).toBe(2); // own-race field average = reference
+    expect(data.expectedSource).toBe('track');
+    expect(data.best!.order.join('→')).toBe('S→M');
+    expect(data.best!.timeS).toBeCloseTo(64.7, 1);
+    expect(lab.confidence).toBe('MEDIUM'); // never HIGH without allocation
+    expect(lab.warnings).toContain('RACE_ALREADY_COMPLETED');
+  });
+});
+
+describe('v0.5.1 confidence gates', () => {
+  const practice = suzukaPracticeRows(); // M + H both measured
+  const target = makeRace({
+    raceId: 420, trackId: 17, trackName: 'Suzuka', state: 0, laps: 53, practice,
+  });
+  const history = [1, 2, 3].map((i) =>
+    makeRace({
+      raceId: 430 + i, trackId: 20 + i, day: 100 + i, state: 2, laps: 50,
+      results: fieldResults(430 + i, 6),
+      pitStops: Array.from({ length: 12 }, (_, k) => ({
+        driverId: (k % 6) + 1, teamId: 1, lap: 10 + k, durationMs: 23000, pitStopId: 600 + i * 100 + k,
+      })),
+    }),
+  );
+
+  it('HIGH only when allocation lives + both deltas measured + ≥3 samples', () => {
+    const lab = buildTyreLab(
+      makeModel([target, ...history], { tyres: allocLives25_38_58() }),
+      420,
+    );
+    expect(lab.data.lifeSource.S).toBe('allocation');
+    expect(lab.data.paceSource.M).toBe('practice');
+    expect(lab.data.paceSource.H).toBe('cross-session');
+    expect(lab.confidence).toBe('HIGH');
+  });
+
+  it('caps at MEDIUM when stint-factor history has < 3 samples', () => {
+    const lab = buildTyreLab(makeModel([target], { tyres: allocLives25_38_58() }), 420);
+    expect(lab.confidence).toBe('MEDIUM');
+    expect(lab.assumptions.some((a) => a.text.includes('Mẫu pit-stop lịch sử'))).toBe(true);
+  });
+
+  it('warns when the plan pits less than the field average (rule c)', () => {
+    const heavyField = makeRace({
+      raceId: 440, trackId: 17, day: 90, state: 2, laps: 53,
+      results: fieldResults(440, 22),
+      pitStops: Array.from({ length: 55 }, (_, i) => ({
+        driverId: (i % 22) + 1, teamId: 1, lap: 12 + (i % 15), durationMs: 23000, pitStopId: 700 + i,
+      })),
+    });
+    const lab = buildTyreLab(
+      makeModel([target, heavyField], { tyres: allocLives25_38_58() }),
+      420,
+    );
+    expect(lab.warnings).toContain('PLAN_BELOW_FIELD_STOPS');
+    expect(lab.assumptions.some((a) => a.text.includes('ít pit hơn mặt bằng'))).toBe(true);
+    expect(lab.confidence).toBe('MEDIUM');
   });
 });

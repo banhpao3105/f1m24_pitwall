@@ -86,11 +86,18 @@ export interface StintFactor {
  * Stint fraction (stint laps / race laps) observed from completed races.
  * ratio = 1 / (avgStopsPerDriver + 1) — oracle formula. Track-specific
  * median wins; then save-wide median ("meta"); then the model constant.
+ * `excludeRaceId` (v0.5.1 leave-one-out): the race being forecast must
+ * never teach the model about itself.
  */
-export function getStintFactor(model: SaveModel, trackId: number): StintFactor {
+export function getStintFactor(
+  model: SaveModel,
+  trackId: number,
+  excludeRaceId?: number,
+): StintFactor {
   const byTrack: Record<number, number[]> = {};
   const all: number[] = [];
   for (const race of model.races) {
+    if (race.raceId === excludeRaceId) continue;
     if (race.state !== 2 || race.results.length === 0) continue;
     const stops = race.pitStops?.length ?? 0;
     if (stops === 0) continue;
@@ -121,10 +128,15 @@ export interface ObservedStops {
 }
 
 /** Average stops per driver at this track across completed races. */
-export function getObservedStops(model: SaveModel, trackId: number): ObservedStops | null {
+export function getObservedStops(
+  model: SaveModel,
+  trackId: number,
+  excludeRaceId?: number,
+): ObservedStops | null {
   let totalStops = 0;
   let driverRaces = 0;
   for (const race of model.races) {
+    if (race.raceId === excludeRaceId) continue;
     if (race.trackId !== trackId || race.state !== 2) continue;
     const pitStops = race.pitStops ?? [];
     if (pitStops.length === 0 || race.results.length === 0) continue;
@@ -562,7 +574,7 @@ export interface TyreLab {
   pitLaneLossS: number;
   pitCostS: number;
   lives: Record<Compound, number>;
-  lifeSource: Record<Compound, 'allocation' | 'track' | 'model'>;
+  lifeSource: Record<Compound, 'allocation' | 'model'>;
   deltas: Record<Compound, number>;
   /** Source used for RANKING (after the same-tier rule). */
   paceSource: Record<Compound, 'practice' | 'cross-session' | 'model' | 'baseline'>;
@@ -623,8 +635,19 @@ export function buildTyreLab(
   const pitLaneLossS = FALLBACK_PIT_LANE_LOSS; // v1: track PitLaneTimeLoss lives in Races_Tracks (P1 data task)
   const pitCostS = pitLaneLossS + PIT_STATIONARY_ESTIMATE;
 
-  /* life ceilings — evidence priority: allocation > track > model (oracle) */
-  const stintFactor = getStintFactor(model, race.trackId);
+  /* life ceilings — evidence priority: allocation caps for the ACTIVE
+     weekend, otherwise the physical envelope. v0.5.1 P1 fix: stintFactor
+     NO LONGER scales lives — a completed race's pit counts must never
+     shrink tyre life (Suzuka post-race: factor 1/(2+1) collapsed lives to
+     S12/M18/H22 while the actual soft stint ran 19–20 laps). stintFactor
+     now only feeds the expectedStops fallback below. */
+  /* Leave-one-out (v0.5.1 P1): the race being forecast must never teach the
+     model about itself — stintFactor (the historical lives-shaper) always
+     excludes the target race. Observed stops stay IN: they are the field's
+     reference average ("cả giải") shown next to the plan, the (c) confidence
+     guard, and the per-track correction record — reference data, not
+     self-teaching (lives no longer consume it at all). */
+  const stintFactor = getStintFactor(model, race.trackId, exclude ?? race.raceId);
   const caps = getCompoundCaps(model);
   const allocationFresh = caps != null && model.tyres.length > 0;
   // Only the active weekend's allocation describes THESE tyres — approximate
@@ -632,28 +655,22 @@ export function buildTyreLab(
   const useAllocation = allocationFresh && race.state !== 2;
 
   const lives: Record<Compound, number> = { S: 0, M: 0, H: 0 };
-  const lifeSource: Record<Compound, 'allocation' | 'track' | 'model'> = {
+  const lifeSource: Record<Compound, 'allocation' | 'model'> = {
     S: 'model', M: 'model', H: 'model',
   };
   for (const c of DRY) {
-    const shaped = Math.max(4, Math.round(laps * stintFactor.factor * FALLBACK_LIFE_SHAPE[c]));
-    let life: number;
-    let src: 'allocation' | 'track' | 'model';
-    if (caps && useAllocation && stintFactor.source !== 'track') {
+    const envelope = Math.max(
+      4,
+      Math.round(laps * FALLBACK_LIFE_SHAPE[c] * PHYSICAL_LIFE_FALLBACK),
+    );
+    let life = envelope;
+    let src: 'allocation' | 'model' = 'model';
+    if (caps && useAllocation) {
       life = Math.max(4, caps[c]);
       src = 'allocation';
-    } else if (caps && useAllocation) {
-      life = Math.min(shaped, Math.max(4, caps[c]));
-      src = 'track';
-    } else if (stintFactor.source === 'track') {
-      life = shaped;
-      src = 'track';
-    } else {
-      life = Math.max(4, Math.round(laps * FALLBACK_LIFE_SHAPE[c] * PHYSICAL_LIFE_FALLBACK));
-      src = 'model';
-    }
-    // Durability clamp (oracle): allocation's fresh S median caps all paths.
-    if (caps && !useAllocation && caps[c] != null) {
+    } else if (caps) {
+      // Durability clamp (oracle): the fresh S median caps all paths even
+      // when this weekend's allocation is not the plan's basis.
       life = Math.min(life, Math.max(4, caps[c]));
     }
     lives[c] = life;
@@ -664,7 +681,7 @@ export function buildTyreLab(
   lives.H = Math.max(lives.H, lives.M);
 
   /* expected field stops */
-  const observed = getObservedStops(model, race.trackId);
+  const observed = getObservedStops(model, race.trackId, exclude);
   let expectedStops: number | null = null;
   let expectedSource: 'track' | 'meta' | 'model' | null = null;
   if (observed && observed.avgStopsPerDriver > 0.4) {
@@ -791,14 +808,39 @@ export function buildTyreLab(
      game plan table not yet normalized — Phase 1 backlog; reported as null) */
   const gamePlan: TyreLab['gamePlan'] = null;
 
-  /* confidence: HIGH needs save-measured lives AND pace; MEDIUM for partial
-     save evidence; LOW for pure model constants (docs/00 §1.6 semantics) */
-  const lifeEvidence = lifeSource.S !== 'model' || lifeSource.M !== 'model';
-  const paceEvidence = paceSource.M === 'practice' || paceSource.H === 'practice';
+  /* confidence — honest tiers (v0.5.1 P1). HIGH requires EVERY pillar:
+     lives from the weekend allocation, BOTH M and H measured from practice
+     (any tier), ≥3 stint-factor samples, and a plan at least as pit-heavy
+     as the field average observed at this track. Any shortfall caps at
+     MEDIUM — a HIGH badge must never rest on unmeasured numbers. */
+  const warnings: string[] = [];
+  const livesFromAllocation = lifeSource.S === 'allocation' || lifeSource.M === 'allocation';
+  const bothPaceMeasured =
+    (paceSource.M === 'practice' || paceSource.M === 'cross-session') &&
+    (paceSource.H === 'practice' || paceSource.H === 'cross-session');
+  const fewStintSamples = stintFactor.samples < 3;
+  const fieldRefStops = observed?.avgStopsPerDriver ?? null;
+  const fewerPitsThanField = best != null && fieldRefStops != null && best.stops < fieldRefStops;
+  const lifeEvidence = livesFromAllocation;
+  const paceEvidence = paceMeasured.M != null || paceMeasured.H != null;
   const stopsEvidence = expectedSource === 'track';
   const evidenceCount = [lifeEvidence, paceEvidence, stopsEvidence].filter(Boolean).length;
   const confidence: Confidence =
-    evidenceCount >= 2 && lifeEvidence ? 'HIGH' : evidenceCount >= 1 ? 'MEDIUM' : 'LOW';
+    livesFromAllocation && bothPaceMeasured && !fewStintSamples && !fewerPitsThanField
+      ? 'HIGH'
+      : evidenceCount >= 1
+        ? 'MEDIUM'
+        : 'LOW';
+  if (fewerPitsThanField) {
+    warnings.push('PLAN_BELOW_FIELD_STOPS');
+    assumptions.push({
+      text: `Plan dùng ít pit hơn mặt bằng cả giải tại track này (plan ${best!.stops} vs ~${fieldRefStops!.toFixed(2)}/driver) — độ tin cậy bị hạ xuống MEDIUM`,
+    });
+  } else if (confidence === 'MEDIUM' && livesFromAllocation && bothPaceMeasured && fewStintSamples) {
+    assumptions.push({
+      text: `Mẫu pit-stop lịch sử chỉ ${stintFactor.samples} chặng (< 3) — độ tin cậy bị hạ xuống MEDIUM`,
+    });
+  }
 
   /* evidence + assumptions (traceability contract) */
   const evidence: Evidence[] = [];
@@ -886,7 +928,6 @@ export function buildTyreLab(
     });
   }
 
-  const warnings: string[] = [];
   if (race.state === 2) warnings.push('RACE_ALREADY_COMPLETED');
   if (sameTierFallback) warnings.push('SAME_TIER_PACE_FALLBACK');
 
