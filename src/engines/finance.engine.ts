@@ -19,6 +19,7 @@
 import type { Confidence, Evidence, Assumption, Recommendation } from '../domain/provenance';
 import type { EngineResult } from '../domain/types';
 import type { SaveModel } from '../domain/types';
+import { formatMoneyCompact } from '../lib/utils';
 
 export interface SpendRow {
   category: string;
@@ -212,7 +213,7 @@ export function buildFinance(model: SaveModel): EngineResult<FinanceBoard> {
   if (costPerPoint != null) {
     recommendations.push({
       id: 'finance-cost-per-point',
-      title: `Cost-per-point: ${costPerPoint} / điểm`,
+      title: `Cost-per-point: ${formatMoneyCompact(costPerPoint)} / điểm`,
       action:
         costPerPoint > 2_000_000
           ? 'Rà lại nhóm chi lớn nhất (xem spend by category) — mỗi điểm đang quá đắt so với mặt bằng'

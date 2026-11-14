@@ -242,21 +242,38 @@ export function TyreLabView({
               </div>
             </div>
             {(() => {
-              const unmeasured = [
-                ...new Set(
-                  tyre.data.best.stints
-                    .filter((st) => tyre.data.paceSource[st.compound] === 'model')
-                    .map((st) => st.compound),
-                ),
-              ];
-              return unmeasured.length > 0 ? (
+              /* 0.5.3 wording fix: the same-tier rule ranks model constants
+               * for BOTH M and H when only one is measured — the old text
+               * claimed the measured compound was "not measured", fighting
+               * the evidence clock. paceMeasured keeps the real values. */
+              const modelRanked = (['M', 'H'] as const).filter(
+                (c) => tyre.data.paceSource[c] === 'model',
+              );
+              if (modelRanked.length === 0) return null;
+              const unmeasured = modelRanked.filter(
+                (c) => tyre.data.paceMeasured[c] == null,
+              );
+              const measured = modelRanked
+                .filter((c) => tyre.data.paceMeasured[c] != null)
+                .map(
+                  (c) =>
+                    `${c} +${(tyre.data.paceMeasured[c] as { delta: number }).delta.toFixed(2)}s`,
+                );
+              const joiner = locale === 'vi' ? ' và ' : ' and ';
+              return (
                 <p
                   className="mt-2 rounded border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger"
                   data-testid="evidence-warning"
                 >
-                  {t('clock.unmeasuredWarn', { compounds: unmeasured.join(', ') })}
+                  {t('clock.unmeasuredWarn', {
+                    compounds: modelRanked.join(joiner),
+                    unmeasured:
+                      unmeasured.length > 0 ? unmeasured.join(', ') : '—',
+                    measured:
+                      measured.length > 0 ? measured.join(', ') : '—',
+                  })}
                 </p>
-              ) : null;
+              );
             })()}
             {prior ? (
               <p className="mt-2 text-[11px] text-ink-soft" data-testid="track-prior">

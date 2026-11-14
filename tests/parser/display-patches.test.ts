@@ -46,6 +46,34 @@ describe('cleanStaffName display patches (0.4.1)', () => {
     expect(cleanStaffName('[StaffName_Surname_Perez1]')).toBe('Perez');
   });
 
+  it('0.5.3: multi-word forename keys split at camelCase boundaries', () => {
+    // Real-save rows: staffId 376 "AndreaKimi" Antonelli.
+    expect(cleanStaffName('[StaffName_Forename_Male_AndreaKimi]')).toBe('Andrea Kimi');
+    expect(cleanStaffName('[StaffName_Forename_Male_JuanManuel]')).toBe('Juan Manuel');
+    expect(cleanStaffName('[StaffName_Forename_Male_FrancoisXavier1]')).toBe('Francois Xavier');
+  });
+
+  it('0.5.3: surname keys split only before particles', () => {
+    // Real-save rows: staffId 76 "Nyck" deVries.
+    expect(cleanStaffName('[StaffName_Surname_deVries]')).toBe('de Vries');
+    expect(cleanStaffName('[StaffName_Surname_deBeer]')).toBe('de Beer');
+    expect(cleanStaffName('[StaffName_Surname_vanLeeuwen]')).toBe('van Leeuwen');
+    expect(cleanStaffName('[StaffName_Surname_AlQubaisi]')).toBe('Al Qubaisi');
+    // no particle → no split (full surname splitting would corrupt these)
+    expect(cleanStaffName('[StaffName_Surname_MacPherson]')).toBe('MacPherson');
+    expect(cleanStaffName('[StaffName_Surname_DallAra]')).toBe('DallAra');
+    expect(cleanStaffName('[StaffName_Surname_VanderVen]')).toBe('VanderVen');
+    // lowercase continuation blocks the split
+    expect(cleanStaffName('[StaffName_Surname_Vandoorne]')).toBe('Vandoorne');
+  });
+
+  it('0.5.3: verified-correct names are untouched by the spacing fix', () => {
+    expect(cleanStaffName('[StaffName_Surname_Verstappen]')).toBe('Verstappen');
+    expect(cleanStaffName('[StaffName_Surname_Ricciardo]')).toBe('Ricciardo');
+    expect(cleanStaffName('[StaffName_Surname_Leclerc]')).toBe('Leclerc');
+    expect(cleanStaffName('[StaffName_Surname_Antonelli]')).toBe('Antonelli');
+  });
+
   it('patch map stays small and documented', () => {
     // Guard rail: patches are a curated display table, not a heuristic.
     expect(Object.keys(STAFF_NAME_DISPLAY_PATCHES).sort()).toEqual([

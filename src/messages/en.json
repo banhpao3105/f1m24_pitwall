@@ -207,6 +207,7 @@
       "openRace": "Open Race Weekend",
       "openTyres": "Open Tyre Lab",
       "noPlan": "No tyre plan could be built for this race yet.",
+      "raceWeek": "race week",
       "live": "LIVE"
     },
     "pace": {
@@ -292,7 +293,7 @@
       "stops": "field stops",
       "noData": "none",
       "measuredBut": "measured +{delta}s — ranked as model",
-      "unmeasuredWarn": "The plan relies on {compounds} whose delta is NOT measured at this track (model constant) — treat as an estimate.",
+      "unmeasuredWarn": "Ranking uses the model constant for both {compounds} because {unmeasured} is not measured at this track (measured: {measured}) — treat as an estimate.",
       "prior": "Last time at {track}: plan {stops} stops (pit lap {lap}), the field ran {field} stops/driver."
     },
     "gamePlan": {
@@ -350,7 +351,7 @@
       "tyreHint": "Tyre: “—” because the save has no per-lap stint data — never invented."
     },
     "schematic": {
-      "label": "Schematic — not to scale",
+      "label": "Track schematic",
       "generic": "Generic outline — no verified shape for this track"
     }
   },

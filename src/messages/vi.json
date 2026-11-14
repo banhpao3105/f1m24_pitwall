@@ -207,6 +207,7 @@
       "openRace": "Mở Race Weekend",
       "openTyres": "Mở Tyre Lab",
       "noPlan": "Chưa xây được kế hoạch lốp cho chặng này.",
+      "raceWeek": "tuần race",
       "live": "ĐANG ĐUA"
     },
     "pace": {
@@ -292,7 +293,7 @@
       "stops": "pit cả giải",
       "noData": "chưa có",
       "measuredBut": "đo được +{delta}s — xếp hạng bằng model",
-      "unmeasuredWarn": "Plan đang dùng {compounds} với delta CHƯA đo được ở track này (hằng số model) — coi như ước lượng.",
+      "unmeasuredWarn": "Xếp hạng đang dùng hằng số model cho cả {compounds} vì {unmeasured} chưa đo được ở track này (đã đo được: {measured}) — coi như ước lượng.",
       "prior": "Lần trước tại {track}: plan {stops} pit (pit vòng {lap}), cả giải chạy {field} pit/driver."
     },
     "gamePlan": {
@@ -350,7 +351,7 @@
       "tyreHint": "Lốp: “—” vì save không lưu dữ liệu stint theo vòng — không đoán số liệu."
     },
     "schematic": {
-      "label": "Sơ đồ minh họa — không theo tỉ lệ",
+      "label": "Sơ đồ minh họa",
       "generic": "Sơ đồ tổng quát — track chưa có hình chuẩn"
     }
   },

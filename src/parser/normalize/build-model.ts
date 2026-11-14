@@ -439,7 +439,14 @@ export function cleanStaffName(raw: string): string {
   for (const p of PREFIXES) {
     if (key.startsWith(p)) {
       const decoded = removeTrailingDigit(key.slice(p.length));
-      return STAFF_NAME_DISPLAY_PATCHES[decoded] ?? decoded;
+      const patched = STAFF_NAME_DISPLAY_PATCHES[decoded];
+      if (patched) return patched;
+      /* 0.5.3: the key prefix tells us which name kind this is — forenames
+       * split fully ("AndreaKimi" → "Andrea Kimi"), surnames only before
+       * particles ("deVries" → "de Vries"). */
+      return p === 'StaffName_Surname_'
+        ? expandKeySurname(decoded)
+        : expandKeyForename(decoded);
     }
   }
   // Unknown key shape — keep the tail segment, still readable.
@@ -450,4 +457,46 @@ export function cleanStaffName(raw: string): string {
 /** Oracle names.js:9705 — a single trailing digit is a key artifact. */
 export function removeTrailingDigit(str: string): string {
   return /\d$/.test(str) ? str.slice(0, -1) : str;
+}
+
+/* 0.5.3 — localization keys cannot contain spaces: multi-word names arrive
+ * camelCased into one token ("AndreaKimi", "deVries" — real save staffId
+ * 376/76). Forename keys split at every lowercase→uppercase boundary;
+ * surname keys split only before a kept particle — full surname splitting
+ * would corrupt MacPherson/DallAra/VanderVen-style names (verified in the
+ * same save). Plain (non-key) names and the curated patch map above are
+ * never re-split. */
+export function expandKeyForename(decoded: string): string {
+  return decoded.replace(/([a-zà-öø-ÿ])([A-ZÀ-Þ])/g, '$1 $2');
+}
+
+const SURNAME_PARTICLE_SET = new Set([
+  'della', 'del', 'dos', 'der', 'ten', 'ter', 'von', 'van', 'de', 'le', 'la', 'da', 'al',
+]);
+const IS_UPPER = /[A-ZÀ-Þ]/;
+
+export function expandKeySurname(decoded: string): string {
+  /* Insert a space after a leading particle when a genuinely uppercase
+   * letter follows: "deVries" → "de Vries", "vanLeeuwen" → "van Leeuwen".
+   * Done programmatically (not with an /i regex) because case-insensitive
+   * character classes would let the uppercase lookahead match lowercase
+   * letters and corrupt "DallAra" → "Da llAra" / "Leclerc" → "Le clerc".
+   * A lowercase continuation blocks the split ("Vandoorne" stays one word);
+   * non-particle surnames keep camelCase glued ("MacPherson", "VanderVen"). */
+  const cuts: number[] = [];
+  for (let i = 0; i < decoded.length; i++) {
+    if (i > 0 && !/\s/.test(decoded[i - 1])) continue;
+    for (let len = 5; len >= 2; len--) {
+      const seg = decoded.slice(i, i + len);
+      if (SURNAME_PARTICLE_SET.has(seg.toLowerCase()) && IS_UPPER.test(decoded[i + len] ?? '')) {
+        cuts.push(i + len);
+        break;
+      }
+    }
+  }
+  let out = decoded;
+  for (let k = cuts.length - 1; k >= 0; k--) {
+    out = out.slice(0, cuts[k]) + ' ' + out.slice(cuts[k]);
+  }
+  return out;
 }

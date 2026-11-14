@@ -73,6 +73,11 @@ export function DegCurveChart({ data }: { data: DegCurveData }) {
   // Narrow the incoming first-compound string to a real dry Compound.
   const capCompound = (['S', 'M', 'H'] as Compound[]).find((c) => c === data.firstCompound);
   const cap = capCompound ? data.lives[capCompound] : null;
+  /* 0.5.3: when the pit line and the life-cap line sit close together their
+   * top labels collide ("Pit tối ưu: vòng 23" vs "S: vòng 33" — 10 laps
+   * apart). Stack the cap label one text row lower instead. */
+  const capLabelDy =
+    data.pitLap != null && cap != null && Math.abs(cap - data.pitLap) < 12 ? 14 : 0;
   const maxDelta = Math.max(
     ...['S', 'M', 'H'].map((c) => {
       const vals = series[c as Compound].filter((v): v is number => v != null);
@@ -144,6 +149,7 @@ export function DegCurveChart({ data }: { data: DegCurveData }) {
               label={{
                 value: t('capLine', { compound: capCompound, lap: cap }),
                 position: 'insideTopRight',
+                dy: capLabelDy,
                 fill: CHART_COLORS.danger,
                 fontSize: 10,
                 fontFamily: 'var(--font-jetbrains-mono), monospace',

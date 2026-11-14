@@ -166,13 +166,24 @@ export function WallHomeView({ model }: { model: SaveModel }) {
                 <span aria-hidden="true" className="live-pulse-dot h-1.5 w-1.5 rounded-full bg-teal" data-testid="next-race-pulse" />
                 <h2 className="text-[15px] font-semibold text-ink">{t('nextRace.label')}</h2>
                 {nextRace.state === 1 ? (
-                  <span
-                    className="inline-flex items-center gap-1.5 rounded bg-danger/10 px-1.5 py-0.5 font-mono text-[10px] uppercase text-danger"
-                    data-testid="live-badge"
-                  >
-                    <span className="live-pulse-dot h-1.5 w-1.5 rounded-full bg-danger" aria-hidden="true" />
-                    {t('nextRace.live')}
-                  </span>
+                  model.meta.day === nextRace.day ? (
+                    <span
+                      className="inline-flex items-center gap-1.5 rounded bg-danger/10 px-1.5 py-0.5 font-mono text-[10px] uppercase text-danger"
+                      data-testid="live-badge"
+                    >
+                      <span className="live-pulse-dot h-1.5 w-1.5 rounded-full bg-danger" aria-hidden="true" />
+                      {t('nextRace.live')}
+                    </span>
+                  ) : (
+                    /* 0.5.3: state 1 = race weekend open, not racing yet —
+                       same wording as Season ("tuần race"), no red pulse. */
+                    <span
+                      className="rounded bg-raised px-1.5 py-0.5 font-mono text-[10px] uppercase text-ink-soft"
+                      data-testid="race-week-badge"
+                    >
+                      {t('nextRace.raceWeek')}
+                    </span>
+                  )
                 ) : null}
                 <span className="font-mono text-xs text-teal">{trackDisplay(nextRace.trackName, locale)}</span>
                 {nextRace.weather?.raceRain ? (
