@@ -461,6 +461,16 @@ export function buildGazetteIssue(
   const seasonRacesUpTo = model.races.filter(
     (r) => r.seasonId === race.seasonId && r.state === 2 && isAtOrBefore(r, cutoff),
   );
+  /* 0.5.3 fix: round = the race's position in the season calendar (day,
+   * then raceId), + 1. Before: seasonRacesUpTo.length counted only
+   * COMPLETED races, so an unraced round (Bahrain = round 4 of 21, viewed
+   * after quali) was mislabeled "Chặng 3" while Season showed #4.
+   * seasonRacesUpTo stays for favorites/dark horse — they need completed
+   * races only. */
+  const seasonCalendar = model.races
+    .filter((r) => r.seasonId === race.seasonId)
+    .sort((a, b) => a.day - b.day || a.raceId - b.raceId);
+  const round = seasonCalendar.findIndex((r) => r.raceId === race.raceId) + 1;
 
   /* ── Results + gap (oracle: r.Time − winnerTime) ── */
   const results = race.results.slice().sort((a, b) => a.finishingPos - b.finishingPos);
@@ -649,7 +659,7 @@ export function buildGazetteIssue(
     data: {
       raceId: race.raceId,
       seasonId: race.seasonId,
-      round: seasonRacesUpTo.length,
+      round,
       totalRounds: model.races.filter((r) => r.seasonId === race.seasonId).length,
       day: race.day,
       today: model.meta.day,

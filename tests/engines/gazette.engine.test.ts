@@ -238,6 +238,41 @@ describe('buildGazetteIssue — degradation (traceable > clever)', () => {
   });
 });
 
+describe('buildGazetteIssue — round numbering (0.5.3)', () => {
+  it('numbers an unraced round by calendar position, not completed count', () => {
+    // Real-save shape (Bahrain Day 46495): 3 rounds done, round 4 (Bahrain)
+    // viewed after quali, not raced. Old code: round = seasonRacesUpTo
+    // .length = 3 → "Chặng 3 · Bahrain" while Season showed #4.
+    const model = makeModel([
+      race(1, 10), // completed — Albert Park
+      race(2, 20), // completed
+      race(3, 30), // completed — Suzuka
+      race(4, 40, { state: 1 }), // Bahrain — after quali, not raced
+    ]);
+    model.races[3].results = [];
+
+    const out = buildGazetteIssue(model, 4);
+    expect(out.data.round).toBe(4);
+    expect(out.data.totalRounds).toBe(4);
+    expect(out.warnings).toContain('RACE_NOT_COMPLETED');
+  });
+
+  it('keeps calendar numbering for completed rounds and survives unsorted race arrays', () => {
+    // Albert Park (round 1) and Suzuka (round 3) stay correct; race rows
+    // arrive unsorted — calendar order is by day, then raceId.
+    const model = makeModel([
+      race(4, 40, { state: 1 }),
+      race(2, 20),
+      race(3, 30),
+      race(1, 10),
+    ]);
+    model.races[0].results = [];
+    expect(buildGazetteIssue(model, 1).data.round).toBe(1);
+    expect(buildGazetteIssue(model, 3).data.round).toBe(3);
+    expect(buildGazetteIssue(model, 4).data.round).toBe(4);
+  });
+});
+
 describe('buildGazetteIssue — transfers (oracle getTransfers)', () => {
   it('derives future contracts, filters same-team and non-F1 moves', () => {
     const model = makeModel([race(1, 10)]);
