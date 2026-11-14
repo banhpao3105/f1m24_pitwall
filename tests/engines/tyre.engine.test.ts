@@ -14,7 +14,7 @@ import {
   getCompoundCaps,
   type TyreLab,
 } from '@/engines/tyre.engine';
-import type { SaveModel, Race } from '@/domain/types';
+import type { SaveModel, Race, PracticeResult, TyreAllocation } from '@/domain/types';
 import { emptyPhase2Sections } from '../helpers/model';
 
 /* ── helpers to build a minimal SaveModel ────────────────────────────────── */
@@ -243,5 +243,165 @@ describe('buildTyreLab', () => {
   it('warns on unknown race id', () => {
     const result = buildTyreLab(model, 9999);
     expect(result.warnings[0]).toContain('RACE_NOT_FOUND');
+  });
+});
+
+/* ── v0.5.1 P0: cross-session pace + same-tier ranking (Suzuka 2027 bug) ── */
+
+/** One practice row = one driver's best lap on that compound/session. */
+function prow(
+  driverId: number,
+  session: number,
+  bestLapMs: number,
+  bestLapTyre: number,
+): PracticeResult {
+  return { driverId, teamId: 1, session, bestLapMs, bestLapTyre };
+}
+
+/**
+ * Practice structure mirroring the REAL Suzuka 2027 weekend (F1M 24 1.11.0
+ * save, owner-verified): S sampled heavily; M ≥3 drivers in two sessions;
+ * H only 2 drivers per session (4 distinct total) — the shape that used to
+ * hide the true +1.76s hard-tyre penalty behind the model constant.
+ */
+function suzukaPracticeRows(): PracticeResult[] {
+  let d = 0;
+  const rows: PracticeResult[] = [];
+  const push = (n: number, session: number, fastestMs: number, tyre: number) => {
+    for (let i = 0; i < n; i++) rows.push(prow(++d, session, fastestMs + i * 50, tyre));
+  };
+  push(13, 1, 91671, 2); // S session 1
+  push(7, 1, 92394, 1); // M session 1 (7 drivers — session-eligible)
+  push(2, 1, 92214, 0); // H session 1 (2 drivers — under-sampled)
+  push(19, 2, 90450, 2); // S session 2 (fastest overall)
+  push(3, 2, 91917, 1); // M session 2 (exactly MIN_PACE_SAMPLE)
+  push(18, 3, 90756, 2); // S session 3
+  push(2, 3, 92355, 0); // H session 3 (2 drivers)
+  push(2, 3, 91095, 1); // M session 3 (2 drivers — under-sampled)
+  return rows;
+}
+
+/** Fresh allocation whose medians give lives S25/M38/H58 (real save0 shape). */
+function allocLives25_38_58(): TyreAllocation[] {
+  const sets: TyreAllocation[] = [];
+  let id = 0;
+  const add = (n: number, type: number, life: number) => {
+    for (let i = 0; i < n; i++) {
+      sets.push({
+        carId: 1,
+        tyreSetId: ++id,
+        weekendTyreType: type,
+        frontLeftWear: 1,
+        availabilityState: 0,
+        estimatedLapLifeRemaining: life,
+      });
+    }
+  };
+  add(4, 2, 25); // S
+  add(2, 3, 38); // M
+  add(2, 4, 58); // H
+  return sets;
+}
+
+describe('v0.5.1 cross-session pace (P0 Suzuka bug)', () => {
+  const target = makeRace({
+    raceId: 300,
+    trackId: 17,
+    trackName: 'Suzuka',
+    state: 0,
+    laps: 53,
+    practice: suzukaPracticeRows(),
+  });
+
+  it('measures H cross-session when every session is under-sampled (Rule 1)', () => {
+    const pace = getPracticePace(makeModel([target]), 17);
+    expect(pace).not.toBeNull();
+    expect(pace!.deltas.M).toBeCloseTo(1.095, 3); // median of session gaps
+    expect(pace!.measured.M).toBe('session');
+    expect(pace!.deltas.H).toBeCloseTo(1.764, 3); // 92.214 − 90.450 (owner's number)
+    expect(pace!.measured.H).toBe('cross-session');
+  });
+
+  it('keeps H unmeasured with only 2 distinct drivers across sessions', () => {
+    const rows = [
+      prow(1, 1, 91671, 2), prow(2, 1, 91721, 2), prow(3, 1, 91771, 2),
+      prow(4, 1, 92394, 1), prow(5, 1, 92444, 1), prow(6, 1, 92494, 1),
+      prow(100, 1, 92214, 0), // H — 1st driver
+      prow(101, 2, 92355, 0), // H — 2nd distinct driver only
+    ];
+    const pace = getPracticePace(makeModel([makeRace({ trackId: 17, state: 0, practice: rows })]), 17);
+    expect(pace!.deltas.M).not.toBeNull();
+    expect(pace!.deltas.H).toBeNull();
+    expect(pace!.measured.H).toBeNull();
+  });
+
+  it('ranks S→S→M best on measured deltas: 80.9s, pits [18,36]; S→H never best', () => {
+    const lab = buildTyreLab(makeModel([target], { tyres: allocLives25_38_58() }), 300);
+    const data: TyreLab = lab.data;
+    expect(data.lives).toEqual({ S: 25, M: 38, H: 58 });
+    expect(data.deltas).toEqual({ S: 0, M: 1.09, H: 1.76 });
+    expect(data.paceSource.M).toBe('practice');
+    expect(data.paceSource.H).toBe('cross-session');
+    expect(data.sameTierFallback).toBe(false);
+
+    const best = data.best!;
+    expect(best.order.join('→')).toBe('S→S→M');
+    expect(best.stops).toBe(2);
+    expect(best.timeS).toBeCloseTo(80.9, 1);
+    expect(best.pitLaps).toEqual([18, 36]);
+
+    const byOrder = (o: string) =>
+      data.strategies.find((s) => s.order.join('→') === o);
+    expect(byOrder('S→M')!.timeS).toBeCloseTo(85.3, 1);
+    // S→H sits far below the best plan (owner's number: 97.6s) — verify the
+    // plan time directly; with honest deltas it no longer even makes top 6.
+    const sh = evaluateStrategy(['S', 'H'], 53, { S: 25, M: 38, H: 58 }, { S: 0, M: 1.09, H: 1.76 }, 20.7);
+    expect(sh!.timeS).toBeCloseTo(97.6, 1);
+    expect(best.order.join('→')).not.toBe('S→H');
+  });
+});
+
+describe('v0.5.1 same-tier fallback (Rule 2)', () => {
+  it('never ranks measured M against model H — best flips to S→M 68.2s', () => {
+    // One session: M measured (+0.72 vs S), H has ZERO practice samples.
+    // Without Rule 2 the model H constant (+1.05) beats measured M (+0.72)
+    // and the plan flips to nonsense S→H 74.4s — the Suzuka failure mode.
+    const rows = [
+      prow(1, 1, 91671, 2), prow(2, 1, 91721, 2), prow(3, 1, 91771, 2),
+      prow(4, 1, 92394, 1), prow(5, 1, 92444, 1), prow(6, 1, 92494, 1),
+    ];
+    const target = makeRace({ raceId: 301, trackId: 17, trackName: 'Suzuka', state: 0, laps: 53, practice: rows });
+    const lab = buildTyreLab(makeModel([target], { tyres: allocLives25_38_58() }), 301);
+    const data = lab.data;
+
+    expect(data.sameTierFallback).toBe(true);
+    expect(data.deltas.M).toBe(0.55); // model constants for BOTH (fair ranking)
+    expect(data.deltas.H).toBe(1.05);
+    expect(data.paceSource.M).toBe('model');
+    expect(data.paceSource.H).toBe('model');
+    expect(data.paceMeasured.M).toEqual({ delta: expect.closeTo(0.723, 3), source: 'session' });
+    expect(data.paceMeasured.H).toBeNull();
+    expect(lab.warnings).toContain('SAME_TIER_PACE_FALLBACK');
+    // measured value stays visible in the evidence
+    expect(lab.evidence.some((e) => e.label.includes('+0.72'))).toBe(true);
+    expect(lab.assumptions.some((a) => a.text.includes('chưa được đo'))).toBe(true);
+
+    const best = data.best!;
+    expect(best.order.join('→')).toBe('S→M');
+    expect(best.timeS).toBeCloseTo(68.2, 1);
+    // Owner's direct check: with the SAME-TIER model deltas S→H costs 74.4s
+    // (evaluate directly — the ranked top-6 is all faster plans now).
+    const sh = evaluateStrategy(['S', 'H'], 53, { S: 25, M: 38, H: 58 }, { S: 0, M: 0.55, H: 1.05 }, 20.7);
+    expect(sh!.timeS).toBeCloseTo(74.4, 1);
+  });
+
+  it('does not trigger when both compounds are measured (even cross-session)', () => {
+    const target = makeRace({
+      raceId: 302, trackId: 17, trackName: 'Suzuka', state: 0, laps: 53,
+      practice: suzukaPracticeRows(),
+    });
+    const lab = buildTyreLab(makeModel([target], { tyres: allocLives25_38_58() }), 302);
+    expect(lab.data.sameTierFallback).toBe(false);
+    expect(lab.warnings).not.toContain('SAME_TIER_PACE_FALLBACK');
   });
 });

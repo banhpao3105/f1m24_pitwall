@@ -135,19 +135,39 @@ export function getObservedStops(model: SaveModel, trackId: number): ObservedSto
   return { avgStopsPerDriver: totalStops / driverRaces, samples: driverRaces };
 }
 
+export type PaceMeasurement = 'session' | 'cross-session';
+
 export interface PracticePace {
   /** Seconds per lap vs Soft. */
   deltas: { S: 0; M: number | null; H: number | null };
   sessions: number;
+  /**
+   * How each compound's delta was measured (null = not measured from
+   * practice at all — the engine then falls back to model constants).
+   * Drives the evidence clock (v0.5.1) and the same-tier ranking rule.
+   */
+  measured: { M: PaceMeasurement | null; H: PaceMeasurement | null };
 }
 
 /**
  * Compound pace deltas from practice best laps at this track (oracle logic):
  * per session, best per compound with ≥ MIN_PACE_SAMPLE drivers; gaps in
  * seconds; median across sessions; sanity-clamped and monotonic.
+ *
+ * Cross-session rule (v0.5.1 P0, Suzuka 2027 bug): a compound with < 3
+ * drivers in EVERY individual session but ≥ MIN_PACE_SAMPLE distinct drivers
+ * across all sessions at the track is measured from cross-session bests —
+ * the global best lap per compound (fastest vs Soft across all sessions).
+ * Oracle-verified on the real save: fastest H 92.214s vs fastest S 90.450s
+ * → +1.76s, exactly the owner's hand computation; the previous code dropped
+ * H entirely and ranked the model constant (+1.05) against measured M
+ * (+1.09), producing the nonsensical S→H / H→S→H plans.
  */
 export function getPracticePace(model: SaveModel, trackId: number): PracticePace | null {
   const bySession = new Map<string, Partial<Record<Compound, number>>>();
+  /* cross-session accumulators (all sessions, any driver count) */
+  const globalBest: Partial<Record<Compound, number>> = {};
+  const driversSeen: Partial<Record<Compound, Set<number>>> = {};
   for (const race of model.races) {
     if (race.trackId !== trackId) continue;
     const perSession = new Map<number, Map<Compound, { best: number; drivers: Set<number> }>>();
@@ -156,6 +176,8 @@ export function getPracticePace(model: SaveModel, trackId: number): PracticePace
       if (!compound) continue;
       const laps = p.bestLapMs / 1000; // model ms → seconds
       if (!(laps > 0)) continue;
+      (driversSeen[compound] ??= new Set<number>()).add(p.driverId);
+      globalBest[compound] = Math.min(globalBest[compound] ?? Infinity, laps);
       const m = perSession.get(p.session) ?? new Map<Compound, { best: number; drivers: Set<number> }>();
       const entry = m.get(compound) ?? { best: Infinity, drivers: new Set<number>() };
       // One best-lap row per driver: keep the fastest.
@@ -177,7 +199,7 @@ export function getPracticePace(model: SaveModel, trackId: number): PracticePace
       }
     }
   }
-  if (bySession.size === 0) return null;
+  if (bySession.size === 0 && Object.keys(globalBest).length === 0) return null;
 
   const gapsSM: number[] = [];
   const gapsMH: number[] = [];
@@ -190,17 +212,35 @@ export function getPracticePace(model: SaveModel, trackId: number): PracticePace
     if (s.S != null && s.H != null) { gapsSH.push(s.H - s.S); contributed = true; }
     if (contributed) sessionCount++;
   }
-  if (sessionCount === 0) return null;
 
-  const mSM = median(gapsSM);
-  const mMH = median(gapsMH);
-  const mSH = median(gapsSH);
   const deltas: { S: 0; M: number | null; H: number | null } = { S: 0, M: null, H: null };
-  if (mSM != null) deltas.M = mSM;
-  else if (mSH != null && mMH != null) deltas.M = mSH - mMH;
-  if (mSH != null && (gapsSH.length >= 2 || mSM == null)) deltas.H = mSH;
-  else if (mSM != null && mMH != null) deltas.H = mSM + mMH;
-  else if (mSH != null) deltas.H = mSH;
+  const measured: { M: PaceMeasurement | null; H: PaceMeasurement | null } = {
+    M: null, H: null,
+  };
+  if (sessionCount > 0) {
+    const mSM = median(gapsSM);
+    const mMH = median(gapsMH);
+    const mSH = median(gapsSH);
+    if (mSM != null) { deltas.M = mSM; measured.M = 'session'; }
+    else if (mSH != null && mMH != null) { deltas.M = mSH - mMH; measured.M = 'session'; }
+    if (mSH != null && (gapsSH.length >= 2 || mSM == null)) { deltas.H = mSH; measured.H = 'session'; }
+    else if (mSM != null && mMH != null) { deltas.H = mSM + mMH; measured.H = 'session'; }
+    else if (mSH != null) { deltas.H = mSH; measured.H = 'session'; }
+  }
+
+  /* cross-session fallback — only for compounds still unmeasured (Rule 1) */
+  for (const c of ['M', 'H'] as const) {
+    if (deltas[c] != null) continue;
+    const enoughDrivers = (driversSeen[c]?.size ?? 0) >= MIN_PACE_SAMPLE;
+    const refOk = (driversSeen.S?.size ?? 0) >= MIN_PACE_SAMPLE;
+    const best = globalBest[c];
+    const refBest = globalBest.S;
+    if (enoughDrivers && refOk && best != null && refBest != null) {
+      deltas[c] = best - refBest;
+      measured[c] = 'cross-session';
+    }
+  }
+
   if (deltas.M == null && deltas.H == null) return null;
   // Sanity: positive, bounded, monotonic (oracle clamps).
   if (deltas.M != null) deltas.M = clamp(deltas.M, 0.05, 2.5);
@@ -208,7 +248,7 @@ export function getPracticePace(model: SaveModel, trackId: number): PracticePace
     deltas.H = clamp(deltas.H, 0.1, 3.5);
     if (deltas.M != null && deltas.H <= deltas.M) deltas.H = deltas.M + 0.15;
   }
-  return { deltas, sessions: sessionCount };
+  return { deltas, sessions: sessionCount, measured };
 }
 
 export interface TrackHistory {
@@ -509,6 +549,12 @@ export function buildWetPlan(model: SaveModel, laps: number): WetPlanResult | nu
 
 /* ── the engine ──────────────────────────────────────────────────────────── */
 
+/** A practice-measured pace delta, kept visible even when overridden. */
+export interface PaceMeasuredEntry {
+  delta: number;
+  source: PaceMeasurement;
+}
+
 export interface TyreLab {
   raceId: number;
   trackName: string;
@@ -518,7 +564,12 @@ export interface TyreLab {
   lives: Record<Compound, number>;
   lifeSource: Record<Compound, 'allocation' | 'track' | 'model'>;
   deltas: Record<Compound, number>;
-  paceSource: Record<Compound, 'practice' | 'model' | 'baseline'>;
+  /** Source used for RANKING (after the same-tier rule). */
+  paceSource: Record<Compound, 'practice' | 'cross-session' | 'model' | 'baseline'>;
+  /** Practice-measured values with their measurement tier (evidence clock). */
+  paceMeasured: { M: PaceMeasuredEntry | null; H: PaceMeasuredEntry | null };
+  /** True when the same-tier rule ranked model constants for both M and H. */
+  sameTierFallback: boolean;
   expectedStops: number | null;
   expectedSource: 'track' | 'meta' | 'model' | null;
   /** Ranked candidate plans (top 6, oracle behaviour). */
@@ -625,19 +676,44 @@ export function buildTyreLab(
   }
 
   /* pace deltas per lap (vs soft) */
+  const assumptions: Assumption[] = [];
   const practicePace = getPracticePace(model, race.trackId);
   const deltas: Record<Compound, number> = { S: 0, M: FALLBACK_PACE_DELTA.M, H: FALLBACK_PACE_DELTA.H };
-  const paceSource: Record<Compound, 'practice' | 'model' | 'baseline'> = {
+  const paceSource: Record<Compound, 'practice' | 'cross-session' | 'model' | 'baseline'> = {
     S: 'baseline', M: 'model', H: 'model',
   };
+  /** Measured values kept visible even when the same-tier rule overrides them. */
+  const paceMeasured: { M: PaceMeasuredEntry | null; H: PaceMeasuredEntry | null } = {
+    M: null, H: null,
+  };
   if (practicePace) {
-    if (practicePace.deltas.M != null) {
-      deltas.M = Math.round(practicePace.deltas.M * 100) / 100;
-      paceSource.M = 'practice';
+    for (const c of ['M', 'H'] as const) {
+      const d = practicePace.deltas[c];
+      const src = practicePace.measured[c];
+      if (d != null && src != null) {
+        paceMeasured[c] = { delta: d, source: src };
+      }
     }
-    if (practicePace.deltas.H != null) {
-      deltas.H = Math.round(practicePace.deltas.H * 100) / 100;
-      paceSource.H = 'practice';
+  }
+  /* Same-tier ranking rule (v0.5.1 P0, Suzuka 2027 bug): never rank a
+     practice-measured compound against a model-constant one. Mixed tiers →
+     the model constants rank for BOTH (fair comparison), the measured values
+     stay visible in the evidence, and the assumption says why. */
+  const sameTierFallback = (paceMeasured.M != null) !== (paceMeasured.H != null);
+  if (sameTierFallback) {
+    const unmeasured = paceMeasured.M == null ? 'M' : 'H';
+    assumptions.push({
+      text: `Delta ${unmeasured} chưa được đo ở track này — dùng hằng số model cho cả M và H để so sánh công bằng (không trộn nguồn đo được và không đo được)`,
+      fallbackValue: `M +${FALLBACK_PACE_DELTA.M}s, H +${FALLBACK_PACE_DELTA.H}s vs Soft`,
+    });
+  } else {
+    if (paceMeasured.M) {
+      deltas.M = Math.round(paceMeasured.M.delta * 100) / 100;
+      paceSource.M = paceMeasured.M.source === 'cross-session' ? 'cross-session' : 'practice';
+    }
+    if (paceMeasured.H) {
+      deltas.H = Math.round(paceMeasured.H.delta * 100) / 100;
+      paceSource.H = paceMeasured.H.source === 'cross-session' ? 'cross-session' : 'practice';
     }
   }
 
@@ -732,10 +808,27 @@ export function buildTyreLab(
     detail: `stint factor ${(stintFactor.factor * 100).toFixed(0)}% (${stintFactor.source}, ${stintFactor.samples} mẫu)`,
   });
   if (practicePace) {
-    evidence.push({
-      source: 'Races_PracticeResults',
-      label: `Practice deltas vs Soft: M +${deltas.M.toFixed(2)}s, H +${deltas.H?.toFixed(2) ?? 'n/a'}s (${practicePace.sessions} session tại ${race.trackName})`,
-    });
+    const fmt = (v: number): string => `+${v.toFixed(2)}s`;
+    let label: string;
+    if (sameTierFallback) {
+      // Show the MEASURED values with their tiers — the ranking uses model
+      // constants for both, but the save's own numbers stay on record.
+      const part = (c: 'M' | 'H'): string => {
+        const m = paceMeasured[c];
+        return m
+          ? `${c} đo được ${fmt(m.delta)} (${m.source === 'cross-session' ? 'cross-session' : 'practice'})`
+          : `${c} chưa đo được`;
+      };
+      label = `Practice tại ${race.trackName}: ${part('M')}, ${part('H')} — xếp hạng dùng hằng số model cho cả hai (M ${fmt(FALLBACK_PACE_DELTA.M)} / H ${fmt(FALLBACK_PACE_DELTA.H)})`;
+    } else {
+      const part = (c: 'M' | 'H'): string => {
+        const m = paceMeasured[c];
+        const src = !m ? 'model' : m.source === 'cross-session' ? 'cross-session (ít mẫu)' : 'practice';
+        return `${c} ${fmt(deltas[c as 'M' | 'H'])} (${src})`;
+      };
+      label = `Practice deltas vs Soft: ${part('M')}, ${part('H')} (${practicePace.sessions} session tại ${race.trackName})`;
+    }
+    evidence.push({ source: 'Races_PracticeResults', label });
   }
   if (observed) {
     evidence.push({
@@ -748,14 +841,13 @@ export function buildTyreLab(
     label: `Pit cost ≈ ${pitCostS.toFixed(1)}s (lane ${pitLaneLossS}s + stationary ${PIT_STATIONARY_ESTIMATE}s)`,
   });
 
-  const assumptions: Assumption[] = [];
   if (lifeSource.S === 'model') {
     assumptions.push({
       text: 'Thiếu allocation fresh-set trong save — dùng envelope mô hình (S ≈ 0.51×, M ≈ 0.75×, H ≈ 0.92× quãng đường)',
       fallbackValue: `${lives.S}/${lives.M}/${lives.H} vòng`,
     });
   }
-  if (paceSource.M === 'model') {
+  if (paceSource.M === 'model' && !sameTierFallback) {
     assumptions.push({
       text: 'Không đủ practice sample (≥3 driver/compound/session) — dùng pace delta hằng số mô hình',
       fallbackValue: `M +${FALLBACK_PACE_DELTA.M}s, H +${FALLBACK_PACE_DELTA.H}s vs Soft`,
@@ -796,6 +888,7 @@ export function buildTyreLab(
 
   const warnings: string[] = [];
   if (race.state === 2) warnings.push('RACE_ALREADY_COMPLETED');
+  if (sameTierFallback) warnings.push('SAME_TIER_PACE_FALLBACK');
 
   return {
     data: {
@@ -808,6 +901,8 @@ export function buildTyreLab(
       lifeSource,
       deltas,
       paceSource,
+      paceMeasured,
+      sameTierFallback,
       expectedStops,
       expectedSource,
       strategies: top,
