@@ -30,6 +30,22 @@ describe('cleanStaffName display patches (0.4.1)', () => {
     expect(cleanStaffName('[StaffName_Surname_Conte]')).toBe('Conte');
   });
 
+  it('0.5.3: decodes STRING_LITERAL names before the generic key fallback', () => {
+    // Real-save rows (Staff_BasicData, Bahrain Day 46495): staffId 645/646.
+    // Old code split the key on the STRING_LITERAL underscore and emitted
+    // "LITERAL:Value=|Colton|".
+    expect(cleanStaffName('[STRING_LITERAL:Value=|Colton|]')).toBe('Colton');
+    expect(cleanStaffName('[STRING_LITERAL:Value=|Herta|]')).toBe('Herta');
+    // value may contain spaces
+    expect(cleanStaffName('[STRING_LITERAL:Value=|Fittipaldi Jr.|]')).toBe('Fittipaldi Jr.');
+  });
+
+  it('0.5.3: existing key shapes still decode exactly as before', () => {
+    expect(cleanStaffName('[StaffName_Forename_Male_Lewis]')).toBe('Lewis');
+    expect(cleanStaffName('[StaffName_Surname_OWard]')).toBe("O'Ward");
+    expect(cleanStaffName('[StaffName_Surname_Perez1]')).toBe('Perez');
+  });
+
   it('patch map stays small and documented', () => {
     // Guard rail: patches are a curated display table, not a heuristic.
     expect(Object.keys(STAFF_NAME_DISPLAY_PATCHES).sort()).toEqual([
@@ -79,5 +95,13 @@ describe('cleanDriverCode (v0.5.0 timing tower)', () => {
     expect(cleanDriverCode('')).toBeUndefined();
     expect(cleanDriverCode(null)).toBeUndefined();
     expect(cleanDriverCode(undefined)).toBeUndefined();
+  });
+
+  it('0.5.3: decodes string-literal codes from real saves', () => {
+    // Real-save rows (Staff_DriverData, Bahrain Day 46495): staffId 600+.
+    expect(cleanDriverCode('[STRING_LITERAL:Value=|LLO|]')).toBe('LLO');
+    expect(cleanDriverCode('[STRING_LITERAL:Value=|Owa|]')).toBe('Owa');
+    // existing shapes untouched
+    expect(cleanDriverCode('[DriverCode_Ver]')).toBe('Ver');
   });
 });

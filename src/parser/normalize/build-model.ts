@@ -423,6 +423,15 @@ export const STAFF_NAME_DISPLAY_PATCHES: Record<string, string> = {
  */
 export function cleanStaffName(raw: string): string {
   const token = raw.trim();
+  /* 0.5.3: player-entered / imported names arrive as string literals —
+   * "[STRING_LITERAL:Value=|Colton|]" (real save: Herta 645, Emerson
+   * Fittipaldi Jr. 646, Briatore 5). Must be checked BEFORE the generic
+   * key decode: its "keep the tail segment" fallback splits on the
+   * STRING_LITERAL underscore and emitted "LITERAL:Value=|Colton|". The
+   * captured value is the literal display text and may contain spaces
+   * ("Fittipaldi Jr."). */
+  const literal = token.match(/^\[STRING_LITERAL:Value=\|(.+)\|\]$/);
+  if (literal) return literal[1].trim();
   const m = token.match(/^\[([^\]]+)\]$/);
   if (!m) return token;
   const key = m[1];

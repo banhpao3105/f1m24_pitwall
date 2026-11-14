@@ -65,6 +65,11 @@ export function cleanDriverCode(raw: unknown): string | undefined {
   const m = token.match(/^\[([^\]]+)\]$/);
   if (!m) return token; // plain code ("VER") — already displayable
   const key = m[1];
+  /* 0.5.3: string-literal shape ("[STRING_LITERAL:Value=|LLO|]", real save
+   * staffId 600+) — the DriverCode_ fallback below would otherwise keep
+   * the whole key as garbage. The captured value is the literal code. */
+  const literal = key.match(/^STRING_LITERAL:Value=\|(.+)\|$/);
+  if (literal) return literal[1].trim();
   const tail = key.startsWith('DriverCode_') ? key.slice('DriverCode_'.length) : key;
   const decoded = tail.replace(/\d+$/, ''); // "Mini1" → "Mini" (oracle parity)
   return decoded.length > 0 ? decoded : undefined;
