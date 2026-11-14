@@ -429,3 +429,51 @@ describe('computeOdds + helpers', () => {
     expect(oleDateToYear(44927)).toBe(2023);
   });
 });
+
+/* ── v0.5.4 — lapped cars: lapsDown instead of a nonsense second gap ──────
+ * Real-save bug (Bahrain Day 46507): the raw time deficit of a lapped car
+ * misses ~1 lap-time per lap down, so Sainz P8 (56 laps) showed +7.498s
+ * while Ricciardo P4 (57 laps) showed +63.449s. */
+
+function lappedRace(p2Laps = 57): Race {
+  const rows: RaceResult[] = [
+    result(11, 1, 1, { laps: 57, totalTimeMs: 5_400_000, points: 25 }),
+    result(21, 2, 2, { laps: p2Laps, totalTimeMs: p2Laps === 57 ? 5_402_000 : 5_450_000, points: 18 }),
+    result(31, 3, 3, { laps: 56, totalTimeMs: 5_301_000, points: 15 }),
+    result(41, 1, 4, { laps: 55, totalTimeMs: 5_200_000, points: 12 }),
+  ];
+  return {
+    raceId: 7, seasonId: SEASON, trackId: 10, trackName: 'Track7',
+    day: 70, state: 2, isSprint: false, laps: 57, trackType: 1,
+    results: rows,
+  };
+}
+
+describe('buildGazetteIssue — lapped cars (v0.5.4)', () => {
+  it('shows lapsDown 1 and 2 for lapped cars, keeps the same-lap second gap', () => {
+    const { data } = buildGazetteIssue(makeModel([lappedRace(57)]), 7);
+    const p2 = data.results.find((r) => r.finishPos === 2)!;
+    const p3 = data.results.find((r) => r.finishPos === 3)!;
+    const p4 = data.results.find((r) => r.finishPos === 4)!;
+
+    // same laps as winner → second gap unchanged, no lapsDown
+    expect(p2.gapS).toBeCloseTo(2.0, 6);
+    expect(p2.lapsDown).toBeUndefined();
+    // 1 lap down → lapsDown 1, raw (misleading) gap suppressed
+    expect(p3.lapsDown).toBe(1);
+    expect(p3.gapS).toBeUndefined();
+    // 2 laps down → lapsDown 2
+    expect(p4.lapsDown).toBe(2);
+    expect(p4.gapS).toBeUndefined();
+  });
+
+  it('winner quote keeps its raw-time basis even when P2 is lapped', () => {
+    // P2 lapped (56 laps) with a 50s raw deficit → still 'dominant',
+    // never 'balanced' — identical to pre-0.5.4 behaviour.
+    const { data } = buildGazetteIssue(makeModel([lappedRace(56)]), 7);
+    const p2 = data.results.find((r) => r.finishPos === 2)!;
+    expect(p2.lapsDown).toBe(1);
+    expect(p2.gapS).toBeUndefined();
+    expect(data.quoteSlots.winner.category).toBe('dominant');
+  });
+});

@@ -13,6 +13,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
 import { teamPair } from '@/lib/team-colours';
+import { computeLapsDown, formatLapsDown } from '@/lib/race-gap';
 import { cn } from '@/lib/utils';
 
 export function TimingTower({ model, raceId }: { model: SaveModel; raceId?: number | null }) {
@@ -41,6 +42,7 @@ export function TimingTower({ model, raceId }: { model: SaveModel; raceId?: numb
     source.pitStops ? source.pitStops.filter((p) => p.driverId === driverId).length : null;
 
   const winner = source.results.find((r) => r.finishingPos === 1);
+  const winnerLaps = winner?.laps;
   const rows = [...source.results].sort((a, b) => a.finishingPos - b.finishingPos);
 
   return (
@@ -77,6 +79,10 @@ export function TimingTower({ model, raceId }: { model: SaveModel; raceId?: numb
                 !row.dnf && winner?.totalTimeMs != null && row.totalTimeMs != null
                   ? (row.totalTimeMs - winner.totalTimeMs) / 1000
                   : null;
+              // v0.5.4 fix: a lapped car's raw time deficit understates the
+              // gap by ~1 lap-time per missing lap (Sainz P8 showed +7.5s
+              // while P4 showed +63.4s) — broadcast convention instead.
+              const lapsDown = !row.dnf ? computeLapsDown(row.laps, winnerLaps) : null;
               const pits = pitsOf(row.driverId);
               return (
                 <tr
@@ -112,9 +118,11 @@ export function TimingTower({ model, raceId }: { model: SaveModel; raceId?: numb
                       ? t('dnf')
                       : row.finishingPos === 1
                         ? t('winner')
-                        : gapS != null
-                          ? `+${gapS.toFixed(3)}s`
-                          : '—'}
+                        : lapsDown != null
+                          ? formatLapsDown(lapsDown)
+                          : gapS != null
+                            ? `+${gapS.toFixed(3)}s`
+                            : '—'}
                   </td>
                   <td className="px-2 py-1.5 text-center font-mono text-ink-faint">—</td>
                   <td className="px-2 py-1.5 text-center font-mono text-ink-soft">

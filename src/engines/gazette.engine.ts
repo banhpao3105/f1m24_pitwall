@@ -18,6 +18,9 @@
  *
  * Formulas carried over (oracle references):
  *   - gap:      r.Time − winnerTime (seconds) — now computed from totalTimeMs.
+ *               v0.5.4: a car laps down vs the winner shows lapsDown instead
+ *               (gapS suppressed) — its raw time deficit understates the gap
+ *               by ~1 lap-time per missing lap.
  *   - odds:     OVERROUND 1.15, strength = avgPoints + baseline (team 2.5,
  *               driver 1.2), adjProb = min(prob × 1.15, 0.95),
  *               odds = clamp(1.05..67, 1/adjProb)        (queries.js:10670)
@@ -48,6 +51,7 @@ import type {
   Evidence,
 } from '../domain/provenance';
 import type { EngineResult, Race, SaveModel, StandingRow } from '../domain/types';
+import { computeLapsDown } from '../lib/race-gap';
 
 /* ── Oracle constants (do not change without a verified save diff) ─────── */
 
@@ -79,6 +83,8 @@ export interface GazetteResultRow extends GazettePerson {
   finishPos: number;
   startPos?: number;
   gapS?: number;
+  /** v0.5.4: laps behind the winner when lapped (gapS suppressed then). */
+  lapsDown?: number;
   dnf: boolean;
   points: number;
   laps?: number;
@@ -472,29 +478,46 @@ export function buildGazetteIssue(
     .sort((a, b) => a.day - b.day || a.raceId - b.raceId);
   const round = seasonCalendar.findIndex((r) => r.raceId === race.raceId) + 1;
 
-  /* ── Results + gap (oracle: r.Time − winnerTime) ── */
+  /* ── Results + gap (oracle: r.Time − winnerTime) ──
+   * v0.5.4: lapped cars (fewer laps than the winner) get lapsDown instead of
+   * a second gap — their raw time deficit understates the true gap by
+   * roughly one lap-time per missing lap (Bahrain 2027: Sainz P8 +7.498s
+   * while Ricciardo P4 +63.449s was nonsense). The winner quote (P2 gap)
+   * keeps its raw-time basis via p2RawGapS so its behaviour is unchanged. */
   const results = race.results.slice().sort((a, b) => a.finishingPos - b.finishingPos);
   const winnerRow = results[0];
   const winnerTimeMs = winnerRow?.totalTimeMs;
+  const winnerLaps = winnerRow?.laps;
   const gapsAvailable = results.every((r) => r.totalTimeMs != null || r.dnf);
   const overtakesAvailable = results.some((r) => r.overtakes != null);
-  const resultRows: GazetteResultRow[] = results.map((r) => ({
-    driverId: r.driverId,
-    driverName: r.driverName,
-    teamId: r.teamId,
-    teamName: r.teamName,
-    finishPos: r.finishingPos,
-    startPos: r.startingPos,
-    gapS:
-      r.dnf || !gapsAvailable || winnerTimeMs == null || r.totalTimeMs == null
-        ? undefined
-        : Math.round(((r.totalTimeMs - winnerTimeMs) / 1000) * 1000) / 1000,
-    dnf: r.dnf,
-    points: r.points,
-    laps: r.laps,
-    fastestLapMs: r.fastestLapMs,
-    overtakes: r.overtakes,
-  }));
+  const resultRows: GazetteResultRow[] = results.map((r) => {
+    const lapsDown = r.dnf ? null : computeLapsDown(r.laps, winnerLaps);
+    return {
+      driverId: r.driverId,
+      driverName: r.driverName,
+      teamId: r.teamId,
+      teamName: r.teamName,
+      finishPos: r.finishingPos,
+      startPos: r.startingPos,
+      gapS:
+        r.dnf || !gapsAvailable || winnerTimeMs == null || r.totalTimeMs == null || lapsDown != null
+          ? undefined
+          : Math.round(((r.totalTimeMs - winnerTimeMs) / 1000) * 1000) / 1000,
+      lapsDown: lapsDown ?? undefined,
+      dnf: r.dnf,
+      points: r.points,
+      laps: r.laps,
+      fastestLapMs: r.fastestLapMs,
+      overtakes: r.overtakes,
+    };
+  });
+  // Raw P2 time deficit for the winner quote — the quote keeps its raw-time
+  // basis even when P2 is lapped (gapS suppressed for that row above).
+  const p2Raw = results.find((r) => r.finishingPos === 2);
+  const p2RawGapS =
+    p2Raw && winnerTimeMs != null && p2Raw.totalTimeMs != null
+      ? (p2Raw.totalTimeMs - winnerTimeMs) / 1000
+      : null;
 
   /* ── Aggregates (oracle getRaceAggregates) ── */
   const aggregates: GazetteAggregates = {
@@ -631,7 +654,7 @@ export function buildGazetteIssue(
     : null;
 
   /* ── Deterministic quote slots (oracle quotes.js) ── */
-  const quoteSlots = buildQuoteSlots(race, resultRows);
+  const quoteSlots = buildQuoteSlots(race, resultRows, p2RawGapS);
 
   /* ── Confidence (narrative completeness, docs/00 §1.6 semantics) ── */
   let confidence: Confidence = 'LOW';
@@ -1081,14 +1104,21 @@ function buildTrivia(model: SaveModel, nextRaceRow: Race, cutoff: { day: number;
 }
 
 /** Deterministic quote slots (oracle quotes.js — see header formulas). */
-function buildQuoteSlots(race: Race, resultRows: GazetteResultRow[]): GazetteIssue['quoteSlots'] {
+function buildQuoteSlots(
+  race: Race,
+  resultRows: GazetteResultRow[],
+  p2RawGapS: number | null,
+): GazetteIssue['quoteSlots'] {
   const winner = resultRows.find((r) => r.finishPos === 1);
   if (!winner) {
     return { winner: { category: 'balanced', index: 0 }, random: null };
   }
   // Winner quote: dominant > 10 s, close < 2 s (oracle winnerQuote n:16806).
+  // v0.5.4: gapS is suppressed for lapped rows, so fall back to the raw
+  // time deficit — keeps the quote's behaviour identical to pre-0.5.4
+  // (a lapped P2 is still a dominant race, never 'balanced').
   const p2 = resultRows.find((r) => r.finishPos === 2);
-  const gap = p2?.gapS;
+  const gap = p2?.gapS ?? p2RawGapS;
   const category: WinnerQuoteCategory =
     gap != null && gap > 10 ? 'dominant' : gap != null && gap < 2 ? 'close' : 'balanced';
   const winnerSlot = { category, index: pickIndex(winner.driverId + race.raceId, 3) };

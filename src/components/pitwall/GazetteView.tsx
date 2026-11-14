@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
+import { formatLapsDown } from '@/lib/race-gap';
 import { useGazette } from '@/lib/engine-hooks';
 import { useWallNav } from './WallNav';
 import { ConfidenceBadge } from './ConfidenceBadge';
@@ -48,7 +49,10 @@ function formatLapTime(ms: number | undefined): string {
   return m > 0 ? `${m}:${rest.padStart(6, '0')}` : `${rest}s`;
 }
 
-function formatGap(gapS: number | undefined): string {
+function formatGap(gapS: number | undefined, lapsDown?: number): string {
+  // v0.5.4: lapped cars show the broadcast laps-down convention instead of
+  // a second gap that understates the true deficit (~1 lap per missing lap).
+  if (lapsDown != null) return formatLapsDown(lapsDown);
   if (gapS == null) return '—';
   if (gapS === 0) return 'WIN';
   return `+${gapS.toFixed(3)}s`;
@@ -423,7 +427,7 @@ export function GazetteView({ model, raceId }: { model: SaveModel; raceId: numbe
                       </span>
                     </td>
                     <td className="px-2 py-1.5 text-ink-soft">{r.teamName}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-ink-soft">{formatGap(r.gapS)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-ink-soft">{formatGap(r.gapS, r.lapsDown)}</td>
                     <td className="px-2 py-1.5 text-right font-mono text-ink-soft">
                       {r.overtakes ?? t('noDataCol')}
                     </td>
