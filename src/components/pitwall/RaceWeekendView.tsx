@@ -305,9 +305,16 @@ export function RaceWeekendView({
                           {r.driverName}
                         </span>
                         <span className="ml-auto flex items-center gap-2 font-mono text-[10px] text-ink-faint">
+                          {/* v0.5.5: race-pace delta is the primary number,
+                              fastest-lap delta is the tiebreak (secondary) */}
+                          {r.racePaceDeltaS != null ? (
+                            <span className="text-ink-soft" title={tSim('racePaceDeltaHint')}>
+                              +{r.racePaceDeltaS.toFixed(3)}s
+                            </span>
+                          ) : null}
                           {r.paceDeltaS != null ? (
                             <span title={tSim('paceDeltaHint')}>
-                              +{r.paceDeltaS.toFixed(3)}s
+                              FL +{r.paceDeltaS.toFixed(3)}s
                             </span>
                           ) : null}
                           {r.expectedStops != null ? <span>~{r.expectedStops} pit</span> : null}

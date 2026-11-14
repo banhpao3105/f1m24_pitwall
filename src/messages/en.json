@@ -363,9 +363,9 @@
   },
   "sim": {
     "tab": "Sim",
-    "title": "Quali & Race Sim",
+    "title": "Quali & Race Sim — ranked by average race pace (Time/Laps); fastest lap is the tiebreak",
     "quali": "Quali sim — predicted grid",
-    "race": "Race sim — projected finishing order",
+    "race": "Race sim — ranked by average race pace (Time/Laps) · fastest lap is tiebreak only",
     "samples": "{count} samples",
     "src": {
       "quali": "quali",
@@ -373,7 +373,8 @@
       "practice": "practice",
       "none": "—"
     },
-    "paceDeltaHint": "Median fastest-lap delta vs the session best",
+    "racePaceDeltaHint": "Median average-lap (Time/Laps) delta vs the session best — primary ranking number",
+    "paceDeltaHint": "Median fastest-lap delta vs the session best — tiebreak only",
     "assumptions": "Assumptions & data sources",
     "noData": "Not enough data to run the sim for this race."
   },

@@ -363,9 +363,9 @@
   },
   "sim": {
     "tab": "Sim",
-    "title": "Quali & Race Sim",
+    "title": "Quali & Race Sim — xếp theo pace đua trung bình (Time/Laps); fastest-lap chỉ tiebreak",
     "quali": "Quali sim — thứ tự xuất phát dự kiến",
-    "race": "Race sim — thứ tự về đích dự kiến",
+    "race": "Race sim — xếp theo pace đua trung bình (Time/Laps) · fastest-lap chỉ làm tiebreak",
     "samples": "{count} mẫu",
     "src": {
       "quali": "quali",
@@ -373,7 +373,8 @@
       "practice": "practice",
       "none": "—"
     },
-    "paceDeltaHint": "Median fastest-lap delta vs best của chặng",
+    "racePaceDeltaHint": "Median vòng trung bình (Time/Laps) vs nhanh nhất chặng — số chính để xếp hạng",
+    "paceDeltaHint": "Median fastest-lap delta vs best của chặng — chỉ dùng làm tiebreak",
     "assumptions": "Giả định & nguồn dữ liệu",
     "noData": "Chưa đủ dữ liệu để chạy sim cho chặng này."
   },

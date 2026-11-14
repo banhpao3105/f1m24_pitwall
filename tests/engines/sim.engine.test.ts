@@ -433,6 +433,36 @@ describe('buildSim — race sim ranks by race pace (v0.5.5, verified Bahrain)', 
     expect(rec.why).toContain('Pace đua median +0.493s/vòng (Time/Laps, 3 chặng mẫu)');
     expect(rec.why).toContain('fastest-lap tiebreak +2.230s');
   });
+
+  it('recommendation cites the positions gained in the latest completed race', () => {
+    const rec = sim.recommendations[0];
+    // Bahrain Day 46507: Ricciardo P9→P4 (+5), O'Ward P22→P9 (+13) → +18
+    expect(rec.why).toContain(
+      "Chặng trước leo +18 vị trí (Bahrain: Ricciardo +5, O'Ward +13)",
+    );
+    expect(rec.why).toContain(
+      'mô hình pace đua đã tính tới sức đua đường dài, không chỉ một vòng nhanh nhất',
+    );
+  });
+
+  it('omits the gains sentence when the latest race yields no measurable gains', () => {
+    const races = [
+      ...[1, 2, 3].map((i) => field(makeRace({ raceId: i }))),
+      makeRace({ raceId: 999, state: 1, results: [] }),
+    ];
+    const model = makeModel(races, {
+      standings: {
+        drivers: [],
+        teams: [
+          { position: 1, id: 1, name: 'Player Racing', points: 40 },
+          { position: 2, id: 2, name: 'Rival Racing', points: 30 },
+        ],
+      },
+    });
+    const s = buildSim(model, 999);
+    // field() rows carry no startingPos → nothing measurable to claim
+    expect(s.recommendations[0].why).not.toContain('Chặng trước leo');
+  });
 });
 
 describe('buildSim — race-pace ranking rules (v0.5.5)', () => {

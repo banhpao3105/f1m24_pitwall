@@ -67,8 +67,8 @@ const baseModel: SaveModel = {
   races: [
     race({
       results: [
-        { driverId: 1, driverName: 'Ace Driver', teamId: 1, teamName: 'Player Racing', finishingPos: 1, points: 25, dnf: false, laps: 30 },
-        { driverId: 2, driverName: 'Backup Driver', teamId: 1, teamName: 'Player Racing', finishingPos: 2, points: 18, dnf: false, laps: 30 },
+        { driverId: 1, driverName: 'Ace Driver', teamId: 1, teamName: 'Player Racing', finishingPos: 1, points: 25, dnf: false, laps: 30, fastestLapMs: 90_000, totalTimeMs: 90_000 * 30 },
+        { driverId: 2, driverName: 'Backup Driver', teamId: 1, teamName: 'Player Racing', finishingPos: 2, points: 18, dnf: false, laps: 30, fastestLapMs: 90_400, totalTimeMs: 90_400 * 30 },
       ],
       qualifying: [
         { driverId: 1, driverName: 'Ace Driver', teamId: 1, finishingPos: 1 },
@@ -192,6 +192,19 @@ describe('RaceWeekendView — Sim tab', () => {
     expect(screen.getByTestId('sim-quali')).toBeInTheDocument();
     expect(screen.getByTestId('sim-race')).toBeInTheDocument();
     expect(screen.getByText('Quali sim — thứ tự xuất phát dự kiến')).toBeInTheDocument();
+  });
+
+  it('v0.5.5: names the race-pace metric and shows both deltas per row', () => {
+    render(withI18n(<RaceWeekendView model={baseModel} raceId={2} />));
+    fireEvent.click(screen.getByRole('button', { name: /Sim/ }));
+    // metric named in the panel title AND the race-sim heading
+    expect(
+      screen.getAllByText(/pace đua trung bình \(Time\/Laps\)/).length,
+    ).toBeGreaterThanOrEqual(2);
+    // race-sim rows: race-pace delta primary + fastest-lap delta tiebreak
+    expect(screen.getByText('+0.400s')).toBeInTheDocument();
+    expect(screen.getByText('FL +0.400s')).toBeInTheDocument();
+    expect(screen.getByText('FL +0.000s')).toBeInTheDocument();
   });
 });
 

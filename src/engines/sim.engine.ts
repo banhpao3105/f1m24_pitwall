@@ -388,6 +388,29 @@ export function buildSim(
   }
 
   /* ── recommendations (6-field standard) ───────────────────────────────── */
+  // v0.5.5 step 2 — counter-evidence: positions actually gained by the
+  // player's cars in the latest completed race (startingPos − finishingPos).
+  // The race-pace ranking already accounts for long-run pace; the most
+  // recent finishing reality shows what that pace is worth on track.
+  // Same row rule as the pace engine's counter-evidence (non-DNF,
+  // measurable startingPos). No claim when there is nothing gained.
+  const fmtSigned = (n: number): string => `${n >= 0 ? '+' : ''}${n}`;
+  const latestCompleted = history[0] ?? null;
+  const gainRows = (latestCompleted?.results ?? [])
+    .filter((r) => r.teamId === model.player.teamId && !r.dnf && r.startingPos != null)
+    .map((r) => ({
+      name: r.driverName,
+      gain: (r.startingPos ?? 0) - r.finishingPos,
+      pos: r.finishingPos,
+    }))
+    .sort((a, b) => a.pos - b.pos); // leader first — reads like the tower
+  const totalGain = gainRows.reduce((s, g) => s + g.gain, 0);
+  const gainSentence =
+    latestCompleted && gainRows.length > 0 && totalGain > 0
+      ? ` Chặng trước leo ${fmtSigned(totalGain)} vị trí (${latestCompleted.trackName}: ${gainRows
+          .map((g) => `${g.name} ${fmtSigned(g.gain)}`)
+          .join(', ')}) — mô hình pace đua đã tính tới sức đua đường dài, không chỉ một vòng nhanh nhất.`
+      : '';
   const recommendations: Recommendation[] = [];
   const playerRace = raceRows.find((r) => r.isPlayer) ?? null;
   const rivalTeamIds = new Set(
@@ -418,7 +441,7 @@ export function buildSim(
       action: faster
         ? `Bảo vệ kết quả trước ${nearestRival.driverName} (P${nearestRival.projectedFinish}): theo dõi pit window của họ để phản ứng undercut`
         : `Nhắm vượt ${nearestRival.driverName} (dự kiến P${nearestRival.projectedFinish}, bạn P${playerBest.projectedFinish}): nhấn mạnh cửa sổ pit — xem Tyre Lab để chốt vòng pit`,
-      why: `Pace đua median ${playerBest.racePaceDeltaS != null ? `+${playerBest.racePaceDeltaS.toFixed(3)}s/vòng` : 'n/a'} (Time/Laps, ${playerBest.samples} chặng mẫu); fastest-lap tiebreak ${playerBest.paceDeltaS != null ? `+${playerBest.paceDeltaS.toFixed(3)}s` : 'n/a'}; expected stops ~${expectedStops ?? '?'} (nguồn: ${expectedStopsSource ?? 'n/a'}). Xuất phát dự kiến P${playerBest.predictedStart ?? '?'}.`,
+      why: `Pace đua median ${playerBest.racePaceDeltaS != null ? `+${playerBest.racePaceDeltaS.toFixed(3)}s/vòng` : 'n/a'} (Time/Laps, ${playerBest.samples} chặng mẫu); fastest-lap tiebreak ${playerBest.paceDeltaS != null ? `+${playerBest.paceDeltaS.toFixed(3)}s` : 'n/a'}; expected stops ~${expectedStops ?? '?'} (nguồn: ${expectedStopsSource ?? 'n/a'}). Xuất phát dự kiến P${playerBest.predictedStart ?? '?'}.${gainSentence}`,
       confidence,
       evidence,
       assumptions,
