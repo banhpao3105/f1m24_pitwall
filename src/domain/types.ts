@@ -349,6 +349,10 @@ export interface RegulationChangeRow {
 export interface RegulationProposal {
   proposalId: number;
   title?: string;
+  /** Raw ChangeType value (Regulations_Proposals.ChangeType). */
+  changeType?: number;
+  /** Display name resolved from Regulations_Enum_ChangeType (0.5.3). */
+  changeTypeLabel?: string;
   state?: number;
   seasonId?: number;
   votes: RegulationVoteRow[];

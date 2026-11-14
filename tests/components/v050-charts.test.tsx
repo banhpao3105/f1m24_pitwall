@@ -103,10 +103,10 @@ describe('DegCurveChart', () => {
 describe('CarLabCharts', () => {
   it('league chart shows inverted pace-rank labels in pace fallback', () => {
     const rows: CarLeagueRow[] = [
-      { teamId: 1, teamName: 'Alpha', score: null, rank: 1, isPlayer: false },
-      { teamId: 2, teamName: 'Player Racing', score: null, rank: 2, isPlayer: true },
+      { teamId: 1, teamName: 'Alpha', rank: 1, isPlayer: false },
+      { teamId: 2, teamName: 'Player Racing', rank: 2, isPlayer: true },
     ];
-    const { getByTestId, getAllByText } = render(withI18n(<CarLeagueChart rows={rows} source="pace" />));
+    const { getByTestId, getAllByText } = render(withI18n(<CarLeagueChart rows={rows} />));
     expect(getByTestId('car-league-chart')).toBeInTheDocument();
     expect(getAllByText('P1').length).toBeGreaterThan(0);
     expect(getAllByText('P2').length).toBeGreaterThan(0);

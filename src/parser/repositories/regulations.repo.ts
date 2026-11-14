@@ -21,6 +21,7 @@ import type {
   RegulationVoteRow,
   RegulationChangeRow,
 } from '../../domain/types';
+import { getPartTypeLabels } from './parts.repo';
 
 const PROPOSALS_TABLE = 'Regulations_Proposals';
 const VOTES_TABLE = 'Regulations_TeamVotes';
@@ -32,6 +33,7 @@ const PROPOSAL_CANDIDATES: Record<string, string[]> = {
   seasonId: ['SeasonID'],
   state: ['State', 'ProposalState', 'Status'],
   title: ['Title', 'Name', 'Description'],
+  changeType: ['ChangeType', 'ChangeTypeID'],
 };
 
 const VOTE_CANDIDATES: Record<string, string[]> = {
@@ -57,6 +59,109 @@ export interface RawRegulations {
     votes: boolean;
     changeGroups: boolean;
   };
+}
+
+/**
+ * 0.5.3 — resolve change-group IDs into readable labels from the save's
+ * own regulation content tables. F1M24 has NO textual group names (the
+ * old fallback emitted bare "group 18, group 19" and Research showed three
+ * identical cards). Labels are composed from measured rows only:
+ *   SweepingReductions      → "Giảm toàn diện N%"
+ *   TypeReductions          → "Giảm N% {PartType}" (Parts_Enum_Type names)
+ *   StatReductions          → "Giảm N% trên {k} chỉ số xe" (per distinct pct)
+ *   TypeStatComboReductions → "Giảm N% {PartType} (combo)"
+ *   NonTechnical            → "Luật phi kỹ thuật (quy tắc #R): value"
+ * Groups with no content rows anywhere degrade to an explicit
+ * "chi tiết không có trong save" note — never a bare "group N".
+ */
+function resolveGroupLabels(db: SqlJsDatabase): Map<number, string> {
+  const typeLabels = getPartTypeLabels(db);
+  const partName = (raw: number | null | undefined): string =>
+    raw != null ? (typeLabels.get(raw) ?? `phần #${raw}`) : 'phần ?';
+  const pct = (v: number): number => Math.round(v * 100);
+
+  const pieces = new Map<number, string[]>();
+  const push = (groupId: number | null | undefined, piece: string): void => {
+    if (groupId == null) return;
+    const list = pieces.get(groupId) ?? [];
+    list.push(piece);
+    pieces.set(groupId, list);
+  };
+  const read = (table: string, need: string[]): { rows: unknown[][]; idx: Record<string, number> } | null => {
+    const t = readTable(db, table);
+    if (!t.present) return null;
+    const idx: Record<string, number> = {};
+    for (const c of need) idx[c] = colIndex(t.columns, c);
+    for (const c of need) if (idx[c] < 0) return null;
+    return { rows: t.rows, idx };
+  };
+
+  const sweep = read('Regulations_Technical_SweepingReductions', ['GroupID', 'SweepingReduction']);
+  if (sweep) {
+    for (const row of sweep.rows) {
+      push(readNum(row, sweep.idx.GroupID), `Giảm toàn diện ${pct(readNum(row, sweep.idx.SweepingReduction) ?? 0)}%`);
+    }
+  }
+  const type = read('Regulations_Technical_TypeReductions', ['GroupID', 'PartType', 'TypeReduction']);
+  if (type) {
+    for (const row of type.rows) {
+      push(
+        readNum(row, type.idx.GroupID),
+        `Giảm ${pct(readNum(row, type.idx.TypeReduction) ?? 0)}% ${partName(readNum(row, type.idx.PartType))}`,
+      );
+    }
+  }
+  const combo = read('Regulations_Technical_TypeStatComboReductions', ['GroupID', 'PartType', 'PartStat', 'ComboReduction']);
+  if (combo) {
+    const seen = new Set<string>();
+    for (const row of combo.rows) {
+      const groupId = readNum(row, combo.idx.GroupID);
+      const p = partName(readNum(row, combo.idx.PartType));
+      const key = `${groupId}:${p}`;
+      if (seen.has(key)) continue; // one piece per part across its stats
+      seen.add(key);
+      push(groupId, `Giảm ${pct(readNum(row, combo.idx.ComboReduction) ?? 0)}% ${p} (combo)`);
+    }
+  }
+  const stat = read('Regulations_Technical_StatReductions', ['GroupID', 'StatReduction']);
+  if (stat) {
+    // group stats by reduction percentage: "Giảm 30% trên 3 chỉ số xe"
+    const byGroupPct = new Map<number, Map<number, number>>();
+    for (const row of stat.rows) {
+      const groupId = readNum(row, stat.idx.GroupID);
+      const p = pct(readNum(row, stat.idx.StatReduction) ?? 0);
+      if (groupId == null) continue;
+      const m = byGroupPct.get(groupId) ?? new Map<number, number>();
+      m.set(p, (m.get(p) ?? 0) + 1);
+      byGroupPct.set(groupId, m);
+    }
+    for (const [groupId, byPct] of byGroupPct) {
+      for (const [p, count] of [...byPct.entries()].sort((a, b) => b[0] - a[0])) {
+        push(groupId, `Giảm ${p}% trên ${count} chỉ số xe`);
+      }
+    }
+  }
+  const nontech = read('Regulations_NonTechnical', ['GroupID', 'Regulation', 'Value']);
+  if (nontech) {
+    for (const row of nontech.rows) {
+      const groupId = readNum(row, nontech.idx.GroupID);
+      const rule = readNum(row, nontech.idx.Regulation);
+      const value = readNum(row, nontech.idx.Value);
+      if (groupId == null || rule == null) continue;
+      const shown =
+        value != null && Math.abs(value) >= 1_000_000
+          ? `${Math.round(value / 100_000) / 10}M`
+          : `biến thể ${value ?? '?'}`;
+      push(groupId, `Luật phi kỹ thuật (quy tắc #${rule}): ${shown}`);
+    }
+  }
+
+  const labels = new Map<number, string>();
+  for (const [groupId, list] of pieces) {
+    const deduped = [...new Set(list)];
+    if (deduped.length > 0) labels.set(groupId, deduped.join(' + '));
+  }
+  return labels;
 }
 
 export function getRegulations(db: SqlJsDatabase): RawRegulations {
@@ -92,6 +197,23 @@ export function getRegulations(db: SqlJsDatabase): RawRegulations {
       labelByGroup.set(groupId, lIdx >= 0 ? readStr(row, lIdx) : undefined);
     }
   }
+  /* 0.5.3: content-derived labels (technical/non-technical tables) fill in
+   * whenever the raw group table carries no readable name (the norm on real
+   * saves). ChangeType names from the save's own enum table. */
+  const resolvedLabels = resolveGroupLabels(db);
+  const changeTypeNames = new Map<number, string>();
+  const ctEnum = readTable(db, 'Regulations_Enum_ChangeType');
+  if (ctEnum.present) {
+    const vIdx = colIndex(ctEnum.columns, 'Value');
+    const nIdx = colIndex(ctEnum.columns, 'Name');
+    if (vIdx >= 0 && nIdx >= 0) {
+      for (const row of ctEnum.rows) {
+        const v = readNum(row, vIdx);
+        const n = readStr(row, nIdx);
+        if (v != null && n != null && !changeTypeNames.has(v)) changeTypeNames.set(v, n);
+      }
+    }
+  }
 
   const propGroups = readTable(db, PROPOSAL_GROUPS_TABLE);
   const pgMap = buildColumnMap(propGroups.columns, PROPOSAL_GROUP_CANDIDATES);
@@ -115,11 +237,22 @@ export function getRegulations(db: SqlJsDatabase): RawRegulations {
         const proposalId = readNum(row, idIdx);
         if (proposalId == null) return [];
         const changes: RegulationChangeRow[] = (groupsByProposal.get(proposalId) ?? []).map(
-          (groupId) => ({ groupId, label: labelByGroup.get(groupId) }),
+          (groupId) => ({
+            groupId,
+            label:
+              labelByGroup.get(groupId) ??
+              resolvedLabels.get(groupId) ??
+              `Nhóm thay đổi #${groupId} (chi tiết không có trong save)`,
+          }),
         );
+        const changeType = pMap.changeType
+          ? readNum(row, colIndex(prop.columns, pMap.changeType))
+          : undefined;
         return [
           {
             proposalId,
+            changeType,
+            changeTypeLabel: changeType != null ? changeTypeNames.get(changeType) : undefined,
             seasonId: readNum(row, colIndex(prop.columns, pMap.seasonId)),
             state: readNum(row, colIndex(prop.columns, pMap.state)),
             title: pMap.title

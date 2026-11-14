@@ -81,7 +81,7 @@ export function CarLabView({ model }: { model: SaveModel }) {
           <span className="font-mono text-[11px] uppercase tracking-wider text-amber">{tSec('league')}</span>
           <h3 className="text-[15px] font-semibold text-ink">{t('league')}</h3>
           <span className="rounded bg-raised px-1.5 py-0.5 font-mono text-[9px] uppercase text-ink-faint">
-            {league.source === 'designs' ? t('leagueByDesigns') : t('leagueByPace')}
+            {t('leagueByPace')}
           </span>
         </header>
         <ul className="space-y-1 sm:hidden">
@@ -100,14 +100,14 @@ export function CarLabView({ model }: { model: SaveModel }) {
                 {row.teamName}
               </span>
               <span className="ml-auto font-mono text-ink-soft">
-                {row.score != null ? `${row.score} ${t('pts')}` : row.rank ? `P${row.rank}` : '—'}
+                {row.rank ? `P${row.rank}` : '—'}
               </span>
             </li>
           ))}
         </ul>
         {/* v0.5.0 step 2: real bars on ≥sm — list above stays for tiny screens */}
         <div className="hidden sm:block">
-          <CarLeagueChart rows={league.rows} source={league.source} model={model} />
+          <CarLeagueChart rows={league.rows} model={model} />
         </div>
       </section>
 

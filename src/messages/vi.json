@@ -113,7 +113,6 @@
       "noLeague": "Chưa có dữ liệu league.",
       "noCondition": "Chưa có dữ liệu condition.",
       "rankInverted": "thanh dài = nhanh hơn",
-      "byDesigns": "Chiều thanh = design points (Parts_Designs).",
       "byPace": "Chiều thanh = vị trí pace đảo ngược (dài = nhanh hơn) — nguồn: pace engine.",
       "watchLine": "WATCH 70%",
       "parts": "part"
@@ -193,7 +192,6 @@
       "season": "Tiến độ mùa",
       "tyreRec": "Khuyến nghị lốp",
       "carRank": "Xếp hạng xe",
-      "carByDesigns": "theo design points",
       "carByPace": "theo pace",
       "heldPos": "giữ P{pos}",
       "posBefore": "P{pos} trước {track}"
@@ -419,7 +417,6 @@
   "cars": {
     "title": "Car Lab — xe, durability, dev queue",
     "league": "League xe",
-    "leagueByDesigns": "theo design points",
     "leagueByPace": "fallback theo pace",
     "pts": "điểm",
     "durability": "Durability — condition & rủi ro hỏng",

@@ -51,7 +51,10 @@ function raceWithPace(): Race {
 }
 
 describe('buildCarLab — league', () => {
-  it('ranks teams by total design points when mapped', () => {
+  it('0.5.3: league is always the pace board — no design-points source, no score field', () => {
+    // The F1M24 schema has NO design-points column (verified 1.11.0) and
+    // Parts_Designs_StatValues sums are not comparable across teams, so the
+    // points concept was dropped (option b) instead of emitting score: null.
     const model = makeModel({
       parts: {
         ...emptyPhase2Sections().parts,
@@ -62,11 +65,16 @@ describe('buildCarLab — league', () => {
         ],
         tablesPresent: { designs: true, items: false, statValues: false, loadouts: false, expertise: false },
       },
+      races: [raceWithPace()],
     });
     const lab = buildCarLab(model);
-    expect(lab.data.league.source).toBe('designs');
-    expect(lab.data.league.rows[0]).toMatchObject({ teamId: 1, score: 150, rank: 1, isPlayer: true });
-    expect(lab.data.league.rows[1]).toMatchObject({ teamId: 2, score: 90, rank: 2 });
+    expect(lab.data.league.source).toBe('pace');
+    expect(lab.data.league.rows[0].isPlayer).toBe(true);
+    for (const row of lab.data.league.rows) {
+      expect('score' in row).toBe(false); // no fake-null score in the output
+      expect(row.rank).toBeGreaterThan(0);
+    }
+    expect(lab.evidence.some((e) => e.source.includes('pace board'))).toBe(true);
   });
 
   it('falls back to pace league and labels the source', () => {
@@ -74,7 +82,7 @@ describe('buildCarLab — league', () => {
     const lab = buildCarLab(model);
     expect(lab.data.league.source).toBe('pace');
     expect(lab.data.league.rows[0].isPlayer).toBe(true);
-    expect(lab.evidence.some((e) => e.source.includes('pace fallback'))).toBe(true);
+    expect(lab.evidence.some((e) => e.source.includes('pace board'))).toBe(true);
   });
 });
 

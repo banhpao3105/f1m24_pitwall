@@ -4,9 +4,9 @@
  * Question: "Xe tôi mạnh/yếu ở đâu? Nâng cấp gì tiếp? Part nào sắp hỏng?"
  *
  * Data reality (Phase 2): Parts_* columns are CANDIDATE-level (adaptive
- * repos). The engine therefore reports what actually mapped and degrades
- * league table to the pace board when design points are unavailable —
- * with the source labelled, never a silent fallback.
+ * repos). Since 0.5.3 the league is always the pace board — the F1M24
+ * schema has no design-points column and StatValues sums are not
+ * comparable across teams; the source is labelled, never a silent fallback.
  *
  * Model constants (documented, not oracle):
  *   DURABILITY_RISK thresholds on normalized condition (0..1):
@@ -30,8 +30,7 @@ export type RiskLevel = 'LOW' | 'WATCH' | 'HIGH' | 'UNKNOWN';
 export interface CarLeagueRow {
   teamId: number;
   teamName: string;
-  /** Design points total (designs source) or null for pace fallback. */
-  score: number | null;
+  /** Pace rank from the pace board (1 = fastest). */
   rank: number | null;
   isPlayer: boolean;
 }
@@ -57,7 +56,11 @@ export interface DevQueueRow {
 }
 
 export interface CarLab {
-  league: { rows: CarLeagueRow[]; source: 'designs' | 'pace' };
+  /* 0.5.3: source is always 'pace' — the F1M24 schema has no design-points
+   * column (verified 1.11.0) and Parts_Designs_StatValues sums are not
+   * comparable across teams (different stat sets per team), so the design
+   * points concept was dropped instead of showing a fake-null score. */
+  league: { rows: CarLeagueRow[]; source: 'pace' };
   parts: PartConditionRow[];
   devQueue: DevQueueRow[];
   hasPartsData: boolean;
@@ -79,36 +82,12 @@ function riskOf(condition: number | null): RiskLevel {
   return 'LOW';
 }
 
-/** Design points league: total points per team from mapped designs. */
-function designLeague(model: SaveModel): CarLeagueRow[] | null {
-  const byTeam = new Map<number, number>();
-  for (const d of model.parts.designs) {
-    if (d.teamId == null || d.points == null) continue;
-    byTeam.set(d.teamId, (byTeam.get(d.teamId) ?? 0) + d.points);
-  }
-  if (byTeam.size === 0) return null;
-  const teamName = (id: number): string =>
-    model.teams.find((t) => t.teamId === id)?.teamName ?? `Team ${id}`;
-  const rows = [...byTeam.entries()].map(([teamId, score]) => ({
-    teamId,
-    teamName: teamName(teamId),
-    score,
-    rank: 0,
-    isPlayer: teamId === model.player.teamId,
-  }));
-  rows.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-  rows.forEach((r, i) => {
-    r.rank = i + 1;
-  });
-  return rows;
-}
-
+/** Pace league — the only league (0.5.3: the points concept is gone). */
 function paceLeague(model: SaveModel): CarLeagueRow[] {
   const pace = buildPaceBoard(model);
   return pace.data.rows.map((r) => ({
     teamId: r.teamId,
     teamName: r.teamName,
-    score: null,
     rank: r.rank,
     isPlayer: r.isPlayer,
   }));
@@ -187,9 +166,7 @@ function devQueue(model: SaveModel): DevQueueRow[] {
 }
 
 export function buildCarLab(model: SaveModel): EngineResult<CarLab> {
-  const dLeague = designLeague(model);
-  const league = dLeague ?? paceLeague(model);
-  const leagueSource: 'designs' | 'pace' = dLeague ? 'designs' : 'pace';
+  const league = paceLeague(model);
   const parts = partConditions(model);
   const queue = devQueue(model);
 
@@ -206,17 +183,10 @@ export function buildCarLab(model: SaveModel): EngineResult<CarLab> {
         : 'LOW';
 
   const evidence: Evidence[] = [];
-  if (dLeague) {
-    evidence.push({
-      source: 'Parts_Designs.Points',
-      label: `League xe xếp theo tổng design points của ${dLeague.length} đội (cột Points đã map)`,
-    });
-  } else {
-    evidence.push({
-      source: 'Races_Results.FastestLap (pace fallback)',
-      label: 'Thiếu design points — league xe tạm xếp theo pace board (ghi rõ ở UI)',
-    });
-  }
+  evidence.push({
+    source: 'Races_Results.FastestLap (pace board)',
+    label: `League xe xếp theo pace board (${league.length} đội) — schema F1M24 không có cột điểm thiết kế (đã verify 1.11.0), tổng StatValues không so sánh được giữa các đội`,
+  });
   if (model.parts.tablesPresent.items) {
     evidence.push({
       source: 'Parts_Items.Condition',
@@ -314,7 +284,7 @@ export function buildCarLab(model: SaveModel): EngineResult<CarLab> {
 
   return {
     data: {
-      league: { rows: league, source: leagueSource },
+      league: { rows: league, source: 'pace' },
       parts,
       devQueue: queue,
       hasPartsData,

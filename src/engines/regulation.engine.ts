@@ -22,6 +22,8 @@ import { computeExpertiseBank, type ExpertiseBankRow } from './finance.engine';
 export interface ProposalView {
   proposalId: number;
   title: string | null;
+  /** Display name of the proposal kind (Regulations_Enum_ChangeType, 0.5.3). */
+  changeTypeLabel: string | null;
   /** Raw state value from the save (semantics not verified). */
   state: number | null;
   seasonId: number | null;
@@ -62,13 +64,19 @@ export function buildRegulations(model: SaveModel): EngineResult<RegulationBoard
     return {
       proposalId: p.proposalId,
       title: p.title ?? null,
+      changeTypeLabel: p.changeTypeLabel ?? null,
       state: p.state ?? null,
       seasonId: p.seasonId ?? null,
       yes,
       no,
       unknownVotes,
       playerVote,
-      changes: p.changes.map((c) => c.label ?? `group ${c.groupId ?? '?'}`),
+      /* 0.5.3: the repo resolves group labels from the save's regulation
+       * content tables; this fallback stays as a last resort and never
+       * emits a bare "group N" identifier. */
+      changes: p.changes.map((c) =>
+        c.label ?? `Nhóm thay đổi ${c.groupId ?? '?'} (không có chi tiết trong save)`,
+      ),
     };
   });
 
@@ -134,7 +142,7 @@ export function buildRegulations(model: SaveModel): EngineResult<RegulationBoard
     const majorityYes = p.yes > totalVotes / 2;
     recommendations.push({
       id: `regulation-vote-${p.proposalId}`,
-      title: `Đề xuất #${p.proposalId}${p.title ? ` — ${p.title}` : ''}`,
+      title: `Đề xuất #${p.proposalId}${p.title ? ` — ${p.title}` : p.changeTypeLabel ? ` — ${p.changeTypeLabel}` : ''}`,
       action:
         p.playerVote != null
           ? `Đội bạn đã vote (${p.playerVote}) — theo dõi tally tới deadline`

@@ -113,7 +113,6 @@
       "noLeague": "No league data yet.",
       "noCondition": "No condition data yet.",
       "rankInverted": "longer bar = faster",
-      "byDesigns": "Bar length = design points (Parts_Designs).",
       "byPace": "Bar length = inverted pace rank (long = faster) — source: pace engine.",
       "watchLine": "WATCH 70%",
       "parts": "parts"
@@ -193,7 +192,6 @@
       "season": "Season progress",
       "tyreRec": "Tyre recommendation",
       "carRank": "Car rank",
-      "carByDesigns": "by design points",
       "carByPace": "by pace",
       "heldPos": "held P{pos}",
       "posBefore": "P{pos} before {track}"
@@ -419,7 +417,6 @@
   "cars": {
     "title": "Car Lab — car, durability, dev queue",
     "league": "Car league",
-    "leagueByDesigns": "by design points",
     "leagueByPace": "pace fallback",
     "pts": "pts",
     "durability": "Durability — condition & failure risk",

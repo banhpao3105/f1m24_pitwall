@@ -245,6 +245,39 @@ describe('buildRegulations', () => {
     expect(rec?.action).not.toContain('trên median');
   });
 
+  it('0.5.3: titles fall back to the ChangeType name and never bare "group N"', () => {
+    // Real-save shape: proposals carry no Title — the card title must use
+    // the save's own ChangeType name and the why must show resolved group
+    // content instead of "group 18, group 19".
+    const model = makeModel({
+      regulations: [
+        {
+          proposalId: 4,
+          changeType: 0,
+          changeTypeLabel: 'MinorTechnical',
+          seasonId: 2027,
+          votes: [],
+          changes: [{ groupId: 1, label: 'Giảm 30% trên 3 chỉ số xe' }],
+        },
+        {
+          proposalId: 5,
+          changeType: 3,
+          changeTypeLabel: 'Sporting',
+          seasonId: 2027,
+          votes: [],
+          changes: [{ groupId: 99 }],
+        },
+      ],
+    });
+    const regs = buildRegulations(model);
+    const r4 = regs.recommendations.find((r) => r.id === 'regulation-vote-4');
+    expect(r4?.title).toBe('Đề xuất #4 — MinorTechnical');
+    const r5 = regs.recommendations.find((r) => r.id === 'regulation-vote-5');
+    expect(r5?.title).toBe('Đề xuất #5 — Sporting');
+    expect(r5?.why).toContain('Nhóm thay đổi 99 (không có chi tiết trong save)');
+    expect(r5?.why).not.toMatch(/group \d/);
+  });
+
   it('degrades when no proposals exist', () => {
     const regs = buildRegulations(makeModel());
     expect(regs.warnings).toContain('REGULATION_DATA_UNAVAILABLE');

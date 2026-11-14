@@ -2,10 +2,10 @@
 
 /**
  * Car Lab charts — v0.5.0 Step 2 (prompt §2 Bước 2).
- *   CarLeagueChart: horizontal bars, one per team. Designs source → bar =
- *   design points (engine `score`). Pace fallback → bar length is the
+ *   CarLeagueChart: horizontal bars, one per team. Bar length is the
  *   inverted pace rank (longest = fastest) — a visual transform of the
- *   engine rank, labelled explicitly, never a made-up score.
+ *   engine rank, labelled explicitly, never a made-up score (0.5.3: the
+ *   design-points source no longer exists).
  *   PartConditionChart: condition average per part group with the WATCH
  *   threshold (car.engine DURABILITY_RISK_WATCH_BELOW = 0.7) as a vertical
  *   reference line; worst group sorts first.
@@ -30,11 +30,9 @@ import { CHART_COLORS, TICK_STYLE, useChartAnimation } from './chart-theme';
 
 export function CarLeagueChart({
   rows,
-  source,
   model,
 }: {
   rows: CarLeagueRow[];
-  source: 'designs' | 'pace';
   /** Team identity (v0.5.0 step 3) — real liveries when available. */
   model?: SaveModel;
 }) {
@@ -48,8 +46,8 @@ export function CarLeagueChart({
   const total = rows.length;
   const data = rows.map((r) => ({
     ...r,
-    // designs: bar = real score. pace: bar = inverted rank (visual only).
-    value: source === 'designs' ? (r.score ?? 0) : total + 1 - (r.rank ?? total),
+    // bar = inverted rank (visual only) — never a made-up score.
+    value: total + 1 - (r.rank ?? total),
   }));
   // Player first visually? Keep board order (rank ascending) — fastest top.
   const ordered = [...data].sort((a, b) => b.value - a.value).reverse();
@@ -76,9 +74,7 @@ export function CarLeagueChart({
                 <div className="rounded-md border border-line bg-surface px-3 py-2 text-xs shadow-lg">
                   <p className="font-medium text-ink">{row.teamName}</p>
                   <p className="mt-1 font-mono text-[11px] text-ink-soft">
-                    {source === 'designs'
-                      ? `${row.score ?? 0} pts`
-                      : `P${row.rank ?? '—'} · ${t('rankInverted')}`}
+                    {`P${row.rank ?? '—'} · ${t('rankInverted')}`}
                   </p>
                 </div>
               );
@@ -104,18 +100,14 @@ export function CarLeagueChart({
             <LabelList
               dataKey="value"
               position="right"
-              formatter={(value: number) => {
-                if (source === 'designs') return `${value}`;
-                const rank = total + 1 - value;
-                return `P${rank}`;
-              }}
+              formatter={(value: number) => `P${total + 1 - value}`}
               style={{ fill: '#92a3b7', fontSize: 10, fontFamily: 'var(--font-jetbrains-mono), monospace' }}
             />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
       <p className="mt-1 text-[10px] text-ink-faint">
-        {source === 'designs' ? t('byDesigns') : t('byPace')}
+        {t('byPace')}
       </p>
     </div>
   );

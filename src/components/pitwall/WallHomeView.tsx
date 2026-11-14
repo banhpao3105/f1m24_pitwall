@@ -115,7 +115,7 @@ export function WallHomeView({ model }: { model: SaveModel }) {
       ) : (
         '—'
       ),
-      sub: carLab?.data.league.source === 'designs' ? t('kpi.carByDesigns') : t('kpi.carByPace'),
+      sub: t('kpi.carByPace'),
     },
   ];
 

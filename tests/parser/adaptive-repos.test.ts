@@ -270,6 +270,54 @@ describe('getRegulations', () => {
     expect(regs.proposals).toEqual([]);
     expect(regs.tablesPresent.proposals).toBe(false);
   });
+
+  it('0.5.3: resolves group labels from content tables + ChangeType names (real-save shape)', () => {
+    // Real 1.11.0 schema: no Title/State on proposals, no textual group
+    // names — labels must come from the technical/non-technical tables.
+    const db = dbFrom([
+      `CREATE TABLE Regulations_Proposals (ProposalID INTEGER, ChangeType INTEGER, VoteDay INTEGER, TargetSeason INTEGER);`,
+      `INSERT INTO Regulations_Proposals VALUES (1, 1, 46015, 2026);`, // MajorTechnical
+      `INSERT INTO Regulations_Proposals VALUES (2, 3, 46118, 2027);`, // Sporting
+      `CREATE TABLE Regulations_Proposals_ChangeGroups (ProposalID INTEGER, GroupID INTEGER, State INTEGER);`,
+      `INSERT INTO Regulations_Proposals_ChangeGroups VALUES (1, 18, 2);`,
+      `INSERT INTO Regulations_Proposals_ChangeGroups VALUES (2, 40, 2);`,
+      `CREATE TABLE Regulations_Enum_ChangeType (Value INTEGER, Name TEXT);`,
+      `INSERT INTO Regulations_Enum_ChangeType VALUES (1, 'MajorTechnical');`,
+      `INSERT INTO Regulations_Enum_ChangeType VALUES (3, 'Sporting');`,
+      `CREATE TABLE Parts_Enum_Type (Value INTEGER, Name TEXT);`,
+      `INSERT INTO Parts_Enum_Type VALUES (5, 'RearWing');`,
+      `CREATE TABLE Regulations_Technical_SweepingReductions (GroupID INTEGER, SweepingReduction REAL);`,
+      `INSERT INTO Regulations_Technical_SweepingReductions VALUES (18, 0.5);`,
+      `CREATE TABLE Regulations_Technical_TypeReductions (GroupID INTEGER, PartType INTEGER, TypeReduction REAL);`,
+      `INSERT INTO Regulations_Technical_TypeReductions VALUES (18, 5, 0.7);`,
+      `CREATE TABLE Regulations_NonTechnical (GroupID INTEGER, Regulation INTEGER, Value REAL);`,
+      `INSERT INTO Regulations_NonTechnical VALUES (40, 6, 4);`,
+    ]);
+    const regs = getRegulations(db);
+    expect(regs.proposals).toHaveLength(2);
+    const p1 = regs.proposals.find((p) => p.proposalId === 1)!;
+    expect(p1.changeType).toBe(1);
+    expect(p1.changeTypeLabel).toBe('MajorTechnical');
+    expect(p1.changes[0].label).toBe('Giảm toàn diện 50% + Giảm 70% RearWing');
+    const p2 = regs.proposals.find((p) => p.proposalId === 2)!;
+    expect(p2.changeTypeLabel).toBe('Sporting');
+    expect(p2.changes[0].label).toBe('Luật phi kỹ thuật (quy tắc #6): biến thể 4');
+    // no bare "group N" anywhere
+    for (const p of regs.proposals) {
+      for (const c of p.changes) expect(c.label).not.toMatch(/^group \d+/);
+    }
+  });
+
+  it('0.5.3: groups without content rows degrade to an explicit note, never bare "group N"', () => {
+    const db = dbFrom([
+      `CREATE TABLE Regulations_Proposals (ProposalID INTEGER, ChangeType INTEGER);`,
+      `INSERT INTO Regulations_Proposals VALUES (7, 0);`,
+      `CREATE TABLE Regulations_Proposals_ChangeGroups (ProposalID INTEGER, GroupID INTEGER);`,
+      `INSERT INTO Regulations_Proposals_ChangeGroups VALUES (7, 99);`,
+    ]);
+    const regs = getRegulations(db);
+    expect(regs.proposals[0].changes[0].label).toBe('Nhóm thay đổi #99 (chi tiết không có trong save)');
+  });
 });
 
 /* ── qualifying ──────────────────────────────────────────────────────────── */
