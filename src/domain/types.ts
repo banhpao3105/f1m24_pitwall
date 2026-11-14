@@ -177,6 +177,12 @@ export interface TyreAllocation {
   frontLeftWear: number;
   availabilityState: number;
   estimatedLapLifeRemaining?: number;
+  /**
+   * Game's own fresh-lap-time estimate in seconds (EstimatedLapTime column,
+   * v0.6.1 — identical across cars for the same compound on verified saves).
+   * Feeds the allocation pace cross-check when practice deltas are unusable.
+   */
+  estimatedLapTimeS?: number;
 }
 
 /* ── Phase 2 sections — schema-adaptive (docs/01 §4.3 degradation) ────────

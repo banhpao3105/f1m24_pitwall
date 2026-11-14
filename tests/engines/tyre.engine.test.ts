@@ -13,10 +13,16 @@ import {
   getObservedStops,
   getPracticePace,
   getCompoundCaps,
+  getAllocationPace,
   type TyreLab,
 } from '@/engines/tyre.engine';
 import type { SaveModel, Race, PracticeResult, TyreAllocation } from '@/domain/types';
 import { emptyPhase2Sections } from '../helpers/model';
+import {
+  buildSilverstoneModel,
+  SILVERSTONE_RACE_ID,
+  SILVERSTONE_LAPS,
+} from '../helpers/silverstone-fixture';
 
 /* ── helpers to build a minimal SaveModel ────────────────────────────────── */
 
@@ -562,5 +568,117 @@ describe('v0.5.1 track-correction prior (P2, local IndexedDB)', () => {
     expect(lab.warnings).not.toContain('PLAN_BELOW_FIELD_STOPS_PRIOR');
     // the prior is still on the record as evidence
     expect(lab.evidence.some((e) => e.source.includes('track-corrections'))).toBe(true);
+  });
+});
+
+/* ── v0.6.1 step 1: a forced delta never masquerades as a measurement ──────
+ * Silverstone 2027 (race 199, 52 laps): practice noise measured H (+0.606
+ * raw, Russell long-run) faster than M (+0.711). The old engine silently
+ * forced H to M+0.15 = +0.861 while STILL labelling it "practice" — the
+ * evidence lied. Now: paceSource.H becomes 'allocation' (the game's own
+ * EstimatedLapTime estimate) or 'clamped' (forced, labelled), and the raw
+ * value stays on the record. */
+
+describe('v0.6.1 getAllocationPace (EstimatedLapTime)', () => {
+  it('derives game-nominal deltas from fresh sets: S 88.91 / M +0.57 / H +0.89', () => {
+    const pace = getAllocationPace(buildSilverstoneModel());
+    expect(pace).not.toBeNull();
+    expect(pace!.lapTime).toEqual({ S: 88.91, M: 89.48, H: 89.8 });
+    expect(pace!.deltas).toEqual({ S: 0, M: 0.57, H: 0.89 });
+    expect(pace!.samples).toEqual({ S: 3, M: 3, H: 3 });
+  });
+
+  it('returns null when any dry compound lacks a fresh EstimatedLapTime', () => {
+    expect(getAllocationPace(buildSilverstoneModel({ withoutEstimatedLapTime: true }))).toBeNull();
+  });
+});
+
+describe('v0.6.1 getPracticePace raw + clamped flags (Silverstone)', () => {
+  it('records the raw +0.606 H delta and flags the monotonic clamp', () => {
+    const model = buildSilverstoneModel();
+    const pace = getPracticePace(model, 210);
+    expect(pace).not.toBeNull();
+    expect(pace!.sessions).toBe(1);
+    expect(pace!.rawDeltas.M).toBeCloseTo(0.711, 3);
+    expect(pace!.rawDeltas.H).toBeCloseTo(0.606, 3);
+    expect(pace!.clamped.H).toBe(true);
+    // the ranking value is the forced M+0.15 — but no longer labelled raw
+    expect(pace!.deltas.H).toBeCloseTo(0.861, 3);
+  });
+
+  it('does not flag the clamp when H is honestly slower than M (Suzuka)', () => {
+    const model = makeModel([makeRace({ trackId: 17, state: 0, practice: suzukaPracticeRows() })]);
+    const pace = getPracticePace(model, 17);
+    expect(pace!.clamped.H).toBe(false);
+    expect(pace!.clamped.M).toBe(false);
+    expect(pace!.rawDeltas.H).toBeCloseTo(pace!.deltas.H as number, 6);
+  });
+});
+
+describe('v0.6.1 buildTyreLab — Silverstone forced-delta honesty', () => {
+  it('ranks H by the allocation estimate and keeps the raw +0.606 on record', () => {
+    const lab = buildTyreLab(buildSilverstoneModel(), SILVERSTONE_RACE_ID);
+    const data: TyreLab = lab.data;
+
+    // lives straight from the save's allocation
+    expect(data.lives).toEqual({ S: 23, M: 35, H: 53 });
+    expect(data.lifeSource).toEqual({ S: 'allocation', M: 'allocation', H: 'allocation' });
+    expect(data.practiceSessions).toBe(1);
+
+    // M keeps its honest practice measurement
+    expect(data.deltas.M).toBeCloseTo(0.71, 2);
+    expect(data.paceSource.M).toBe('practice');
+    expect(data.paceMeasured.M).toEqual({ delta: expect.closeTo(0.711, 3), source: 'session' });
+
+    // H: the forced value is replaced by the game's own estimate
+    expect(data.paceSource.H).toBe('allocation');
+    expect(data.deltas.H).toBeGreaterThanOrEqual(0.85);
+    expect(data.deltas.H).toBeLessThanOrEqual(0.9);
+    expect(data.paceMeasured.H).toEqual({
+      delta: expect.closeTo(0.606, 3),
+      source: 'session',
+      rawDelta: expect.closeTo(0.606, 3),
+    });
+
+    // the evidence tells the truth: raw value + forced source, never "(practice)"
+    const paceEvidence = lab.evidence.find((e) => e.source === 'Races_PracticeResults');
+    expect(paceEvidence).toBeDefined();
+    expect(paceEvidence!.label).toContain('+0.606');
+    expect(paceEvidence!.label).toContain('allocation');
+    expect(paceEvidence!.label).toContain('không dùng được');
+    expect(paceEvidence!.label).not.toMatch(/H \+0\.\d+s \(practice\)/);
+    expect(lab.assumptions.some((a) => a.text.includes('allocation của game'))).toBe(true);
+    expect(lab.warnings).toContain('PACE_DELTA_FORCED');
+    expect(lab.confidence).not.toBe('HIGH');
+  });
+
+  it("falls back to the labelled 'clamped' value when no allocation estimate exists", () => {
+    const lab = buildTyreLab(
+      buildSilverstoneModel({ withoutEstimatedLapTime: true }),
+      SILVERSTONE_RACE_ID,
+    );
+    const data: TyreLab = lab.data;
+    expect(data.paceSource.H).toBe('clamped');
+    expect(data.deltas.H).toBeCloseTo(0.86, 2); // the forced M + 0.15
+    expect(data.paceMeasured.H).toEqual({
+      delta: expect.closeTo(0.606, 3),
+      source: 'session',
+      rawDelta: expect.closeTo(0.606, 3),
+    });
+    const paceEvidence = lab.evidence.find((e) => e.source === 'Races_PracticeResults');
+    expect(paceEvidence!.label).toContain('+0.606');
+    expect(paceEvidence!.label).toContain('(model —');
+    expect(paceEvidence!.label).not.toMatch(/H \+0\.\d+s \(practice\)/);
+    expect(lab.warnings).toContain('PACE_DELTA_FORCED');
+  });
+
+  it('leaves honest measurements untouched (Suzuka H 1.76 stays practice-ranked)', () => {
+    const target = makeRace({
+      raceId: 302, trackId: 17, trackName: 'Suzuka', state: 0, laps: 53,
+      practice: suzukaPracticeRows(),
+    });
+    const lab = buildTyreLab(makeModel([target], { tyres: allocLives25_38_58() }), 302);
+    expect(lab.data.paceSource.H).toBe('cross-session');
+    expect(lab.warnings).not.toContain('PACE_DELTA_FORCED');
   });
 });

@@ -150,7 +150,7 @@ export function getObservedStops(
 export type PaceMeasurement = 'session' | 'cross-session';
 
 export interface PracticePace {
-  /** Seconds per lap vs Soft. */
+  /** Seconds per lap vs Soft (post sanity-clamp — the RANKING values). */
   deltas: { S: 0; M: number | null; H: number | null };
   sessions: number;
   /**
@@ -159,6 +159,15 @@ export interface PracticePace {
    * Drives the evidence clock (v0.5.1) and the same-tier ranking rule.
    */
   measured: { M: PaceMeasurement | null; H: PaceMeasurement | null };
+  /**
+   * v0.6.1: the RAW measured deltas BEFORE the sanity/monotonic clamps.
+   * When the monotonic rule forces H above M (practice noise — Silverstone
+   * 2027: raw H +0.606 < M +0.711), the forced value must never masquerade
+   * as a measurement: the raw value stays visible and the flag records it.
+   */
+  rawDeltas: { M: number | null; H: number | null };
+  /** True when the sanity/monotonic clamp changed that compound's delta. */
+  clamped: { M: boolean; H: boolean };
 }
 
 /**
@@ -229,6 +238,8 @@ export function getPracticePace(model: SaveModel, trackId: number): PracticePace
   const measured: { M: PaceMeasurement | null; H: PaceMeasurement | null } = {
     M: null, H: null,
   };
+  /* v0.6.1: keep the pre-clamp values for the honesty record. */
+  const rawDeltas: { M: number | null; H: number | null } = { M: null, H: null };
   if (sessionCount > 0) {
     const mSM = median(gapsSM);
     const mMH = median(gapsMH);
@@ -254,13 +265,21 @@ export function getPracticePace(model: SaveModel, trackId: number): PracticePace
   }
 
   if (deltas.M == null && deltas.H == null) return null;
-  // Sanity: positive, bounded, monotonic (oracle clamps).
+  // Sanity: positive, bounded, monotonic (oracle clamps). v0.6.1: the raw
+  // values are recorded first and any clamp is flagged — a forced delta is
+  // a MODEL opinion, not a measurement, and must never be labelled one.
+  rawDeltas.M = deltas.M;
+  rawDeltas.H = deltas.H;
   if (deltas.M != null) deltas.M = clamp(deltas.M, 0.05, 2.5);
   if (deltas.H != null) {
     deltas.H = clamp(deltas.H, 0.1, 3.5);
     if (deltas.M != null && deltas.H <= deltas.M) deltas.H = deltas.M + 0.15;
   }
-  return { deltas, sessions: sessionCount, measured };
+  const clamped = {
+    M: deltas.M != null && rawDeltas.M != null && deltas.M !== rawDeltas.M,
+    H: deltas.H != null && rawDeltas.H != null && deltas.H !== rawDeltas.H,
+  };
+  return { deltas, sessions: sessionCount, measured, rawDeltas, clamped };
 }
 
 export interface TrackHistory {
@@ -310,6 +329,59 @@ export function getCompoundCaps(model: SaveModel): Record<Compound, number> | nu
   caps.M = Math.max(caps.M, caps.S);
   caps.H = Math.max(caps.H, caps.M);
   return caps;
+}
+
+/* ── allocation pace cross-check (v0.6.1) ────────────────────────────────── */
+
+export interface AllocationPace {
+  /** Median EstimatedLapTime per compound (seconds, fresh sets). */
+  lapTime: Record<Compound, number>;
+  /** Deltas vs Soft derived from the game's own estimates. */
+  deltas: Record<Compound, number>;
+  /** Fresh sets with an EstimatedLapTime, per compound (median inputs). */
+  samples: Record<Compound, number>;
+}
+
+/**
+ * The game's own pace estimate from Save_CarTyreAllocation.EstimatedLapTime
+ * (fresh sets). Verified on the Silverstone 2027 save: the values are the
+ * game's nominal per-compound lap times, identical across cars
+ * (S 88.91 / M 89.48 / H 89.80 → +0.57 / +0.89 vs Soft). Used ONLY when the
+ * practice measurement is unusable (monotonic clamp forced H above M) — it
+ * replaces the forced number with the game's own estimate, clearly labelled
+ * 'allocation'. Returns null unless all three dry compounds have fresh sets
+ * with a positive lap time.
+ */
+export function getAllocationPace(model: SaveModel): AllocationPace | null {
+  const byType: Record<number, number[]> = { 2: [], 3: [], 4: [] };
+  for (const set of model.tyres) {
+    if (
+      set.frontLeftWear >= 0.99 &&
+      set.estimatedLapTimeS != null &&
+      set.estimatedLapTimeS > 0 &&
+      set.weekendTyreType in byType
+    ) {
+      byType[set.weekendTyreType].push(set.estimatedLapTimeS);
+    }
+  }
+  const lapTime: Partial<Record<Compound, number>> = {};
+  const samples: Partial<Record<Compound, number>> = {};
+  for (const [type, c] of [[2, 'S'], [3, 'M'], [4, 'H']] as const) {
+    const m = median(byType[type]);
+    if (m == null) return null;
+    lapTime[c as Compound] = m;
+    samples[c as Compound] = byType[type].length;
+  }
+  const s = lapTime.S!;
+  return {
+    lapTime: lapTime as Record<Compound, number>,
+    deltas: {
+      S: 0,
+      M: Math.round((lapTime.M! - s) * 100) / 100,
+      H: Math.round((lapTime.H! - s) * 100) / 100,
+    },
+    samples: samples as Record<Compound, number>,
+  };
 }
 
 /* ── strategy optimizer (oracle port) ───────────────────────────────────── */
@@ -565,6 +637,12 @@ export function buildWetPlan(model: SaveModel, laps: number): WetPlanResult | nu
 export interface PaceMeasuredEntry {
   delta: number;
   source: PaceMeasurement;
+  /**
+   * v0.6.1: the raw pre-clamp value when a monotonic clamp replaced the
+   * measurement (Silverstone 2027: raw +0.606 forced to +0.861). Present
+   * only when the ranked value is NOT the raw measurement.
+   */
+  rawDelta?: number;
 }
 
 /**
@@ -627,7 +705,10 @@ export interface TyreLab {
   lifeSource: Record<Compound, 'allocation' | 'model'>;
   deltas: Record<Compound, number>;
   /** Source used for RANKING (after the same-tier rule). */
-  paceSource: Record<Compound, 'practice' | 'cross-session' | 'model' | 'baseline'>;
+  paceSource: Record<
+    Compound,
+    'practice' | 'cross-session' | 'model' | 'baseline' | 'clamped' | 'allocation'
+  >;
   /** Practice-measured values with their measurement tier (evidence clock). */
   paceMeasured: { M: PaceMeasuredEntry | null; H: PaceMeasuredEntry | null };
   /** True when the same-tier rule ranked model constants for both M and H. */
@@ -760,19 +841,26 @@ export function buildTyreLab(
   const assumptions: Assumption[] = [];
   const practicePace = getPracticePace(model, race.trackId);
   const deltas: Record<Compound, number> = { S: 0, M: FALLBACK_PACE_DELTA.M, H: FALLBACK_PACE_DELTA.H };
-  const paceSource: Record<Compound, 'practice' | 'cross-session' | 'model' | 'baseline'> = {
-    S: 'baseline', M: 'model', H: 'model',
-  };
+  const paceSource: Record<
+    Compound,
+    'practice' | 'cross-session' | 'model' | 'baseline' | 'clamped' | 'allocation'
+  > = { S: 'baseline', M: 'model', H: 'model' };
   /** Measured values kept visible even when the same-tier rule overrides them. */
   const paceMeasured: { M: PaceMeasuredEntry | null; H: PaceMeasuredEntry | null } = {
     M: null, H: null,
   };
   if (practicePace) {
     for (const c of ['M', 'H'] as const) {
-      const d = practicePace.deltas[c];
       const src = practicePace.measured[c];
-      if (d != null && src != null) {
-        paceMeasured[c] = { delta: d, source: src };
+      if (src != null && practicePace.rawDeltas[c] != null) {
+        /* v0.6.1: paceMeasured always carries the RAW measured value; when a
+           monotonic clamp replaced it, rawDelta records the same pre-clamp
+           number explicitly so the UI can show both sides. */
+        paceMeasured[c] = {
+          delta: practicePace.rawDeltas[c]!,
+          source: src,
+          ...(practicePace.clamped[c] ? { rawDelta: practicePace.rawDeltas[c]! } : {}),
+        };
       }
     }
   }
@@ -781,6 +869,13 @@ export function buildTyreLab(
      the model constants rank for BOTH (fair comparison), the measured values
      stay visible in the evidence, and the assumption says why. */
   const sameTierFallback = (paceMeasured.M != null) !== (paceMeasured.H != null);
+  /* v0.6.1: a monotonic clamp (practice noise — H measured faster than M,
+     Silverstone 2027) must never masquerade as a measurement. The ranking
+     delta switches to the game's own allocation estimate when available
+     ('allocation'), otherwise the forced value stays but is labelled
+     'clamped'. The raw measurement stays visible either way. */
+  const allocPace = getAllocationPace(model);
+  const hForced = practicePace?.clamped.H === true && !sameTierFallback;
   if (sameTierFallback) {
     const unmeasured = paceMeasured.M == null ? 'M' : 'H';
     assumptions.push({
@@ -792,9 +887,26 @@ export function buildTyreLab(
       deltas.M = Math.round(paceMeasured.M.delta * 100) / 100;
       paceSource.M = paceMeasured.M.source === 'cross-session' ? 'cross-session' : 'practice';
     }
-    if (paceMeasured.H) {
+    if (paceMeasured.H && !hForced) {
       deltas.H = Math.round(paceMeasured.H.delta * 100) / 100;
       paceSource.H = paceMeasured.H.source === 'cross-session' ? 'cross-session' : 'practice';
+    }
+    if (paceMeasured.H && hForced) {
+      if (allocPace) {
+        deltas.H = allocPace.deltas.H;
+        paceSource.H = 'allocation';
+        assumptions.push({
+          text: `Practice đo được H (+${paceMeasured.H.delta.toFixed(3)}s) nhanh hơn M nên không dùng được (nhiễu — mỗi tay đua chỉ chạy 1 hợp chất) — xếp hạng H bằng ước tính allocation của game (${allocPace.lapTime.S.toFixed(2)} / ${allocPace.lapTime.M.toFixed(2)} / ${allocPace.lapTime.H.toFixed(2)}s)`,
+          fallbackValue: `H +${allocPace.deltas.H}s vs Soft (giá trị thô +${paceMeasured.H.delta.toFixed(3)}s)`,
+        });
+      } else {
+        deltas.H = Math.round(practicePace!.deltas.H! * 100) / 100;
+        paceSource.H = 'clamped';
+        assumptions.push({
+          text: `Practice đo được H (+${paceMeasured.H.delta.toFixed(3)}s) nhanh hơn M nên không dùng được (nhiễu) — giữ quy tắc đơn điệu H = M + 0.15s, ghi rõ đây là giá trị model không phải số đo`,
+          fallbackValue: `H +${deltas.H}s vs Soft (giá trị thô +${paceMeasured.H.delta.toFixed(3)}s)`,
+        });
+      }
     }
   }
 
@@ -950,6 +1062,13 @@ export function buildTyreLab(
       const part = (c: 'M' | 'H'): string => {
         const m = paceMeasured[c];
         const src = !m ? 'model' : m.source === 'cross-session' ? 'cross-session (ít mẫu)' : 'practice';
+        /* v0.6.1: a forced H delta is labelled for what it is — model or
+           allocation — never "(practice)"; the raw measurement stays on
+           record for comparison. */
+        if (c === 'H' && m && (paceSource.H === 'clamped' || paceSource.H === 'allocation')) {
+          const forcedSource = paceSource.H === 'allocation' ? 'allocation' : 'model';
+          return `${c} ${fmt(deltas.H)} (${forcedSource} — practice đo được H nhanh hơn M nên không dùng được; giá trị thô +${m.delta.toFixed(3)}s)`;
+        }
         return `${c} ${fmt(deltas[c as 'M' | 'H'])} (${src})`;
       };
       label = `Practice deltas vs Soft: ${part('M')}, ${part('H')} (${practicePace.sessions} session tại ${race.trackName})`;
@@ -1020,6 +1139,9 @@ export function buildTyreLab(
 
   if (race.state === 2) warnings.push('RACE_ALREADY_COMPLETED');
   if (sameTierFallback) warnings.push('SAME_TIER_PACE_FALLBACK');
+  if (paceSource.H === 'clamped' || paceSource.H === 'allocation') {
+    warnings.push('PACE_DELTA_FORCED');
+  }
 
   return {
     data: {

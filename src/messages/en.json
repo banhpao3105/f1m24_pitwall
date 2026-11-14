@@ -320,7 +320,8 @@
       "practice": "practice",
       "meta": "meta",
       "baseline": "baseline",
-      "cross-session": "cross-session"
+      "cross-session": "cross-session",
+      "clamped": "model (forced)"
     },
     "clock": {
       "title": "Evidence clock",
@@ -328,6 +329,7 @@
       "stops": "field stops",
       "noData": "none",
       "measuredBut": "measured +{delta}s — ranked as model",
+      "measuredButForced": "measured +{delta}s — forced, ranked as {source}",
       "unmeasuredWarn": "Ranking uses the model constant for both {compounds} because {unmeasured} is not measured at this track (measured: {measured}) — treat as an estimate.",
       "prior": "Last time at {track}: plan {stops} stops (pit lap {lap}), the field ran {field} stops/driver."
     },

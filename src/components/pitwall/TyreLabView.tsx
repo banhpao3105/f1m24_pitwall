@@ -248,6 +248,16 @@ export function TyreLabView({
                         {t('clock.measuredBut', { delta: measured.delta.toFixed(2) })}
                       </span>
                     ) : null}
+                    {/* v0.6.1: a forced delta is never silent — the chip shows
+                        the raw measurement beside the clamped/allocation rank */}
+                    {measured && (src === 'clamped' || src === 'allocation') ? (
+                      <span className="font-mono text-[10px] text-amber">
+                        {t('clock.measuredButForced', {
+                          delta: measured.delta.toFixed(2),
+                          source: src === 'allocation' ? t('source.allocation') : t('source.model'),
+                        })}
+                      </span>
+                    ) : null}
                   </div>
                 );
               })}

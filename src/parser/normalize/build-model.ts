@@ -371,6 +371,7 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
       frontLeftWear: t.frontLeftWear,
       availabilityState: t.availabilityState,
       estimatedLapLifeRemaining: t.estimatedLapLifeRemaining,
+      estimatedLapTimeS: t.estimatedLapTimeS,
     })),
     parts: partsModel,
     regulations: regulationsModel.proposals,

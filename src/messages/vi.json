@@ -320,7 +320,8 @@
       "practice": "practice",
       "meta": "meta",
       "baseline": "baseline",
-      "cross-session": "cross-session"
+      "cross-session": "cross-session",
+      "clamped": "model (ép)"
     },
     "clock": {
       "title": "Đồng hồ bằng chứng",
@@ -328,6 +329,7 @@
       "stops": "pit cả giải",
       "noData": "chưa có",
       "measuredBut": "đo được +{delta}s — xếp hạng bằng model",
+      "measuredButForced": "đo được +{delta}s — bị ép, xếp hạng bằng {source}",
       "unmeasuredWarn": "Xếp hạng đang dùng hằng số model cho cả {compounds} vì {unmeasured} chưa đo được ở track này (đã đo được: {measured}) — coi như ước lượng.",
       "prior": "Lần trước tại {track}: plan {stops} pit (pit vòng {lap}), cả giải chạy {field} pit/driver."
     },
