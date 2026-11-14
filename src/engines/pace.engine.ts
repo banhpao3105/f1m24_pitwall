@@ -28,6 +28,7 @@
 import type { Confidence, Evidence, Assumption, Recommendation } from '../domain/provenance';
 import type { EngineResult } from '../domain/types';
 import type { SaveModel } from '../domain/types';
+import { buildResultsBoard } from './results.engine';
 
 export const RIVAL_PACE_TOLERANCE_S = 0.5;
 export const TREND_RACES = 6;
@@ -203,6 +204,59 @@ function assembleTeamBoard(
   };
 }
 
+/**
+ * v0.5.6 — the results-board counter-story for a pace recommendation.
+ *
+ * The pace gap says the car; the results board says the scoreboard. The
+ * sentence always states the facts in the direction the numbers actually go
+ * (rival better → the sentence says so), never only when it flatters the
+ * player. Format (prompt v0.5.6 step 2):
+ *   "Pace đua (vòng trung bình) chậm hơn Alpine 0.105s/vòng, nhưng trên kết
+ *    quả bạn hơn: đối đầu thắng 5–1 (5/6 chặng), hơn 40 điểm (51 vs 11),
+ *    DNF 1 vs 5."
+ * Returns null when the rival has no results row/head-to-head in the window.
+ */
+function headToHeadSentence(
+  model: SaveModel,
+  options: PaceBoardOptions,
+  rivalTeamId: number,
+  rivalName: string,
+  paceGapS: number, // player − rival, seconds (positive = player slower)
+  metricLabel: string,
+): string | null {
+  const results = buildResultsBoard(model, options);
+  const playerRow = results.data.rows.find((r) => r.isPlayer);
+  const rivalRow = results.data.rows.find((r) => r.teamId === rivalTeamId);
+  const h2h = rivalRow?.headToHead;
+  if (!playerRow || !rivalRow || !h2h) return null;
+  const counted = h2h.wins + h2h.losses;
+  if (counted === 0) return null;
+
+  const slower = paceGapS > 0;
+  const paceClause = `${metricLabel} ${slower ? 'chậm hơn' : 'nhanh hơn'} ${rivalName} ${Math.abs(paceGapS).toFixed(3)}s/vòng`;
+  const p = playerRow.points;
+  const q = rivalRow.points;
+  const ahead = p > q;
+  const behind = p < q;
+  const gap = Math.abs(p - q);
+  let resultsClause: string;
+  if (ahead) {
+    resultsClause =
+      `trên kết quả bạn hơn: đối đầu thắng ${h2h.wins}–${h2h.losses} (${h2h.wins}/${counted} chặng),` +
+      ` hơn ${gap} điểm (${p} vs ${q}), DNF ${playerRow.dnfCount} vs ${rivalRow.dnfCount}`;
+  } else if (behind) {
+    resultsClause =
+      `trên kết quả bạn kém: đối đầu thắng ${h2h.wins}–${h2h.losses} (${h2h.wins}/${counted} chặng),` +
+      ` kém ${gap} điểm (${p} vs ${q}), DNF ${playerRow.dnfCount} vs ${rivalRow.dnfCount}`;
+  } else {
+    resultsClause =
+      `kết quả ngang: đối đầu ${h2h.wins}–${h2h.losses} (${counted} chặng),` +
+      ` điểm ngang (${p} vs ${q}), DNF ${playerRow.dnfCount} vs ${rivalRow.dnfCount}`;
+  }
+  const connector = ahead || behind ? (slower === ahead ? 'nhưng' : 'và') : 'và';
+  return `${paceClause}, ${connector} ${resultsClause}.`;
+}
+
 /** Latest-first completed races of the current season, capped to the window. */
 function completedRacesWindow(model: SaveModel, maxRaces: number) {
   return model.races
@@ -260,6 +314,10 @@ export function buildPaceBoard(
    * shows a bare peak-pace verdict. Peak NUMBERS stay untouched. */
   const racePace = buildRacePaceBoard(model, options);
   const racePlayerRow = racePace.data.rows.find((r) => r.isPlayer) ?? null;
+  const h2hPeak =
+    rivalRef && playerVsRivalS != null
+      ? headToHeadSentence(model, options, rivalRef.teamId, rivalRef.teamName, playerVsRivalS, 'Pace đỉnh (fastest lap)')
+      : null;
   const latestRace = completed[0] ?? null;
   const fmtSigned = (n: number): string => `${n >= 0 ? '+' : ''}${n}`;
   const gainRows = (latestRace?.results ?? [])
@@ -331,7 +389,7 @@ export function buildPaceBoard(
       action: slower
         ? `Ưu tiên thu hẹp gap pace với ${rivalRef.teamName} (xếp hạng pace đỉnh #${playerRow.rank} trên ${rows.length} đội) trước kỳ nâng cấp tiếp theo`
         : `Giữ lợi thế pace trước ${rivalRef.teamName}; tập trung nguồn lực vào mặt trận yếu hơn (pit, tyre preservation)`,
-      why: `Median gap ${core.usableRaces} chặng gần nhất = ${playerVsRivalS > 0 ? '+' : ''}${playerVsRivalS.toFixed(3)}s/vòng${trendS != null ? `; xu hướng ${trendS < 0 ? 'đang thu hẹp' : 'đang mở rộng'} ${Math.abs(trendS).toFixed(3)}s so với nửa trước giai đoạn` : ''}. Đối thủ trực tiếp xác định theo standings (trên/dưới 1 bậc) + pace trong ±${RIVAL_PACE_TOLERANCE_S}s.${counterEvidence ? ` ${counterEvidence}.` : ''}`,
+      why: `Median gap ${core.usableRaces} chặng gần nhất = ${playerVsRivalS > 0 ? '+' : ''}${playerVsRivalS.toFixed(3)}s/vòng${trendS != null ? `; xu hướng ${trendS < 0 ? 'đang thu hẹp' : 'đang mở rộng'} ${Math.abs(trendS).toFixed(3)}s so với nửa trước giai đoạn` : ''}. Đối thủ trực tiếp xác định theo standings (trên/dưới 1 bậc) + pace trong ±${RIVAL_PACE_TOLERANCE_S}s.${counterEvidence ? ` ${counterEvidence}.` : ''}${h2hPeak ? ` ${h2hPeak}` : ''}`,
       confidence,
       evidence,
       assumptions,
@@ -429,6 +487,10 @@ export function buildRacePaceBoard(
 
   /* confidence — capped at MEDIUM: avg-lap proxy, no per-lap data yet */
   const confidence: Confidence = core.usableRaces >= 3 ? 'MEDIUM' : 'LOW';
+  const h2hRace =
+    rivalRef && playerVsRivalS != null
+      ? headToHeadSentence(model, options, rivalRef.teamId, rivalRef.teamName, playerVsRivalS, 'Pace đua (vòng trung bình)')
+      : null;
 
   const evidence: Evidence[] = [];
   if (playerRow && rivalRef) {
@@ -463,7 +525,7 @@ export function buildRacePaceBoard(
       action: slower
         ? `So sánh hạng pace đua #${playerRow.rank}/${rows.length} với hạng pace đỉnh khi đánh giá xe — vòng đua đường dài mới là điều kiện đua thật`
         : `Giữ lợi thế pace đua trước ${rivalRef.teamName}; pace đỉnh chỉ phản ánh một vòng push`,
-      why: `Median gap ${core.usableRaces} chặng gần nhất = ${playerVsRivalS > 0 ? '+' : ''}${playerVsRivalS.toFixed(3)}s/vòng${trendS != null ? `; xu hướng ${trendS < 0 ? 'đang thu hẹp' : 'đang mở rộng'} ${Math.abs(trendS).toFixed(3)}s so với nửa trước giai đoạn` : ''}. ${RACE_PACE_PIT_LAP_ASSUMPTION}.`,
+      why: `Median gap ${core.usableRaces} chặng gần nhất = ${playerVsRivalS > 0 ? '+' : ''}${playerVsRivalS.toFixed(3)}s/vòng${trendS != null ? `; xu hướng ${trendS < 0 ? 'đang thu hẹp' : 'đang mở rộng'} ${Math.abs(trendS).toFixed(3)}s so với nửa trước giai đoạn` : ''}. ${RACE_PACE_PIT_LAP_ASSUMPTION}.${h2hRace ? ` ${h2hRace}` : ''}`,
       confidence,
       evidence,
       assumptions,

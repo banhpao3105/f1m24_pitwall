@@ -9,6 +9,7 @@
 import { useMemo } from 'react';
 import { buildTyreLab, type TyreLab, type TyreLabOptions } from '@/engines/tyre.engine';
 import { buildPaceBoard, buildRacePaceBoard, type PaceBoard } from '@/engines/pace.engine';
+import { buildResultsBoard, type ResultsBoard } from '@/engines/results.engine';
 import { buildSim, type SimBoard, type SimOptions } from '@/engines/sim.engine';
 import { buildCarLab, type CarLab } from '@/engines/car.engine';
 import { buildFinance, type FinanceBoard } from '@/engines/finance.engine';
@@ -51,6 +52,15 @@ export function useRacePaceBoard(): EngineResult<PaceBoard> | null {
   return useMemo(() => {
     if (!model) return null;
     return buildRacePaceBoard(model);
+  }, [model]);
+}
+
+/** v0.5.6 — race results board (points, median best finish, DNF, gained, h2h). */
+export function useResultsBoard(): EngineResult<ResultsBoard> | null {
+  const model = useSaveStore((s) => s.model);
+  return useMemo(() => {
+    if (!model) return null;
+    return buildResultsBoard(model);
   }, [model]);
 }
 

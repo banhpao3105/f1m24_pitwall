@@ -142,7 +142,8 @@
     "standings": "STANDINGS",
     "data": "RACE DATA",
     "evidence": "EVIDENCE",
-    "game": "GAME PLAN"
+    "game": "GAME PLAN",
+    "results": "RESULTS"
   },
   "pitbar": {
     "optimalLabel": "Pit tối ưu: vòng {lap} (cửa sổ {lo}–{hi})",
@@ -359,6 +360,19 @@
     "schematic": {
       "label": "Sơ đồ minh họa",
       "generic": "Sơ đồ tổng quát — track chưa có hình chuẩn"
+    },
+    "results": {
+      "title": "Sức mạnh thực chiến",
+      "window": "{count} chặng gần nhất",
+      "colRank": "#",
+      "colTeam": "Đội",
+      "colPoints": "Điểm",
+      "colPerRace": "Đ/chặng",
+      "colMedian": "Median best finish",
+      "colDnf": "DNF",
+      "colGained": "Leo vị trí",
+      "colH2h": "Đối đầu vs bạn",
+      "assumptions": "Giả định & nguồn dữ liệu"
     }
   },
   "sim": {

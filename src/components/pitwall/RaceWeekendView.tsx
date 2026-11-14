@@ -12,12 +12,13 @@ import { useState } from 'react';
 import { Flag, CloudRain, Thermometer, CircleAlert, Gauge, Timer } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
-import { useTyreLab, usePaceBoard, useRacePaceBoard, useSim } from '@/lib/engine-hooks';
+import { useTyreLab, usePaceBoard, useRacePaceBoard, useResultsBoard, useSim } from '@/lib/engine-hooks';
 import { StintTimeline } from './StintTimeline';
 import { PitWindowBar } from './PitWindowBar';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { CompoundBadge, type CompoundKey } from './CompoundBadge';
 import { RecommendationCard } from './RecommendationCard';
+import { ResultsBoardCard } from './ResultsBoard';
 import { PaceBarChart } from './charts/PaceBarChart';
 import { TimingTower } from './TimingTower';
 import { TrackSchematic } from './TrackSchematic';
@@ -45,6 +46,7 @@ export function RaceWeekendView({
   const tyre = useTyreLab(race?.raceId ?? null);
   const pace = usePaceBoard();
   const racePace = useRacePaceBoard();
+  const results = useResultsBoard();
   const sim = useSim(race?.raceId ?? null);
 
   if (!race) {
@@ -218,12 +220,23 @@ export function RaceWeekendView({
             </section>
           ) : null}
 
-          {/* v0.5.4 — the peak-pace rec carries race pace + gains as
-              counter-evidence (engine-composed); render it here so the
-              full story is visible next to the boards. */}
-          {pace && pace.recommendations.length > 0 ? (
+          {/* v0.5.6 — real-race results board right after the pace boards:
+              the scoreboard story next to the car story. No new route/tab. */}
+          {results && results.data.rows.length > 0 ? (
+            <ResultsBoardCard board={results} model={model} />
+          ) : null}
+
+          {/* v0.5.4/v0.5.6 — pace recs carry race pace + gains + the
+              results-board head-to-head as counter-evidence (engine-composed).
+              Both boards' recommendations render here so neither story is
+              hidden. */}
+          {(pace && pace.recommendations.length > 0) ||
+          (racePace && racePace.recommendations.length > 0) ? (
             <section aria-label={t('recs')} className="space-y-3" data-testid="race-pace-recs">
-              {pace.recommendations.map((rec) => (
+              {pace?.recommendations.map((rec) => (
+                <RecommendationCard key={rec.id} recommendation={rec} />
+              ))}
+              {racePace?.recommendations.map((rec) => (
                 <RecommendationCard key={rec.id} recommendation={rec} />
               ))}
             </section>

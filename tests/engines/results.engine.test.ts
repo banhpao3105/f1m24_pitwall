@@ -209,3 +209,73 @@ describe('buildResultsBoard — window, confidence and degradation', () => {
     expect(aston).toBeLessThan(alfa);
   });
 });
+/* ── v0.5.6 step 2 — pace recommendations carry the results story ─────────
+ * On this fixture the pace boards' reference rival is Alpine for both boards:
+ * race pace  CU +0.575s vs AL +0.470s (closest), peak pace CU +0.700s vs
+ * AL +0.620s (closest). The sentence must quote the same team as rivalRef.
+ */
+
+describe('v0.5.6 — pace recommendations quote the head-to-head story', () => {
+  const model = buildMiamiModel();
+
+  it('race-pace recommendation: slower pace, better results → "nhưng"', () => {
+    const result = buildRacePaceBoard(model);
+    expect(result.data.rivalRef?.teamName).toBe('Alpine');
+    expect(result.data.playerVsRivalS).toBeCloseTo(0.105, 9);
+    const rec = result.recommendations[0];
+    expect(rec.why).toContain(
+      'Pace đua (vòng trung bình) chậm hơn Alpine 0.105s/vòng, nhưng trên kết quả bạn hơn: đối đầu thắng 5–1 (5/6 chặng), hơn 40 điểm (51 vs 11), DNF 1 vs 5.',
+    );
+  });
+
+  it('peak-pace recommendation carries the same counter-story', () => {
+    const result = buildPaceBoard(model);
+    expect(result.data.rivalRef?.teamName).toBe('Alpine');
+    expect(result.data.playerVsRivalS).toBeCloseTo(0.08, 9);
+    const rec = result.recommendations[0];
+    expect(rec.why).toContain(
+      'Pace đỉnh (fastest lap) chậm hơn Alpine 0.080s/vòng, nhưng trên kết quả bạn hơn: đối đầu thắng 5–1 (5/6 chặng), hơn 40 điểm (51 vs 11), DNF 1 vs 5.',
+    );
+  });
+
+  it('direction flips when the rival is ahead on points', () => {
+    // swap the season points of CustomTeam and Alpine row-by-row
+    const flipped: SaveModel = {
+      ...model,
+      races: model.races.map((race: Race) => ({
+        ...race,
+        results: race.results.map((res) => {
+          if (res.teamId === 32) return { ...res, points: res.points === 10 ? 0 : res.points };
+          if (res.teamId === 6 && res.finishingPos === 5) return { ...res, points: 10 };
+          return res;
+        }),
+      })),
+    };
+    // after the swap: CustomTeam 51 − 10 = 41, Alpine 11 + 10 = 21 → still ahead;
+    // push further: strip all CustomTeam best-car points onto Alpine's P5 row
+    const flipped2: SaveModel = {
+      ...model,
+      races: model.races.map((race) => ({
+        ...race,
+        results: race.results.map((res) => {
+          if (res.teamId === 32) return { ...res, points: 0 };
+          if (res.teamId === 6 && res.finishingPos === 5 && !res.dnf) {
+            const cuPoints = race.results
+              .filter((r) => r.teamId === 32)
+              .reduce((s, r) => s + r.points, 0);
+            return { ...res, points: res.points + cuPoints };
+          }
+          return res;
+        }),
+      })),
+    };
+    const result = buildRacePaceBoard(flipped2);
+    const rec = result.recommendations[0];
+    // player 0 pts vs Alpine 51+11=62-ish → behind, pace slower → 'và', kém điểm
+    expect(rec.why).toContain('trên kết quả bạn kém');
+    expect(rec.why).toContain('kém ');
+    expect(rec.why).toContain('DNF 1 vs 5');
+    // the "nhưng" contradiction must NOT appear for this direction
+    expect(rec.why).not.toContain('nhưng trên kết quả bạn hơn');
+  });
+});

@@ -142,7 +142,8 @@
     "standings": "STANDINGS",
     "data": "RACE DATA",
     "evidence": "EVIDENCE",
-    "game": "GAME PLAN"
+    "game": "GAME PLAN",
+    "results": "RESULTS"
   },
   "pitbar": {
     "optimalLabel": "Optimal pit: lap {lap} (window {lo}–{hi})",
@@ -359,6 +360,19 @@
     "schematic": {
       "label": "Track schematic",
       "generic": "Generic outline — no verified shape for this track"
+    },
+    "results": {
+      "title": "Real-race results",
+      "window": "last {count} races",
+      "colRank": "#",
+      "colTeam": "Team",
+      "colPoints": "Pts",
+      "colPerRace": "Pts/race",
+      "colMedian": "Median best finish",
+      "colDnf": "DNF",
+      "colGained": "Pos. gained",
+      "colH2h": "H2H vs you",
+      "assumptions": "Assumptions & data sources"
     }
   },
   "sim": {
