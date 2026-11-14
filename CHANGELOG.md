@@ -2,6 +2,61 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.5.5] — Race sim xếp theo pace đua (vòng trung bình) thay vì fastest-lap
+
+Đợt sửa theo báo cáo số liệu thật của chủ dự án, kiểm chứng trên save Bahrain
+mùa 2027 (Day 46507, sim Jeddah chặng 194): sim cũ xếp tay đua theo **median
+fastest-lap delta** (pace đỉnh một vòng) nên dự đoán 2 xe vừa về P4/P9 ở
+Bahrain (pace đua đội hạng 7/11, leo +18 vị trí) sẽ về **P19/P21** ở chặng
+tới — với confidence HIGH. Đợt này đổi metric xếp hạng race sim sang **pace
+đua trung bình (`Races_Results.Time / Laps`)** — cùng định nghĩa với board
+pace đua v0.5.4 — fastest-lap chỉ còn làm tiebreak. **Quali sim không đổi**
+(median vị trí quali là metric đúng cho phân hạng một vòng). Không đụng: số
+liệu peak pace 2.299s #11/11, board pace đua 0.468s #7/11 của v0.5.4, engine
+lốp/stint/finance/gazette, dependency, CI. `expectedStops` vẫn chỉ hiển thị
+(chưa vào công thức xếp hạng — để đợt sau). 1 bước = 1 commit Conventional,
+lint + typecheck + test xanh trước mỗi commit.
+
+### Changed — Bước 1: race sim xếp theo pace đua (`4eeaa32`)
+- `buildSim` (`src/engines/sim.engine.ts`): mỗi tay đua mỗi chặng có
+  `avgLapMs = totalTimeMs / laps` (loại DNF, laps ≤ 0, Time ≤ 0 — cùng quy
+  tắc với `buildRacePaceBoard`); gap = avg lap − best trung bình của chặng;
+  `DriverAgg.racePaceDeltas` mới song song với `paceDeltas` (fastest-lap
+  GIỮ NGUYÊN làm tiebreak).
+- Sort race sim: `racePaceDeltaS` tăng dần (null → cuối) → `paceDeltaS`
+  (tiebreak) → xuất phát dự kiến. `racePaceDeltaS` là trường mới trên
+  `RaceSimRow`; `samples` giờ đếm mẫu pace đua (metric chính); confidence
+  theo số mẫu pace đua thay vì fastest-lap.
+- Evidence: dòng nguồn `Races_Results.Time / Laps` cho ranking + dòng
+  fastest-lap ghi rõ "chỉ dùng làm tiebreak". Assumption sửa thành:
+  "Xếp hạng dùng pace đua trung bình (Time/Laps) — vòng trung bình tính cả
+  vòng vào/ra pit nên tay đua ít pit hơn có lợi nhẹ; fastest-lap chỉ làm
+  tiebreak". Recommendation why trích pace đua làm số chính.
+- **Kiểm chứng (unit test khóa trên bộ số liệu đã đối chiếu SQL, sim Jeddah
+  trên save Bahrain Day 46507): O'Ward P10 (median +0.493s/vòng, 3 mẫu —
+  Suzuka DNF loại), Ricciardo P12 (median +0.573s, 4 mẫu; hòa De Vries
+  0.573s, phân định bằng tiebreak fastest-lap) — hết P19/P21; đúng thứ hạng
+  pace đua đã kiểm chứng O'Ward #10 / Ricciardo #12 trong 21 tay đua có
+  ≥2 mẫu; quali sim không đổi (Ricciardo P17, O'Ward P21)**. Rule tests:
+  hòa pace đua → FL quyết định; pace đua thắng FL khi hai metric lệch nhau;
+  không có Time/Laps → xếp cuối dù FL tốt nhất.
+
+### Changed — Bước 2: tab Sim nói rõ metric + hiện cả 2 delta + bằng chứng leo vị trí (`15a6824`)
+- Tiêu đề panel + heading race sim ghi rõ: "xếp theo pace đua trung bình
+  (Time/Laps) · fastest-lap chỉ làm tiebreak" (VI/EN).
+- Mỗi dòng race sim hiện cả 2 số: **race-pace delta (số chính, vd
+  "+0.49s")** và **fastest-lap delta (số phụ, "FL +2.23s")**; giữ nguyên cột
+  xuất phát dự kiến / về đích dự kiến / expected stops. Không thêm view mới,
+  không redesign.
+- Recommendation sim thêm câu bằng chứng leo vị trí ở chặng gần nhất đã xong
+  (startingPos − finishingPos của 2 xe đội, non-DNF, leader trước):
+  "Chặng trước leo +18 vị trí (Bahrain: Ricciardo +5, O'Ward +13) — mô hình
+  pace đua đã tính tới sức đua đường dài, không chỉ một vòng nhanh nhất."
+  Engine tự ghép (components không bịa số), có test khóa + test âm (không
+  có gain đo được → không có câu).
+
+---
+
 ## [0.5.4] — Pace đua (vòng trung bình) + nhãn pace đỉnh + sửa gap tower xe bị bắt vòng
 
 Đợt sửa theo báo cáo số liệu thật của chủ dự án, kiểm chứng trên save Bahrain
