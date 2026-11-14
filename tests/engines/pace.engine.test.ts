@@ -332,3 +332,38 @@ describe('buildRacePaceBoard — verified Bahrain Day 46507 numbers', () => {
     expect(result.recommendations[0].title).toContain('pace đua');
   });
 });
+
+describe('v0.5.4 peak-pace recommendation carries counter-evidence', () => {
+  const model = verifiedModel();
+  const result = buildPaceBoard(model);
+  const rec = result.recommendations[0];
+
+  it('title says peak pace (fastest lap), never a bare pace verdict', () => {
+    expect(rec.title).toContain('Pace đỉnh');
+    expect(rec.title).toContain('(fastest lap)');
+    expect(rec.title).toContain('Alfa Romeo');
+    expect(rec.title).toContain('0.274');
+    expect(rec.title).toContain('chậm hơn');
+  });
+
+  it('why carries all 3 pieces: race-pace rank + gains + points (Bahrain)', () => {
+    expect(rec.why).toContain('pace đua (vòng trung bình) hạng 7/11');
+    expect(rec.why).toContain('+18 vị trí ở Bahrain');
+    expect(rec.why).toContain('Ricciardo +5');
+    expect(rec.why).toContain("O'Ward +13");
+    expect(rec.why).toContain('14 điểm');
+    expect(rec.why).toContain('xe đua đường dài tốt hơn một vòng nhanh nhất');
+  });
+
+  it('evidence includes the race-pace counter source', () => {
+    expect(result.evidence.some((e) => e.source === 'Races_Results.Time / Laps')).toBe(true);
+    expect(result.assumptions.some((a) => a.text.includes('vòng vào/ra pit'))).toBe(true);
+  });
+
+  it('peak numbers on the board stay untouched by the enrichment', () => {
+    const player = result.data.rows.find((r) => r.isPlayer)!;
+    expect(player.paceDeltaS).toBeCloseTo(2.299, 9);
+    expect(player.rank).toBe(11);
+    expect(result.data.playerVsRivalS).toBeCloseTo(0.274, 9);
+  });
+});

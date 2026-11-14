@@ -192,7 +192,7 @@
       "season": "Tiến độ mùa",
       "tyreRec": "Khuyến nghị lốp",
       "carRank": "Xếp hạng xe",
-      "carByPace": "theo pace",
+      "carByPace": "theo pace đỉnh (fastest lap)",
       "heldPos": "giữ P{pos}",
       "posBefore": "P{pos} trước {track}"
     },
@@ -211,11 +211,14 @@
       "live": "ĐANG ĐUA"
     },
     "pace": {
-      "label": "Pace vs đối thủ trực tiếp",
+      "label": "Pace đỉnh (fastest lap) vs đối thủ trực tiếp",
       "vsRival": "{gap}/vòng {dir} so với {rival} (median các chặng gần nhất)",
       "slower": "chậm",
       "faster": "nhanh",
-      "rank": "Pace rank {rank}/{total}",
+      "rank": "Pace đỉnh #{rank}/{total}",
+      "raceRank": "Pace đua (vòng trung bình) #{rank}/{total}",
+      "raceVsRival": "{gap}/vòng {dir} so với {rival}",
+      "gains": "Vị trí leo được — {track}: {detail} · tổng {races} chặng: {seasonTotal}",
       "noData": "Chưa đủ dữ liệu pace — nạp save sau chặng kế tiếp."
     },
     "todo": {
@@ -327,8 +330,11 @@
     "dry": "Khô",
     "lastResult": "Kết quả đội bạn: P{pos} ({points} pts){dnf}",
     "plan": "Kế hoạch lốp đề xuất",
-    "pace": "Pace vs đối thủ",
+    "pace": "Pace đỉnh (fastest lap) vs đối thủ",
     "paceValue": "{gap}/vòng {dir} so với {rival}",
+    "paceRankPeak": "Pace đỉnh #{rank}/{total}",
+    "paceRace": "Pace đua (vòng trung bình)",
+    "paceRankRace": "Pace đua #{rank}/{total}",
     "paceSlower": "chậm",
     "paceFaster": "nhanh",
     "alreadyDone": "Chặng này đã đua xong — kế hoạch dưới đây mang tham chiếu.",

@@ -12,7 +12,7 @@ import { useState } from 'react';
 import { Flag, CloudRain, Thermometer, CircleAlert, Gauge, Timer } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
-import { useTyreLab, usePaceBoard, useSim } from '@/lib/engine-hooks';
+import { useTyreLab, usePaceBoard, useRacePaceBoard, useSim } from '@/lib/engine-hooks';
 import { StintTimeline } from './StintTimeline';
 import { PitWindowBar } from './PitWindowBar';
 import { ConfidenceBadge } from './ConfidenceBadge';
@@ -44,6 +44,7 @@ export function RaceWeekendView({
 
   const tyre = useTyreLab(race?.raceId ?? null);
   const pace = usePaceBoard();
+  const racePace = useRacePaceBoard();
   const sim = useSim(race?.raceId ?? null);
 
   if (!race) {
@@ -173,8 +174,58 @@ export function RaceWeekendView({
                     // (closest pace), never rivals[0] (which is the fastest rival).
                     rival: pace.data.rivalRef?.teamName ?? '—',
                   })}
+                  {pace.data.rows.find((r) => r.isPlayer) ? (
+                    <span className="ml-2 font-mono text-[11px] text-ink-faint">
+                      {t('paceRankPeak', {
+                        rank: pace.data.rows.find((r) => r.isPlayer)!.rank,
+                        total: pace.data.rows.length,
+                      })}
+                    </span>
+                  ) : null}
                 </p>
               ) : null}
+
+              {/* v0.5.4 — second board in the same section: average raced lap */}
+              {racePace && racePace.data.rows.length > 0 ? (
+                <div className="mt-4 border-t border-line pt-3" data-testid="race-pace-board">
+                  <div className="mb-2 flex items-center gap-2">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
+                      {t('paceRace')}
+                    </h4>
+                    <ConfidenceBadge confidence={racePace.confidence} />
+                  </div>
+                  <PaceBarChart rows={racePace.data.rows} model={model} testId="race-pace-avg-chart" />
+                  <p className="mt-2 text-xs text-ink-soft">
+                    {racePace.data.rows.find((r) => r.isPlayer)
+                      ? t('paceRankRace', {
+                          rank: racePace.data.rows.find((r) => r.isPlayer)!.rank,
+                          total: racePace.data.rows.length,
+                        })
+                      : null}
+                    {racePace.data.playerVsRivalS != null && racePace.data.rivalRef ? (
+                      <span>
+                        {' · '}
+                        {t('paceValue', {
+                          gap: `${Math.abs(racePace.data.playerVsRivalS).toFixed(3)}s`,
+                          dir: racePace.data.playerVsRivalS > 0 ? t('paceSlower') : t('paceFaster'),
+                          rival: racePace.data.rivalRef.teamName,
+                        })}
+                      </span>
+                    ) : null}
+                  </p>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          {/* v0.5.4 — the peak-pace rec carries race pace + gains as
+              counter-evidence (engine-composed); render it here so the
+              full story is visible next to the boards. */}
+          {pace && pace.recommendations.length > 0 ? (
+            <section aria-label={t('recs')} className="space-y-3" data-testid="race-pace-recs">
+              {pace.recommendations.map((rec) => (
+                <RecommendationCard key={rec.id} recommendation={rec} />
+              ))}
             </section>
           ) : null}
 

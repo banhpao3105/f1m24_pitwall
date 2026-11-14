@@ -253,6 +253,33 @@ export function buildPaceBoard(
   const core = assembleTeamBoard(model, playerTeamId, raceAggs);
   const { rows, playerRow, rivals, rivalRef, playerVsRivalS, trendS } = core;
 
+  /* v0.5.4 step 2 — the peak-pace recommendation carries its own
+   * counter-evidence. Peak pace is one push lap; the raced average
+   * (buildRacePaceBoard) and the positions actually gained in the latest
+   * completed race tell the long-run story. Computed here so the UI never
+   * shows a bare peak-pace verdict. Peak NUMBERS stay untouched. */
+  const racePace = buildRacePaceBoard(model, options);
+  const racePlayerRow = racePace.data.rows.find((r) => r.isPlayer) ?? null;
+  const latestRace = completed[0] ?? null;
+  const fmtSigned = (n: number): string => `${n >= 0 ? '+' : ''}${n}`;
+  const gainRows = (latestRace?.results ?? [])
+    .filter((r) => r.teamId === playerTeamId && !r.dnf && r.startingPos != null)
+    .map((r) => ({
+      name: r.driverName,
+      gain: (r.startingPos ?? 0) - r.finishingPos,
+      points: r.points,
+    }));
+  const totalGain = gainRows.reduce((s, g) => s + g.gain, 0);
+  const totalPoints = gainRows.reduce((s, g) => s + g.points, 0);
+  const counterEvidence = racePlayerRow
+    ? `nhưng pace đua (vòng trung bình) hạng ${racePlayerRow.rank}/${racePace.data.rows.length}` +
+      (gainRows.length > 0 && latestRace
+        ? ` và leo ${fmtSigned(totalGain)} vị trí ở ${latestRace.trackName}` +
+          ` (${gainRows.map((g) => `${g.name} ${fmtSigned(g.gain)}`).join(', ')}, ${totalPoints} điểm)`
+        : '') +
+      (totalGain > 0 ? ' — xe đua đường dài tốt hơn một vòng nhanh nhất' : '')
+    : '';
+
   /* confidence (docs/00 §1.6 semantics) */
   let confidence: Confidence = 'LOW';
   if (playerRow && rivalRef && core.usableRaces >= 4) confidence = 'HIGH';
@@ -271,6 +298,13 @@ export function buildPaceBoard(
     label: `Pace board xếp hạng ${rows.length} đội theo median gap tới fastest lap của chặng (${core.usableRaces} chặng mùa ${seasonId})`,
     seasonId,
   });
+  if (racePlayerRow) {
+    evidence.push({
+      source: 'Races_Results.Time / Laps',
+      label: `Pace đua (vòng trung bình): hạng ${racePlayerRow.rank}/${racePace.data.rows.length}, median ${racePlayerRow.paceDeltaS.toFixed(3)}s — đối trọng với fastest lap`,
+      seasonId,
+    });
+  }
 
   const assumptions: Assumption[] = [];
   if (core.usableRaces < 4) {
@@ -281,6 +315,9 @@ export function buildPaceBoard(
   assumptions.push({
     text: 'Pace đo bằng fastest lap trong race — không phản ánh race pace trung bình (sẽ bổ sung stint pace ở Phase 2)',
   });
+  if (racePlayerRow) {
+    assumptions.push({ text: RACE_PACE_PIT_LAP_ASSUMPTION });
+  }
 
   /* recommendations — 6-field standard */
   const recommendations: Recommendation[] = [];
@@ -289,12 +326,12 @@ export function buildPaceBoard(
     recommendations.push({
       id: `pace-rival-${seasonId}`,
       title: slower
-        ? `Đang chậm hơn ${rivalRef.teamName} ${playerVsRivalS.toFixed(3)}s/vòng`
-        : `Đang nhanh hơn ${rivalRef.teamName} ${Math.abs(playerVsRivalS).toFixed(3)}s/vòng`,
+        ? `Pace đỉnh đang chậm hơn ${rivalRef.teamName} ${playerVsRivalS.toFixed(3)}s/vòng (fastest lap)`
+        : `Pace đỉnh đang nhanh hơn ${rivalRef.teamName} ${Math.abs(playerVsRivalS).toFixed(3)}s/vòng (fastest lap)`,
       action: slower
-        ? `Ưu tiên thu hẹp gap pace với ${rivalRef.teamName} (xếp hạng pace #${playerRow.rank} trên ${rows.length} đội) trước kỳ nâng cấp tiếp theo`
+        ? `Ưu tiên thu hẹp gap pace với ${rivalRef.teamName} (xếp hạng pace đỉnh #${playerRow.rank} trên ${rows.length} đội) trước kỳ nâng cấp tiếp theo`
         : `Giữ lợi thế pace trước ${rivalRef.teamName}; tập trung nguồn lực vào mặt trận yếu hơn (pit, tyre preservation)`,
-      why: `Median gap ${core.usableRaces} chặng gần nhất = ${playerVsRivalS > 0 ? '+' : ''}${playerVsRivalS.toFixed(3)}s/vòng${trendS != null ? `; xu hướng ${trendS < 0 ? 'đang thu hẹp' : 'đang mở rộng'} ${Math.abs(trendS).toFixed(3)}s so với nửa trước giai đoạn` : ''}. Đối thủ trực tiếp xác định theo standings (trên/dưới 1 bậc) + pace trong ±${RIVAL_PACE_TOLERANCE_S}s.`,
+      why: `Median gap ${core.usableRaces} chặng gần nhất = ${playerVsRivalS > 0 ? '+' : ''}${playerVsRivalS.toFixed(3)}s/vòng${trendS != null ? `; xu hướng ${trendS < 0 ? 'đang thu hẹp' : 'đang mở rộng'} ${Math.abs(trendS).toFixed(3)}s so với nửa trước giai đoạn` : ''}. Đối thủ trực tiếp xác định theo standings (trên/dưới 1 bậc) + pace trong ±${RIVAL_PACE_TOLERANCE_S}s.${counterEvidence ? ` ${counterEvidence}.` : ''}`,
       confidence,
       evidence,
       assumptions,

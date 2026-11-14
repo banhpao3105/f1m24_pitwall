@@ -192,7 +192,7 @@
       "season": "Season progress",
       "tyreRec": "Tyre recommendation",
       "carRank": "Car rank",
-      "carByPace": "by pace",
+      "carByPace": "by peak pace (fastest lap)",
       "heldPos": "held P{pos}",
       "posBefore": "P{pos} before {track}"
     },
@@ -211,11 +211,14 @@
       "live": "LIVE"
     },
     "pace": {
-      "label": "Pace vs direct rival",
+      "label": "Peak pace (fastest lap) vs direct rival",
       "vsRival": "{gap}/lap {dir} than {rival} (median of recent races)",
       "slower": "slower",
       "faster": "faster",
-      "rank": "Pace rank {rank}/{total}",
+      "rank": "Peak pace #{rank}/{total}",
+      "raceRank": "Race pace (avg lap) #{rank}/{total}",
+      "raceVsRival": "{gap}/lap {dir} than {rival}",
+      "gains": "Positions gained — {track}: {detail} · last {races} races total: {seasonTotal}",
       "noData": "Not enough pace data yet — reload your save after the next race."
     },
     "todo": {
@@ -327,8 +330,11 @@
     "dry": "Dry",
     "lastResult": "Your team's result: P{pos} ({points} pts){dnf}",
     "plan": "Recommended tyre plan",
-    "pace": "Pace vs rival",
+    "pace": "Peak pace (fastest lap) vs rival",
     "paceValue": "{gap}/lap {dir} than {rival}",
+    "paceRankPeak": "Peak pace #{rank}/{total}",
+    "paceRace": "Race pace (average lap)",
+    "paceRankRace": "Race pace #{rank}/{total}",
     "paceSlower": "slower",
     "paceFaster": "faster",
     "alreadyDone": "This race is completed — the plan below is for reference.",

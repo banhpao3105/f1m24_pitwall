@@ -11,7 +11,7 @@ import { motion } from 'framer-motion';
 import { Trophy, Timer, Waves, Car } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
-import { usePaceBoard, useTyreLab, useCarLab, useFinance } from '@/lib/engine-hooks';
+import { usePaceBoard, useRacePaceBoard, useTyreLab, useCarLab, useFinance } from '@/lib/engine-hooks';
 import { PaceBarChart } from './charts/PaceBarChart';
 import { useWallNav } from './WallNav';
 import { RecommendationCard } from './RecommendationCard';
@@ -35,6 +35,7 @@ export function WallHomeView({ model }: { model: SaveModel }) {
 
   const tyre = useTyreLab(nextRace?.raceId ?? null);
   const pace = usePaceBoard();
+  const racePace = useRacePaceBoard();
   const carLab = useCarLab();
   const finance = useFinance();
   const { setView } = useWallNav();
@@ -54,7 +55,6 @@ export function WallHomeView({ model }: { model: SaveModel }) {
   // measured against) instead of re-deriving it locally.
   const rivalRow = pace?.data.rivalRef ?? null;
   const carLeagueRow = carLab?.data.league.rows.find((r) => r.isPlayer) ?? null;
-
   // v0.5.0 step 4 — honest position delta: standings now vs standings
   // recomputed WITHOUT the last completed race (both from stored data).
   const lastCompleted =
@@ -71,6 +71,23 @@ export function WallHomeView({ model }: { model: SaveModel }) {
       .findIndex((row) => row.id === model.player.teamId) + 1;
     positionDelta = { before, after: playerTeamRow.position, track: trackDisplay(lastCompleted.trackName, locale) };
   }
+
+  // v0.5.4 — long-run story next to the peak-pace verdict: race pace rank
+  // (Time/Laps engine) + positions actually gained by the player's drivers
+  // (startingPos − finishingPos), last race and season total.
+  const racePaceRow = racePace?.data.rows.find((r) => r.isPlayer) ?? null;
+  const gainRows = (lastCompleted?.results ?? [])
+    .filter((r) => r.teamId === model.player.teamId && !r.dnf && r.startingPos != null)
+    .map((r) => ({ name: r.driverName, gain: (r.startingPos ?? 0) - r.finishingPos }));
+  const completedGainRaces = seasonRaces.filter((r) => r.state === 2);
+  const seasonGainTotal = completedGainRaces.reduce(
+    (sum, race) => sum + race.results.reduce((s, r) => {
+      if (r.teamId !== model.player.teamId || r.dnf || r.startingPos == null) return s;
+      return s + (r.startingPos - r.finishingPos);
+    }, 0),
+    0,
+  );
+  const fmtSigned = (n: number): string => `${n >= 0 ? '+' : ''}${n}`;
 
   const kpis: { icon: React.ReactNode; label: string; value: React.ReactNode; sub?: React.ReactNode; delta?: React.ReactNode }[] = [
     {
@@ -282,6 +299,30 @@ export function WallHomeView({ model }: { model: SaveModel }) {
                   <span className="ml-2 font-mono text-[11px] text-ink-faint">
                     {t('pace.rank', { rank: paceRow.rank, total: pace.data.rows.length })}
                   </span>
+                </p>
+              ) : null}
+              {racePace && racePaceRow ? (
+                <p className="mt-1 text-sm text-ink" data-testid="home-race-pace-rank">
+                  {t('pace.raceRank', { rank: racePaceRow.rank, total: racePace.data.rows.length })}
+                  {racePace.data.playerVsRivalS != null && racePace.data.rivalRef ? (
+                    <span className="ml-2 font-mono text-[11px] text-ink-faint">
+                      {t('pace.raceVsRival', {
+                        rival: racePace.data.rivalRef.teamName,
+                        gap: `${Math.abs(racePace.data.playerVsRivalS).toFixed(3)}s`,
+                        dir: racePace.data.playerVsRivalS > 0 ? t('pace.slower') : t('pace.faster'),
+                      })}
+                    </span>
+                  ) : null}
+                </p>
+              ) : null}
+              {lastCompleted && gainRows.length > 0 ? (
+                <p className="mt-1 text-xs text-ink-soft" data-testid="home-positions-gained">
+                  {t('pace.gains', {
+                    track: trackDisplay(lastCompleted.trackName, locale),
+                    detail: gainRows.map((g) => `${g.name} ${fmtSigned(g.gain)}`).join(', '),
+                    races: completedGainRaces.length,
+                    seasonTotal: fmtSigned(seasonGainTotal),
+                  })}
                 </p>
               ) : null}
             </>
