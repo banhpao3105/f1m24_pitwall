@@ -186,6 +186,65 @@ describe('buildRegulations', () => {
     expect(regs.data.expertise.playerRank).toBe(1);
   });
 
+  it('0.5.3 regression: all-zero league is NOT "above median" in Research either', () => {
+    // Real-save shape (Bahrain Day 46495): bank 0, median 0, rank 11/11 —
+    // the old `>=` produced "Bank đã trên median" in Research while Strategy
+    // (finance, fixed in 0.4.1) worded the tie. Both views must agree now.
+    const model = makeModel({
+      parts: {
+        ...emptyPhase2Sections().parts,
+        expertise: [1, 2, 3].map((teamId) => ({
+          teamId,
+          partType: 'FrontWing',
+          nextSeasonExpertise: 0,
+        })),
+        tablesPresent: { designs: false, items: false, statValues: false, loadouts: false, expertise: true },
+      },
+    });
+    const regs = buildRegulations(model);
+    const rec = regs.recommendations.find((r) => r.id === 'regulation-expertise-bank');
+    expect(rec).toBeDefined();
+    expect(rec?.title).toMatch(/Expertise banking cho mùa tới: 0 \(hạng \d\/3\)/);
+    expect(rec?.action).not.toContain('trên median');
+    expect(rec?.action).toContain('Cả giải chưa bank expertise nào');
+    expect(rec?.confidence).toBe('MEDIUM');
+  });
+
+  it('0.5.3: strictly above median keeps the same advice as before', () => {
+    const model = makeModel({
+      parts: {
+        ...emptyPhase2Sections().parts,
+        expertise: [
+          { teamId: 1, nextSeasonExpertise: 40 },
+          { teamId: 2, nextSeasonExpertise: 10 },
+          { teamId: 3, nextSeasonExpertise: 25 },
+        ],
+        tablesPresent: { designs: false, items: false, statValues: false, loadouts: false, expertise: true },
+      },
+    });
+    const regs = buildRegulations(model);
+    const rec = regs.recommendations.find((r) => r.id === 'regulation-expertise-bank');
+    expect(rec?.action).toContain('Bank đã trên median');
+  });
+
+  it('0.5.3: tied at a non-zero median words the tie, no fake advantage', () => {
+    const model = makeModel({
+      parts: {
+        ...emptyPhase2Sections().parts,
+        expertise: [
+          { teamId: 1, nextSeasonExpertise: 20 },
+          { teamId: 2, nextSeasonExpertise: 10 },
+          { teamId: 3, nextSeasonExpertise: 25 },
+        ],
+        tablesPresent: { designs: false, items: false, statValues: false, loadouts: false, expertise: true },
+      },
+    });
+    const regs = buildRegulations(model);
+    const rec = regs.recommendations.find((r) => r.id === 'regulation-expertise-bank');
+    expect(rec?.action).toContain('Bằng median giải');
+    expect(rec?.action).not.toContain('trên median');
+  });
+
   it('degrades when no proposals exist', () => {
     const regs = buildRegulations(makeModel());
     expect(regs.warnings).toContain('REGULATION_DATA_UNAVAILABLE');

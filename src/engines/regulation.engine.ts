@@ -149,13 +149,22 @@ export function buildRegulations(model: SaveModel): EngineResult<RegulationBoard
     });
   }
   if (playerExp && medianNext != null && expRows.length > 1) {
-    const aboveMedian = playerExp.nextSeason >= medianNext;
+    // 0.5.3: same 3-case fix as finance.engine (0.4.1) — `>=` claimed "above
+    // median" when the whole league sat at 0 (bank 0, median 0, rank 11/11).
+    // Compare strictly and word the tie; title/confidence/evidence unchanged.
+    const aboveMedian = playerExp.nextSeason > medianNext;
+    const atMedian = playerExp.nextSeason === medianNext;
+    const allZero = expRows.every((r) => r.nextSeason === 0);
     recommendations.push({
       id: 'regulation-expertise-bank',
       title: `Expertise banking cho mùa tới: ${playerExp.nextSeason} (hạng ${playerExp.rank}/${expRows.length})`,
       action: aboveMedian
         ? 'Bank đã trên median — không cần đốt R&D chỉ để tăng expertise'
-        : 'Cần thêm R&D trước khi mùa kết thúc để bank lên tối thiểu median giải',
+        : atMedian
+          ? allZero
+            ? 'Cả giải chưa bank expertise nào (toàn bộ 0) — chưa có mặt trận nào thắng/thua; bật R&D bank từ giữa mùa để tạo khoảng cách'
+            : 'Bằng median giải — chưa có lợi thế; đẩy R&D cuối mùa để nhích lên trên nhóm giữa'
+          : 'Cần thêm R&D trước khi mùa kết thúc để bank lên tối thiểu median giải',
       why: `Σ NextSeasonExpertise của bạn ${playerExp.nextSeason} vs median ${medianNext} — banking quyết định khởi điểm mùa sau (docs/03 §5.6).`,
       confidence: 'MEDIUM',
       evidence,
