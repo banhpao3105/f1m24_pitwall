@@ -15,7 +15,7 @@ import { RecommendationCard } from './RecommendationCard';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { DataUnavailable } from './DataUnavailable';
 import { TeamDot } from './TeamIdentity';
-import { CarLeagueChart, PartConditionChart } from './charts/CarLabCharts';
+import { CarLeagueChart, PartConditionChart, PartPerformanceChart, DevPointsChart } from './charts/CarLabCharts';
 import { cn } from '@/lib/utils';
 
 const RISK_TONE: Record<RiskLevel, string> = {
@@ -151,6 +151,17 @@ export function CarLabView({ model }: { model: SaveModel }) {
         </section>
       ) : null}
 
+      {/* v0.6.0 step 4 — part groups vs the league median (Parts_Items) */}
+      {lab.data.parts.length > 0 ? (
+        <section aria-label={t('perfTitle')} className="rounded-lg border border-line bg-panel p-4">
+          <header className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="font-mono text-[11px] uppercase tracking-wider text-amber">{tSec('durability')}</span>
+            <h3 className="text-[15px] font-semibold text-ink">{t('perfTitle')}</h3>
+          </header>
+          <PartPerformanceChart rows={lab.data.parts} items={model.parts.items} />
+        </section>
+      ) : null}
+
       {/* dev queue */}
       {lab.data.devQueue.length > 0 ? (
         <section aria-label={t('devQueue')} className="rounded-lg border border-line bg-panel p-4">
@@ -159,6 +170,10 @@ export function CarLabView({ model }: { model: SaveModel }) {
             <h3 className="text-[15px] font-semibold text-ink">{t('devQueue')}</h3>
             <span className="font-mono text-[10px] text-ink-faint">{t('devQueueHint')}</span>
           </header>
+          {/* v0.6.0 step 4 — design points per part group as a bar chart */}
+          <div className="mb-4">
+            <DevPointsChart rows={lab.data.devQueue} />
+          </div>
           <ul className="space-y-1.5">
             {lab.data.devQueue.slice(0, 6).map((q, i) => (
               <li key={q.designId} className="flex flex-wrap items-center gap-2 rounded bg-surface px-3 py-2 text-xs" data-testid={`dev-queue-${i}`}>

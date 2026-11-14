@@ -115,7 +115,11 @@
       "rankInverted": "thanh dài = nhanh hơn",
       "byPace": "Chiều thanh = vị trí pace đảo ngược (dài = nhanh hơn) — nguồn: pace engine.",
       "watchLine": "WATCH 70%",
-      "parts": "part"
+      "parts": "part",
+      "playerBar": "Bạn",
+      "medianBar": "Median giải",
+      "partPerfHint": "Median tính trên điều kiện trung bình từng đội (Parts_Items, các đội có dữ liệu cùng nhóm part).",
+      "devHint": "Design points đã lưu của các thiết kế trong hàng chờ phát triển (Parts_Designs.Points)."
     },
     "series": {
       "peak": "Pace đỉnh (fastest lap)",
@@ -133,6 +137,12 @@
       "countdown": "còn {days} ngày",
       "raceWeek": "tuần race",
       "yourPoints": "+{points} pts đội"
+    },
+    "tyre": {
+      "life": "Đời lốp (vòng)",
+      "delta": "Delta pace (+s so với Soft)",
+      "deg": "Deg cuối đời (+s/vòng) — hằng số mô hình",
+      "hint": "Ba thước đo, ba thang đo riêng — không gộp thành một điểm số."
     }
   },
   "sec": {
@@ -326,6 +336,14 @@
       "windows": "cửa sổ {windows}",
       "loadoutsDiffer": "Hai xe chọn plan khác nhau — đang hiện theo LoadoutID 0.",
       "teamLevel": "Mức đội — chưa xác minh được LoadoutID (0/1) map sang xe nào. Nguồn: Save_PlayerStrategyStints."
+    },
+    "compareTitle": "So sánh 3 hợp chất",
+    "table": {
+      "stint": "Stint",
+      "compound": "Hợp chất",
+      "laps": "Số vòng",
+      "range": "Phạm vi vòng",
+      "pit": "Pit"
     }
   },
   "whatif": {
@@ -471,7 +489,8 @@
     "partCount": "{count} part",
     "supplier": "supplier part — bank reset mỗi mùa",
     "noPartsData": "Parts_* chưa có dữ liệu trong save này",
-    "noPartsDataHint": "Car Lab chạy chế độ suy giảm: league theo pace fallback; nạp save trong race weekend hoặc introspect để bật part grid."
+    "noPartsDataHint": "Car Lab chạy chế độ suy giảm: league theo pace fallback; nạp save trong race weekend hoặc introspect để bật part grid.",
+    "perfTitle": "Hiệu năng nhóm part — bạn vs median giải"
   },
   "strategy": {
     "title": "Strategy — tài chính & nhân sự",

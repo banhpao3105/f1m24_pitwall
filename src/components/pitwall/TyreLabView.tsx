@@ -19,6 +19,7 @@ import { ConfidenceBadge } from './ConfidenceBadge';
 import { StintTimeline } from './StintTimeline';
 import { PitWindowBar } from './PitWindowBar';
 import { DegCurveChart } from './charts/DegCurveChart';
+import { CompoundCompareChart } from './charts/CompoundCompareChart';
 import { CompoundBadge, type CompoundKey } from './CompoundBadge';
 import type { StrategyResult } from '@/engines/tyre.engine';
 import { Slider } from '@/components/ui/slider';
@@ -175,6 +176,35 @@ export function TyreLabView({
               totalLaps={tyre.data.laps}
               pitLaps={tyre.data.best.pitLaps}
             />
+            {/* v0.6.0 step 4 — the pit plan as a stint-by-stint table */}
+            <table className="mt-3 w-full text-left text-xs" data-testid="tyre-stint-table">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-wide text-ink-faint">
+                  <th className="py-1 pr-2 font-medium">{t('table.stint')}</th>
+                  <th className="py-1 pr-2 font-medium">{t('table.compound')}</th>
+                  <th className="py-1 pr-2 font-medium">{t('table.laps')}</th>
+                  <th className="py-1 pr-2 font-medium">{t('table.range')}</th>
+                  <th className="py-1 font-medium">{t('table.pit')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tyre.data.best.stints.map((s, i) => (
+                  <tr key={i} className="border-t border-line">
+                    <td className="py-1.5 pr-2 font-mono text-ink-faint">#{i + 1}</td>
+                    <td className="py-1.5 pr-2">
+                      <CompoundBadge compound={s.compound as CompoundKey} size="sm" showLabel />
+                    </td>
+                    <td className="py-1.5 pr-2 font-mono text-ink">{s.laps}</td>
+                    <td className="py-1.5 pr-2 font-mono text-ink-soft">
+                      {s.fromLap}–{s.toLap}
+                    </td>
+                    <td className="py-1.5 font-mono text-amber">
+                      {tyre.data.best!.pitLaps[i] != null ? `V${tyre.data.best!.pitLaps[i]}` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
             {tyre.data.best.pitLaps.length > 0 ? (
               <div className="mt-4">
                 <PitWindowBar
@@ -367,6 +397,16 @@ export function TyreLabView({
                 firstCompound: tyre.data.best.stints[0]?.compound as CompoundKey | undefined,
               }}
             />
+          </section>
+
+          {/* v0.6.0 step 4 — the three compounds side by side (3 metrics,
+              3 independent scales; numbers straight from the tyre engine) */}
+          <section aria-label={t('compareTitle')} className="rounded-lg border border-line bg-panel p-4">
+            <header className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="font-mono text-[11px] uppercase tracking-wider text-teal">{tSec('deg')}</span>
+              <h3 className="text-[15px] font-semibold text-ink">{t('compareTitle')}</h3>
+            </header>
+            <CompoundCompareChart lives={tyre.data.lives} deltas={tyre.data.deltas} />
           </section>
 
           {/* what-if (Phase 2) */}

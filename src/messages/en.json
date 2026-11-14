@@ -115,7 +115,11 @@
       "rankInverted": "longer bar = faster",
       "byPace": "Bar length = inverted pace rank (long = faster) — source: pace engine.",
       "watchLine": "WATCH 70%",
-      "parts": "parts"
+      "parts": "parts",
+      "playerBar": "You",
+      "medianBar": "League median",
+      "partPerfHint": "Median of every team’s average condition (Parts_Items, teams with data for the same group).",
+      "devHint": "Stored design points of the dev-queue designs (Parts_Designs.Points)."
     },
     "series": {
       "peak": "Peak pace (fastest lap)",
@@ -133,6 +137,12 @@
       "countdown": "in {days} days",
       "raceWeek": "race week",
       "yourPoints": "+{points} team pts"
+    },
+    "tyre": {
+      "life": "Tyre life (laps)",
+      "delta": "Pace delta (+s vs Soft)",
+      "deg": "End-of-life deg (+s/lap) — model constant",
+      "hint": "Three metrics, three independent scales — never merged into one score."
     }
   },
   "sec": {
@@ -326,6 +336,14 @@
       "windows": "windows {windows}",
       "loadoutsDiffer": "The two cars selected different plans — showing LoadoutID 0.",
       "teamLevel": "Team level — the LoadoutID (0/1) → car mapping is unverified. Source: Save_PlayerStrategyStints."
+    },
+    "compareTitle": "Compound comparison",
+    "table": {
+      "stint": "Stint",
+      "compound": "Compound",
+      "laps": "Laps",
+      "range": "Lap range",
+      "pit": "Pit"
     }
   },
   "whatif": {
@@ -471,7 +489,8 @@
     "partCount": "{count} part(s)",
     "supplier": "supplier part — bank resets each season",
     "noPartsData": "Parts_* has no data in this save",
-    "noPartsDataHint": "Car Lab runs degraded: league via pace fallback; load the save during a race weekend or introspect to enable the part grid."
+    "noPartsDataHint": "Car Lab runs degraded: league via pace fallback; load the save during a race weekend or introspect to enable the part grid.",
+    "perfTitle": "Part-group performance — you vs league median"
   },
   "strategy": {
     "title": "Strategy — finance & personnel",
