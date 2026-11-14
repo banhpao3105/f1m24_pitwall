@@ -534,3 +534,33 @@ describe('v0.5.1 confidence gates', () => {
     expect(lab.confidence).toBe('MEDIUM');
   });
 });
+
+describe('v0.5.1 track-correction prior (P2, local IndexedDB)', () => {
+  const target = makeRace({
+    raceId: 450, trackId: 17, trackName: 'Suzuka', state: 0, laps: 53,
+    practice: suzukaPracticeRows(),
+  });
+
+  it('caps at MEDIUM + warns when the plan pits less than the prior field average', () => {
+    const lab = buildTyreLab(
+      makeModel([target], { tyres: allocLives25_38_58() }),
+      450,
+      { prior: { predictedStops: 1, fieldAvgStops: 2.5, predictedPitLap: 19 } },
+    );
+    expect(lab.warnings).toContain('PLAN_BELOW_FIELD_STOPS_PRIOR');
+    expect(lab.confidence).toBe('MEDIUM');
+    expect(lab.assumptions.some((a) => a.text.includes('Lần trước tại'))).toBe(true);
+    expect(lab.evidence.some((e) => e.source.includes('track-corrections'))).toBe(true);
+  });
+
+  it('does not cap when the plan is at least as pit-heavy as the prior', () => {
+    const lab = buildTyreLab(
+      makeModel([target], { tyres: allocLives25_38_58() }),
+      450,
+      { prior: { predictedStops: 1, fieldAvgStops: 2.0, predictedPitLap: 19 } },
+    );
+    expect(lab.warnings).not.toContain('PLAN_BELOW_FIELD_STOPS_PRIOR');
+    // the prior is still on the record as evidence
+    expect(lab.evidence.some((e) => e.source.includes('track-corrections'))).toBe(true);
+  });
+});

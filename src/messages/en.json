@@ -141,7 +141,9 @@
     "queue": "DEV QUEUE",
     "calendar": "CALENDAR",
     "standings": "STANDINGS",
-    "data": "RACE DATA"
+    "data": "RACE DATA",
+    "evidence": "EVIDENCE",
+    "game": "GAME PLAN"
   },
   "pitbar": {
     "optimalLabel": "Optimal pit: lap {lap} (window {lo}–{hi})",
@@ -283,7 +285,26 @@
       "model": "model",
       "practice": "practice",
       "meta": "meta",
-      "baseline": "baseline"
+      "baseline": "baseline",
+      "cross-session": "cross-session"
+    },
+    "clock": {
+      "title": "Evidence clock",
+      "lives": "lives",
+      "stops": "field stops",
+      "noData": "none",
+      "measuredBut": "measured +{delta}s — ranked as model",
+      "unmeasuredWarn": "The plan relies on {compounds} whose delta is NOT measured at this track (model constant) — treat as an estimate.",
+      "prior": "Last time at {track}: plan {stops} stops (pit lap {lap}), the field ran {field} stops/driver."
+    },
+    "gamePlan": {
+      "title": "Game strategist plan",
+      "game": "GAME",
+      "web": "WEB",
+      "pitLaps": "pit {laps}",
+      "windows": "windows {windows}",
+      "loadoutsDiffer": "The two cars selected different plans — showing LoadoutID 0.",
+      "teamLevel": "Team level — the LoadoutID (0/1) → car mapping is unverified. Source: Save_PlayerStrategyStints."
     }
   },
   "whatif": {

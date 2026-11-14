@@ -8,7 +8,7 @@ import type { SaveModel } from '@/domain/types';
 
 export function emptyPhase2Sections(): Pick<
   SaveModel,
-  'parts' | 'finance' | 'personnel' | 'regulations'
+  'parts' | 'finance' | 'personnel' | 'regulations' | 'playerStrategy'
 > {
   return {
     parts: {
@@ -34,6 +34,7 @@ export function emptyPhase2Sections(): Pick<
       patience: [],
       tablesPresent: { contracts: false, performance: false, patience: false },
     },
+    playerStrategy: { tablePresent: false, plans: [] },
     regulations: [],
   };
 }

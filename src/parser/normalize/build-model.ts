@@ -17,6 +17,9 @@ import type {
   Race,
   GameVersionId,
   QualifyingResult,
+  PlayerStrategyPlan,
+  PlayerStrategySection,
+  PlayerStrategyStint,
 } from '../../domain/types';
 import { detectSchema, type SchemaInfo, OPTIONAL_TABLES } from '../schema';
 import { getPlayer, getPlayerState } from '../repositories/player.repo';
@@ -27,6 +30,7 @@ import { getPracticeResults } from '../repositories/practice.repo';
 import { getPitTimings } from '../repositories/pitstops.repo';
 import { getTyreAllocations } from '../repositories/tyres.repo';
 import { getQualifyingResults } from '../repositories/quali.repo';
+import { getPlayerStrategyStints } from '../repositories/player-strategy.repo';
 import { getPartsSnapshot } from '../repositories/parts.repo';
 import { getFinanceSnapshot } from '../repositories/finance.repo';
 import { getStaffDetail } from '../repositories/staff-detail.repo';
@@ -292,6 +296,44 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
   // has 0 rows post-race); engines must fall back to the model envelope.
   const tyreSets = getTyreAllocations(db);
 
+  // In-game strategist plan (Save_PlayerStrategyStints) — empty before
+  // qualifying and after the race; TyreType 0=H / 1=M / 2=S (verified via
+  // TyreDurability). Group raw rows into per-loadout strategy candidates.
+  const strategyRaw = safe('Save_PlayerStrategyStints', () => getPlayerStrategyStints(db), {
+    tablePresent: false,
+    rows: [],
+  });
+  const STRATEGY_TYRE: Record<number, 'S' | 'M' | 'H'> = { 0: 'H', 1: 'M', 2: 'S' };
+  const planKey = (row: { loadoutId: number; strategyId: number }): string =>
+    `${row.loadoutId}:${row.strategyId}`;
+  const planMap = new Map<string, PlayerStrategyPlan>();
+  for (const row of strategyRaw.rows) {
+    const key = planKey(row);
+    const plan = planMap.get(key) ?? {
+      loadoutId: row.loadoutId,
+      strategyId: row.strategyId,
+      selected: row.selected === 1,
+      stints: [],
+    };
+    if (row.selected === 1) plan.selected = true;
+    plan.stints.push({
+      stintIndex: row.stintId,
+      compound: STRATEGY_TYRE[row.tyreType] ?? null,
+      pitWindowStart: row.pitWindowStart ?? null,
+      pitWindowEnd: row.pitWindowEnd ?? null,
+      expectedPitLap: row.averageStartingLap ?? null,
+      optimalPitLap: row.optimalPitLap ?? null,
+    });
+    planMap.set(key, plan);
+  }
+  const playerStrategy: PlayerStrategySection = {
+    tablePresent: strategyRaw.tablePresent,
+    plans: [...planMap.values()].map((p) => ({
+      ...p,
+      stints: [...p.stints].sort((a, b) => a.stintIndex - b.stintIndex),
+    })),
+  };
+
   return {
     meta,
     player: {
@@ -339,6 +381,7 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
       tablesPresent: financeModel.tablesPresent,
     },
     personnel: staffDetail,
+    playerStrategy,
     availability: OPTIONAL_TABLES.map((t) => ({
       table: t,
       present: !schema.tablesMissingOptional.includes(t),

@@ -21,7 +21,7 @@
 
 import type { Confidence, Evidence, Assumption, Recommendation } from '../domain/provenance';
 import type { EngineResult } from '../domain/types';
-import type { SaveModel, Race } from '../domain/types';
+import type { SaveModel, Race, PlayerStrategySection } from '../domain/types';
 
 /* ── oracle constants (do not change without a changelog entry) ─────────── */
 
@@ -567,6 +567,54 @@ export interface PaceMeasuredEntry {
   source: PaceMeasurement;
 }
 
+/**
+ * Decode Save_PlayerStrategyStints into the game's plan for the active
+ * weekend. LoadoutID → driver mapping is UNVERIFIED (both cars shared one
+ * plan on the audited save) — the plan is reported at team level: loadout
+ * 0's selected strategy, with `loadoutsAgree` flagging a split. A plan
+ * containing wet/unknown tyre encodings is not modelled here → null.
+ */
+export function buildGamePlan(
+  section: PlayerStrategySection,
+  laps: number,
+): TyreLab['gamePlan'] {
+  if (!section.tablePresent) return null;
+  const selected = section.plans.filter((p) => p.selected && p.stints.length > 0);
+  if (selected.length === 0) return null;
+  const plan = selected.find((p) => p.loadoutId === 0) ?? selected[0];
+  const stints = [...plan.stints].sort((a, b) => a.stintIndex - b.stintIndex);
+  if (stints.some((s) => s.compound == null)) return null;
+  const compounds = stints.map((s) => s.compound as Compound);
+  const pitLaps: number[] = [];
+  const pitWindows: { start: number; end: number }[] = [];
+  for (const s of stints.slice(1)) {
+    const lap =
+      s.optimalPitLap != null && s.optimalPitLap > 0
+        ? s.optimalPitLap
+        : s.expectedPitLap;
+    if (lap == null || lap < 2 || lap > laps) return null;
+    pitLaps.push(lap);
+    pitWindows.push({
+      start: s.pitWindowStart ?? lap,
+      end: s.pitWindowEnd ?? lap,
+    });
+  }
+  const stintLaps: number[] = [];
+  let prev = 1;
+  for (const lap of pitLaps) {
+    stintLaps.push(Math.max(1, lap - prev));
+    prev = lap;
+  }
+  stintLaps.push(Math.max(1, laps - prev + 1));
+  const shape = (p: (typeof selected)[number]): string =>
+    [...p.stints]
+      .sort((a, b) => a.stintIndex - b.stintIndex)
+      .map((s) => `${s.compound}@${s.optimalPitLap && s.optimalPitLap > 0 ? s.optimalPitLap : s.expectedPitLap}`)
+      .join('|');
+  const loadoutsAgree = selected.every((p) => shape(p) === shape(plan));
+  return { compounds, stintLaps, pitLaps, pitWindows, loadoutsAgree };
+}
+
 export interface TyreLab {
   raceId: number;
   trackName: string;
@@ -596,16 +644,30 @@ export interface TyreLab {
   trackHistory: TrackHistory;
   observedStops: ObservedStops | null;
   practiceSessions: number;
+  /** The game's own strategist plan for the ACTIVE weekend (null otherwise). */
   gamePlan: {
     compounds: Compound[];
     stintLaps: number[];
     pitLaps: number[];
+    /** Pit window per pit (stints 1..n-1) from the game rows. */
+    pitWindows: { start: number; end: number }[];
+    /** False when the two loadouts' selected plans differ (team-level caveat). */
+    loadoutsAgree: boolean;
   } | null;
+}
+
+/** Prior from the local per-track correction store (v0.5.1 P2, IndexedDB). */
+export interface TyreLabPrior {
+  predictedStops: number | null;
+  fieldAvgStops: number | null;
+  predictedPitLap: number | null;
 }
 
 export interface TyreLabOptions {
   /** Exclude one race from history (backtesting); default none. */
   excludeRaceId?: number;
+  /** Local per-track correction record (UI loads it from IndexedDB). */
+  prior?: TyreLabPrior;
 }
 
 export function buildTyreLab(
@@ -804,9 +866,24 @@ export function buildTyreLab(
     };
   }
 
-  /* in-game strategist plan (Save_PlayerStrategyStints ≈ model.tyres v1 note:
-     game plan table not yet normalized — Phase 1 backlog; reported as null) */
-  const gamePlan: TyreLab['gamePlan'] = null;
+  /* in-game strategist plan — normalized from Save_PlayerStrategyStints
+     (v0.5.1 P2). The table has no race reference; rows exist only for the
+     current weekend, so the plan attaches to the first non-completed race
+     of the CURRENT season (real saves keep placeholder state-0 calendars
+     for future seasons — filtering by season is what anchors the plan to
+     the actual weekend). Empty table / completed race → null. */
+  const activeRace = model.races
+    .filter((r) => r.seasonId === model.meta.seasonId && r.state !== 2)
+    .sort((a, b) => a.day - b.day)[0];
+  const gamePlan: TyreLab['gamePlan'] =
+    race.raceId === activeRace?.raceId
+      ? buildGamePlan(model.playerStrategy, laps)
+      : null;
+  if (gamePlan) {
+    assumptions.push({
+      text: 'Plan của game đọc từ Save_PlayerStrategyStints, hiển thị ở mức đội — chưa xác minh được LoadoutID (0/1) map sang xe nào',
+    });
+  }
 
   /* confidence — honest tiers (v0.5.1 P1). HIGH requires EVERY pillar:
      lives from the weekend allocation, BOTH M and H measured from practice
@@ -819,7 +896,10 @@ export function buildTyreLab(
     (paceSource.M === 'practice' || paceSource.M === 'cross-session') &&
     (paceSource.H === 'practice' || paceSource.H === 'cross-session');
   const fewStintSamples = stintFactor.samples < 3;
-  const fieldRefStops = observed?.avgStopsPerDriver ?? null;
+  // Field reference: the save's own observed stops win; the local per-track
+  // correction prior (v0.5.1 P2) fills in when this save has none.
+  const priorApplied = observed == null && options.prior?.fieldAvgStops != null;
+  const fieldRefStops = observed?.avgStopsPerDriver ?? options.prior?.fieldAvgStops ?? null;
   const fewerPitsThanField = best != null && fieldRefStops != null && best.stops < fieldRefStops;
   const lifeEvidence = livesFromAllocation;
   const paceEvidence = paceMeasured.M != null || paceMeasured.H != null;
@@ -832,9 +912,11 @@ export function buildTyreLab(
         ? 'MEDIUM'
         : 'LOW';
   if (fewerPitsThanField) {
-    warnings.push('PLAN_BELOW_FIELD_STOPS');
+    warnings.push(priorApplied ? 'PLAN_BELOW_FIELD_STOPS_PRIOR' : 'PLAN_BELOW_FIELD_STOPS');
     assumptions.push({
-      text: `Plan dùng ít pit hơn mặt bằng cả giải tại track này (plan ${best!.stops} vs ~${fieldRefStops!.toFixed(2)}/driver) — độ tin cậy bị hạ xuống MEDIUM`,
+      text: priorApplied
+        ? `Lần trước tại ${race.trackName} cả giải chạy ~${fieldRefStops!.toFixed(2)} pit/driver, plan hiện dùng ${best!.stops} pit — độ tin cậy bị hạ xuống MEDIUM`
+        : `Plan dùng ít pit hơn mặt bằng cả giải tại track này (plan ${best!.stops} vs ~${fieldRefStops!.toFixed(2)}/driver) — độ tin cậy bị hạ xuống MEDIUM`,
     });
   } else if (confidence === 'MEDIUM' && livesFromAllocation && bothPaceMeasured && fewStintSamples) {
     assumptions.push({
@@ -882,6 +964,12 @@ export function buildTyreLab(
     source: 'Races_Tracks + model constant',
     label: `Pit cost ≈ ${pitCostS.toFixed(1)}s (lane ${pitLaneLossS}s + stationary ${PIT_STATIONARY_ESTIMATE}s)`,
   });
+  if (priorApplied && options.prior) {
+    evidence.push({
+      source: 'pitwall:track-corrections (local)',
+      label: `Hiệu chỉnh local tại ${race.trackName}: lần trước plan ${options.prior.predictedStops ?? '?'} pit (pit vòng ${options.prior.predictedPitLap ?? '?'}), cả giải chạy ${(options.prior.fieldAvgStops ?? 0).toFixed(2)} pit/driver`,
+    });
+  }
 
   if (lifeSource.S === 'model') {
     assumptions.push({

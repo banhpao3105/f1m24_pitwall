@@ -298,6 +298,42 @@ export interface PersonnelModel {
   tablesPresent: { contracts: boolean; performance: boolean; patience: boolean };
 }
 
+/* ── In-game strategist plan (Save_PlayerStrategyStints, v0.5.1 P2) ─────
+ * Encoding verified on a real 1.11.0 save: TyreType 0=H / 1=M / 2=S
+ * (confirmed via the TyreDurability column: H=1.0, M=0.7845, S=0.5638).
+ * The table is empty before qualifying and after the race; rows appear
+ * for the CURRENT weekend only (no race reference column).
+ */
+
+/** One planned stint of the game's strategist plan. */
+export interface PlayerStrategyStint {
+  /** StintID as stored (0-based). */
+  stintIndex: number;
+  /** Decoded compound; null for unknown/wet encodings (not modelled). */
+  compound: 'S' | 'M' | 'H' | null;
+  /** Pit window for the pit ENDING this stint (null on the opening stint). */
+  pitWindowStart: number | null;
+  pitWindowEnd: number | null;
+  /** AverageStartingLap — the game's modelled start lap of this stint. */
+  expectedPitLap: number | null;
+  /** OptimalPitLap (0 pre-race in verified saves). */
+  optimalPitLap: number | null;
+}
+
+/** One strategy candidate for one car loadout. */
+export interface PlayerStrategyPlan {
+  loadoutId: number;
+  strategyId: number;
+  /** Selected = the plan the strategist currently runs. */
+  selected: boolean;
+  stints: PlayerStrategyStint[];
+}
+
+export interface PlayerStrategySection {
+  tablePresent: boolean;
+  plans: PlayerStrategyPlan[];
+}
+
 export interface RegulationVoteRow {
   teamId: number;
   /** Raw vote value — encoding not verified; engines treat 1 as YES. */
@@ -344,6 +380,8 @@ export interface SaveModel {
   regulations: RegulationProposal[];
   finance: FinanceModel;
   personnel: PersonnelModel;
+  /** In-game strategist plan for the active weekend (empty table → plans: []). */
+  playerStrategy: PlayerStrategySection;
   /** Which optional table groups were present — drives UI degradation. */
   availability: { table: string; present: boolean }[];
   /** Engine results attached later by analytics engines. */

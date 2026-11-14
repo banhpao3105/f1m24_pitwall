@@ -7,12 +7,13 @@
  */
 
 import { useTranslations, useLocale } from 'next-intl';
-import { useMemo, useState } from 'react';
-import { Waves, SlidersHorizontal, CloudRain } from 'lucide-react';
+import { useMemo, useState, useEffect, useRef } from 'react';
+import { Waves, SlidersHorizontal, CloudRain, Activity, Bot } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
+import { getTrackCorrection, putTrackCorrection, TRACK_CORRECTIONS_VERSION } from '@/lib/track-corrections';
 import { useTyreLab } from '@/lib/engine-hooks';
-import { whatIfPitShift, buildWetPlan } from '@/engines/tyre.engine';
+import { whatIfPitShift, buildWetPlan, type TyreLabPrior } from '@/engines/tyre.engine';
 import { RecommendationCard } from './RecommendationCard';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { StintTimeline } from './StintTimeline';
@@ -35,11 +36,69 @@ export function TyreLabView({
   const tWhat = useTranslations('whatif');
   const tSec = useTranslations('sec');
   const locale = useLocale() as 'vi' | 'en';
-  const tyre = useTyreLab(raceId);
 
   // what-if local state (docs/03 §5.3: pit sớm/muộn ±, toggle mưa)
   const [pitShift, setPitShift] = useState(0);
   const [rainOn, setRainOn] = useState(false);
+
+  const seasonRaces = model.races.filter((r) => r.seasonId === model.meta.seasonId);
+  const race = seasonRaces.find((r) => r.raceId === raceId) ?? seasonRaces.find((r) => r.state !== 2) ?? seasonRaces.at(-1) ?? null;
+
+  /* v0.5.1 P2 — local per-track correction prior (IndexedDB, local-only).
+     Loaded before the engine runs so the confidence cap applies on first
+     paint; scoped by trackId so a track switch hides the stale prior at
+     render time (no synchronous setState inside the effect). */
+  const [priorRecord, setPriorRecord] = useState<{ trackId: number; prior: TyreLabPrior } | null>(null);
+  const trackId = race?.trackId ?? null;
+  useEffect(() => {
+    let cancelled = false;
+    if (trackId == null) return;
+    void getTrackCorrection(trackId).then((rec) => {
+      if (cancelled || !rec || rec.trackId !== trackId) return;
+      setPriorRecord({
+        trackId,
+        prior: {
+          predictedStops: rec.predictedStops,
+          fieldAvgStops: rec.fieldAvgStops,
+          predictedPitLap: rec.predictedPitLap,
+        },
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [trackId]);
+  const prior = priorRecord && priorRecord.trackId === trackId ? priorRecord.prior : null;
+
+  const tyre = useTyreLab(raceId, prior ? { prior } : undefined);
+
+  /* v0.5.1 P2 — record the correction after a completed race: what the
+     engine advised vs what the field actually did. Once per race+plan. */
+  const capturedRef = useRef('');
+  useEffect(() => {
+    if (!tyre?.data.best || !race || race.state !== 2) return;
+    const key = `${race.raceId}:${tyre.data.best.stops}`;
+    if (capturedRef.current === key) return;
+    capturedRef.current = key;
+    const playerDriverIds = new Set(
+      model.drivers
+        .filter((d) => d.teamId === model.meta.playerTeamId)
+        .map((d) => d.staffId),
+    );
+    void putTrackCorrection({
+      trackId: race.trackId,
+      raceId: race.raceId,
+      seasonId: race.seasonId,
+      savedAt: new Date().toISOString(),
+      predictedStops: tyre.data.best.stops,
+      predictedPitLap: tyre.data.best.pitLaps[0] ?? null,
+      fieldAvgStops: tyre.data.observedStops?.avgStopsPerDriver ?? null,
+      playerPitLaps: (race.pitStops ?? [])
+        .filter((s) => playerDriverIds.has(s.driverId))
+        .map((s) => s.lap),
+      version: TRACK_CORRECTIONS_VERSION,
+    });
+  }, [tyre, race, model]);
 
   const whatIf = useMemo(() => {
     if (!tyre?.data.best) return null;
@@ -57,9 +116,6 @@ export function TyreLabView({
     if (!rainOn || !tyre) return null;
     return buildWetPlan(model, tyre.data.laps);
   }, [model, rainOn, tyre]);
-
-  const seasonRaces = model.races.filter((r) => r.seasonId === model.meta.seasonId);
-  const race = seasonRaces.find((r) => r.raceId === raceId) ?? seasonRaces.find((r) => r.state !== 2) ?? seasonRaces.at(-1) ?? null;
 
   if (!race) {
     return (
@@ -131,6 +187,150 @@ export function TyreLabView({
               </div>
             ) : null}
           </section>
+
+          {/* evidence clock (v0.5.1 P2) — the source of every number behind
+              the plan; add-only strip, no layout redesign */}
+          <section
+            aria-label={t('clock.title')}
+            className="rounded-lg border border-line bg-surface p-4"
+            data-testid="evidence-clock"
+          >
+            <header className="mb-3 flex flex-wrap items-center gap-2">
+              <Activity className="h-4 w-4 text-teal" aria-hidden="true" />
+              <span className="font-mono text-[11px] uppercase tracking-wider text-teal">{tSec('evidence')}</span>
+              <h3 className="text-[15px] font-semibold text-ink">{t('clock.title')}</h3>
+            </header>
+            <div className="flex flex-wrap gap-2">
+              {(['S', 'M', 'H'] as CompoundKey[]).map((c) => {
+                const src = tyre.data.paceSource[c];
+                const measured = c === 'S' ? null : tyre.data.paceMeasured[c as 'M' | 'H'];
+                return (
+                  <div key={c} className="flex items-center gap-1.5 rounded bg-panel px-2.5 py-1.5">
+                    <CompoundBadge compound={c} size="sm" />
+                    <span className="font-mono text-xs text-ink">
+                      {c === 'S' ? '—' : `+${tyre.data.deltas[c].toFixed(2)}s`}
+                    </span>
+                    <span className="rounded bg-raised px-1.5 py-0.5 font-mono text-[9px] uppercase text-ink-faint">
+                      {t(`source.${src}`)}
+                    </span>
+                    {measured && src === 'model' ? (
+                      <span className="font-mono text-[10px] text-amber">
+                        {t('clock.measuredBut', { delta: measured.delta.toFixed(2) })}
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              })}
+              <div className="flex items-center gap-1.5 rounded bg-panel px-2.5 py-1.5">
+                <span className="text-[10px] text-ink-faint">{t('clock.lives')}</span>
+                <span className="rounded bg-raised px-1.5 py-0.5 font-mono text-[9px] uppercase text-ink-faint">
+                  {t(`source.${tyre.data.lifeSource.S}`)}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 rounded bg-panel px-2.5 py-1.5">
+                <span className="text-[10px] text-ink-faint">{t('clock.stops')}</span>
+                <span className="font-mono text-xs text-ink">
+                  {tyre.data.observedStops
+                    ? `~${tyre.data.observedStops.avgStopsPerDriver.toFixed(2)}`
+                    : '—'}
+                </span>
+                <span className="rounded bg-raised px-1.5 py-0.5 font-mono text-[9px] uppercase text-ink-faint">
+                  {tyre.data.expectedSource
+                    ? t(`source.${tyre.data.expectedSource}`)
+                    : t('clock.noData')}
+                </span>
+              </div>
+            </div>
+            {(() => {
+              const unmeasured = [
+                ...new Set(
+                  tyre.data.best.stints
+                    .filter((st) => tyre.data.paceSource[st.compound] === 'model')
+                    .map((st) => st.compound),
+                ),
+              ];
+              return unmeasured.length > 0 ? (
+                <p
+                  className="mt-2 rounded border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger"
+                  data-testid="evidence-warning"
+                >
+                  {t('clock.unmeasuredWarn', { compounds: unmeasured.join(', ') })}
+                </p>
+              ) : null;
+            })()}
+            {prior ? (
+              <p className="mt-2 text-[11px] text-ink-soft" data-testid="track-prior">
+                {t('clock.prior', {
+                  track: trackDisplay(race.trackName, locale),
+                  stops: prior.predictedStops ?? '—',
+                  lap: prior.predictedPitLap ?? '—',
+                  field: prior.fieldAvgStops != null ? prior.fieldAvgStops.toFixed(1) : '—',
+                })}
+              </p>
+            ) : null}
+          </section>
+
+          {/* the game's own strategist plan (v0.5.1 P2) — team level */}
+          {tyre.data.gamePlan ? (
+            <section
+              aria-label={t('gamePlan.title')}
+              className="rounded-lg border border-line bg-panel p-4"
+              data-testid="game-plan"
+            >
+              <header className="mb-3 flex flex-wrap items-center gap-2">
+                <Bot className="h-4 w-4 text-teal" aria-hidden="true" />
+                <span className="font-mono text-[11px] uppercase tracking-wider text-teal">{tSec('game')}</span>
+                <h3 className="text-[15px] font-semibold text-ink">{t('gamePlan.title')}</h3>
+              </header>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-10 font-mono text-[10px] text-ink-faint">{t('gamePlan.game')}</span>
+                  <span className="flex flex-wrap gap-1">
+                    {tyre.data.gamePlan.stintLaps.map((laps, j) => (
+                      <span key={j} className="inline-flex items-center gap-0.5">
+                        <CompoundBadge compound={tyre.data.gamePlan!.compounds[j] as CompoundKey} size="sm" />
+                        <span className="font-mono text-[10px] text-ink-soft">{laps}</span>
+                      </span>
+                    ))}
+                  </span>
+                  {tyre.data.gamePlan.pitLaps.length > 0 ? (
+                    <span className="font-mono text-[10px] text-ink-soft">
+                      {t('gamePlan.pitLaps', { laps: tyre.data.gamePlan.pitLaps.join(', ') })}
+                    </span>
+                  ) : null}
+                  <span className="font-mono text-[10px] text-ink-faint">
+                    {t('gamePlan.windows', {
+                      windows: tyre.data.gamePlan.pitWindows
+                        .map((w) => `${w.start}–${w.end}`)
+                        .join(' · '),
+                    })}
+                  </span>
+                </div>
+                {tyre.data.best ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="w-10 font-mono text-[10px] text-ink-faint">{t('gamePlan.web')}</span>
+                    <span className="flex flex-wrap gap-1">
+                      {tyre.data.best.stints.map((s, j) => (
+                        <span key={j} className="inline-flex items-center gap-0.5">
+                          <CompoundBadge compound={s.compound as CompoundKey} size="sm" />
+                          <span className="font-mono text-[10px] text-ink-soft">{s.laps}</span>
+                        </span>
+                      ))}
+                    </span>
+                    {tyre.data.best.pitLaps.length > 0 ? (
+                      <span className="font-mono text-[10px] text-ink-soft">
+                        {t('gamePlan.pitLaps', { laps: tyre.data.best.pitLaps.join(', ') })}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+              {!tyre.data.gamePlan.loadoutsAgree ? (
+                <p className="mt-2 text-[11px] text-amber">{t('gamePlan.loadoutsDiffer')}</p>
+              ) : null}
+              <p className="mt-1 text-[11px] text-ink-faint">{t('gamePlan.teamLevel')}</p>
+            </section>
+          ) : null}
 
           {/* degradation curves — engine constants visualised (v0.5.0 step 2) */}
           <section aria-label={t('degTitle')} className="rounded-lg border border-line bg-panel p-4">

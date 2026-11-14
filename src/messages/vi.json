@@ -141,7 +141,9 @@
     "queue": "DEV QUEUE",
     "calendar": "CALENDAR",
     "standings": "STANDINGS",
-    "data": "RACE DATA"
+    "data": "RACE DATA",
+    "evidence": "EVIDENCE",
+    "game": "GAME PLAN"
   },
   "pitbar": {
     "optimalLabel": "Pit tối ưu: vòng {lap} (cửa sổ {lo}–{hi})",
@@ -283,7 +285,26 @@
       "model": "model",
       "practice": "practice",
       "meta": "meta",
-      "baseline": "baseline"
+      "baseline": "baseline",
+      "cross-session": "cross-session"
+    },
+    "clock": {
+      "title": "Đồng hồ bằng chứng",
+      "lives": "đời lốp",
+      "stops": "pit cả giải",
+      "noData": "chưa có",
+      "measuredBut": "đo được +{delta}s — xếp hạng bằng model",
+      "unmeasuredWarn": "Plan đang dùng {compounds} với delta CHƯA đo được ở track này (hằng số model) — coi như ước lượng.",
+      "prior": "Lần trước tại {track}: plan {stops} pit (pit vòng {lap}), cả giải chạy {field} pit/driver."
+    },
+    "gamePlan": {
+      "title": "Plan của game",
+      "game": "GAME",
+      "web": "WEB",
+      "pitLaps": "pit {laps}",
+      "windows": "cửa sổ {windows}",
+      "loadoutsDiffer": "Hai xe chọn plan khác nhau — đang hiện theo LoadoutID 0.",
+      "teamLevel": "Mức đội — chưa xác minh được LoadoutID (0/1) map sang xe nào. Nguồn: Save_PlayerStrategyStints."
     }
   },
   "whatif": {

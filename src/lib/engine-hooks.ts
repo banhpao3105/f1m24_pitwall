@@ -7,7 +7,7 @@
  */
 
 import { useMemo } from 'react';
-import { buildTyreLab, type TyreLab } from '@/engines/tyre.engine';
+import { buildTyreLab, type TyreLab, type TyreLabOptions } from '@/engines/tyre.engine';
 import { buildPaceBoard, type PaceBoard } from '@/engines/pace.engine';
 import { buildSim, type SimBoard, type SimOptions } from '@/engines/sim.engine';
 import { buildCarLab, type CarLab } from '@/engines/car.engine';
@@ -23,12 +23,18 @@ import { buildGazetteIssue, type GazetteIssue } from '@/engines/gazette.engine';
 import type { EngineResult } from '@/domain/types';
 import { useSaveStore } from '@/store/save.store';
 
-export function useTyreLab(raceId: number | null): EngineResult<TyreLab> | null {
+export function useTyreLab(
+  raceId: number | null,
+  options?: TyreLabOptions,
+): EngineResult<TyreLab> | null {
   const model = useSaveStore((s) => s.model);
+  // Structurally-stable deps only — the prior object arrives from an async
+  // local store and changes identity when it finishes loading.
+  const prior = options?.prior;
   return useMemo(() => {
     if (!model || raceId == null) return null;
-    return buildTyreLab(model, raceId);
-  }, [model, raceId]);
+    return buildTyreLab(model, raceId, prior ? { prior } : undefined);
+  }, [model, raceId, prior]);
 }
 
 export function usePaceBoard(): EngineResult<PaceBoard> | null {

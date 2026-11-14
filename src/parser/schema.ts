@@ -35,6 +35,7 @@ export const OPTIONAL_TABLES = [
   'Races_DriverStandings',
   'Races_TeamStandings',
   'Save_CarTyreAllocation',
+  'Save_PlayerStrategyStints',
   'Staff_PerformanceStats',
   'Staff_DriverData',
   'Staff_Contracts',
