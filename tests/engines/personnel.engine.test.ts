@@ -101,6 +101,75 @@ describe('buildPersonnel', () => {
     expect(rec?.confidence).toBe('MEDIUM');
   });
 
+  it('0.5.3: tyre duel skips drivers who never raced for the team — no fabricated gap, no "null" text', () => {
+    // Real-save shape (Bahrain Day 46495): roster maps 4 drivers to the
+    // player team, but only Ricciardo (#13) and O'Ward (#285) actually
+    // raced for it. Zhou (#105) has results but all for team 9 (stale
+    // drivers-team mapping); Fittipaldi (#80) never raced at all. The old
+    // code took the first two staff-ordered cards and coerced Fittipaldi's
+    // null avgStintLaps to 0 → fabricated "57 laps/stint gap" + text
+    // "Pietro Fittipaldi null".
+    const races: Race[] = [1, 2, 3].map((i) => {
+      const race = makeRace({ raceId: i });
+      race.results = [
+        { driverId: 13, driverName: 'Daniel Ricciardo', teamId: 32, teamName: 'CustomTeam', finishingPos: 11, points: 0, dnf: false, laps: 57 },
+        { driverId: 285, driverName: "Pato O'Ward", teamId: 32, teamName: 'CustomTeam', finishingPos: 17, points: 0, dnf: false, laps: 57 },
+        { driverId: 105, driverName: 'Guanyu Zhou', teamId: 9, teamName: 'Other Team', finishingPos: 14, points: 0, dnf: false, laps: 57 },
+      ];
+      race.pitStops = [
+        { driverId: 285, teamId: 32, lap: 20, durationMs: 22_000 },
+        { driverId: 105, teamId: 9, lap: 19, durationMs: 22_000 },
+        { driverId: 105, teamId: 9, lap: 38, durationMs: 22_000 },
+      ];
+      return race;
+    });
+    const model = makeModel(races, {
+      player: { teamId: 32, teamName: 'CustomTeam', customTeamEnabled: true },
+      drivers: [
+        { staffId: 13, fullName: 'Daniel Ricciardo', teamId: 32 },
+        { staffId: 80, fullName: 'Pietro Fittipaldi', teamId: 32 },
+        { staffId: 105, fullName: 'Guanyu Zhou', teamId: 32 },
+        { staffId: 285, fullName: "Pato O'Ward", teamId: 32 },
+      ],
+    });
+    const p = buildPersonnel(model);
+
+    const duel = p.recommendations.find((r) => r.id === 'personnel-duel-tyre');
+    expect(duel).toBeDefined();
+    expect(duel?.title).toContain('Daniel Ricciardo');
+    expect(duel?.title).toContain("Pato O'Ward");
+    for (const r of p.recommendations) {
+      const text = `${r.title} ${r.action} ${r.why} ${r.riskIfIgnored ?? ''}`;
+      expect(text).not.toContain('null');
+      expect(text).not.toContain('Fittipaldi');
+      expect(text).not.toContain('Guanyu Zhou');
+    }
+  });
+
+  it('0.5.3: fewer than 2 raced drivers → no tyre duel rec, explicit assumption instead', () => {
+    const races: Race[] = [1].map((i) => {
+      const race = makeRace({ raceId: i });
+      race.results = [
+        { driverId: 13, driverName: 'Daniel Ricciardo', teamId: 32, teamName: 'CustomTeam', finishingPos: 11, points: 0, dnf: false, laps: 57 },
+      ];
+      return race;
+    });
+    const model = makeModel(races, {
+      player: { teamId: 32, teamName: 'CustomTeam', customTeamEnabled: true },
+      drivers: [
+        { staffId: 13, fullName: 'Daniel Ricciardo', teamId: 32 },
+        { staffId: 80, fullName: 'Pietro Fittipaldi', teamId: 32 },
+      ],
+    });
+    const p = buildPersonnel(model);
+    expect(p.recommendations.find((r) => r.id === 'personnel-duel-tyre')).toBeUndefined();
+    expect(p.assumptions.some((a) => a.text.includes('Chưa đủ dữ liệu giữ lốp'))).toBe(true);
+    for (const r of p.recommendations) {
+      const text = `${r.title} ${r.action} ${r.why} ${r.riskIfIgnored ?? ''}`;
+      expect(text).not.toContain('null');
+    }
+  });
+
   it('flags expiring contracts inside the alert window', () => {
     const model = makeModel(duelRaces(), {
       personnel: {

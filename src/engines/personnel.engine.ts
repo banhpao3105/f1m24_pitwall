@@ -98,6 +98,11 @@ function median(values: number[]): number | null {
   return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
+/** 0.5.3: display helper — missing data renders "n/a", never the string "null". */
+function fmtStint(v: number | null): string {
+  return v != null ? `${v}` : 'n/a';
+}
+
 function driverName(model: SaveModel, id: number): string {
   return (
     model.drivers.find((d) => d.staffId === id)?.fullName ??
@@ -293,23 +298,61 @@ export function buildPersonnel(model: SaveModel): EngineResult<PersonnelBoard> {
       riskIfIgnored: 'Hết hợp đồng → mất người miễn phí; tay đua chủ chốt sẽ kéo theo điểm xếp hạng đội',
     });
   }
-  const playerDrivers = cards.filter((c) => c.isPlayer);
-  if (playerDrivers.length >= 2) {
-    const [a, b] = playerDrivers;
-    const tyreEdge = (a.avgStintLaps ?? 0) - (b.avgStintLaps ?? 0);
-    if (Math.abs(tyreEdge) >= 1) {
-      const better = tyreEdge > 0 ? a : b;
-      const worse = tyreEdge > 0 ? b : a;
-      recommendations.push({
-        id: 'personnel-duel-tyre',
-        title: `${better.name} giữ lốp tốt hơn ${worse.name}`,
-        action: `Ưu tiên chiến thuật dài stint cho ${better.name}; cho ${worse.name} pit sớm hơn theo plan của Tyre Lab`,
-        why: `Median laps/stint: ${better.name} ${better.avgStintLaps} vs ${worse.name} ${worse.avgStintLaps} (chênh ${Math.abs(Math.round(tyreEdge * 10) / 10)} vòng/stint) — JTBD #8.`,
-        confidence: 'MEDIUM',
-        evidence,
-        assumptions,
-      });
+  /* 0.5.3 fix: the tyre duel compares only drivers who actually raced for
+   * the team. Before: the first two staff-ordered player cards were picked
+   * and null avgStintLaps was coerced to 0 — on the real Bahrain save this
+   * pitted Ricciardo against reserve Fittipaldi (never raced) and fabricated
+   * a "57 laps/stint gap" with the literal text "Pietro Fittipaldi null".
+   * Eligible = player driver with measured median laps/stint and ≥1
+   * completed race without DNF driving FOR the player team; prefer the two
+   * with the most such races. Fewer than 2 eligible → no duel rec, no
+   * fabricated numbers — an explicit assumption instead. */
+  const nonDnfPlayerRacesByStaff = new Map<number, number>();
+  for (const race of completedRaces) {
+    for (const res of race.results) {
+      if (res.dnf || res.teamId !== playerTeamId) continue;
+      nonDnfPlayerRacesByStaff.set(
+        res.driverId,
+        (nonDnfPlayerRacesByStaff.get(res.driverId) ?? 0) + 1,
+      );
     }
+  }
+  const playerDrivers = cards.filter((c) => c.isPlayer);
+  const duelEligible = playerDrivers
+    .filter(
+      (c) =>
+        c.avgStintLaps != null && (nonDnfPlayerRacesByStaff.get(c.staffId) ?? 0) > 0,
+    )
+    .sort(
+      (x, y) =>
+        (nonDnfPlayerRacesByStaff.get(y.staffId) ?? 0) -
+          (nonDnfPlayerRacesByStaff.get(x.staffId) ?? 0) ||
+        x.staffId - y.staffId,
+    );
+  if (duelEligible.length >= 2) {
+    const [a, b] = duelEligible;
+    const aStint = a.avgStintLaps;
+    const bStint = b.avgStintLaps;
+    if (aStint != null && bStint != null) {
+      const tyreEdge = aStint - bStint;
+      if (Math.abs(tyreEdge) >= 1) {
+        const better = tyreEdge > 0 ? a : b;
+        const worse = tyreEdge > 0 ? b : a;
+        recommendations.push({
+          id: 'personnel-duel-tyre',
+          title: `${better.name} giữ lốp tốt hơn ${worse.name}`,
+          action: `Ưu tiên chiến thuật dài stint cho ${better.name}; cho ${worse.name} pit sớm hơn theo plan của Tyre Lab`,
+          why: `Median laps/stint: ${better.name} ${fmtStint(better.avgStintLaps)} vs ${worse.name} ${fmtStint(worse.avgStintLaps)} (chênh ${Math.abs(Math.round(tyreEdge * 10) / 10)} vòng/stint) — JTBD #8.`,
+          confidence: 'MEDIUM',
+          evidence,
+          assumptions,
+        });
+      }
+    }
+  } else if (playerDrivers.length >= 2) {
+    assumptions.push({
+      text: 'Chưa đủ dữ liệu giữ lốp để so duel giữa các tay đua của đội (cần ≥2 tay đua thực sự đua cho đội, có chặng hoàn thành không DNF) — không so sánh cho',
+    });
   }
   if (recommendations.length === 0 && cards.length === 0) {
     recommendations.push({
@@ -417,8 +460,6 @@ export function buildDriverDuel(
 
   const recommendations: Recommendation[] = [];
   if (bothPresent) {
-    const tyreA = a.avgStintLaps ?? 0;
-    const tyreB = b.avgStintLaps ?? 0;
     const winner =
       raceA !== raceB ? (raceA > raceB ? a : b) : qualiA !== qualiB ? (qualiA > qualiB ? a : b) : null;
     if (winner) {
@@ -427,7 +468,7 @@ export function buildDriverDuel(
         id: 'duel-verdict',
         title: `${winner.name} đang thắng duel với ${loser.name}`,
         action: `Giữ ${winner.name} làm mốc so sánh; xếp thứ tự nâng cấp part/chiến thuật theo ${winner.name} trước`,
-        why: `Race H2H ${a.name.split(' ').at(-1)} ${raceA}-${raceB} ${b.name.split(' ').at(-1)}, quali ${qualiA}-${qualiB}, điểm ${a.points ?? 0} vs ${b.points ?? 0}, giữ lốp ${a.avgStintLaps ?? 'n/a'} vs ${b.avgStintLaps ?? 'n/a'} laps/stint.`,
+        why: `Race H2H ${a.name.split(' ').at(-1)} ${raceA}-${raceB} ${b.name.split(' ').at(-1)}, quali ${qualiA}-${qualiB}, điểm ${fmtStint(a.points)} vs ${fmtStint(b.points)}, giữ lốp ${fmtStint(a.avgStintLaps)} vs ${fmtStint(b.avgStintLaps)} laps/stint.`,
         confidence,
         evidence,
         assumptions,
