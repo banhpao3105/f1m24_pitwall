@@ -2,6 +2,65 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.6.2] — Sửa mapping WeekendTyreType (delta H về đúng +0.89) + 2 lỗi review 0.6.0
+
+Đợt sửa sau khi chủ dự án audit v0.6.1 trên save Silverstone 2027 pre-race:
+v0.6.1 đúng 2/3 (vách mòn giết được S→H, confidence tụt LOW với lý do rõ,
+delta bị ép lộ mặt giữ raw +0.606) nhưng bước 1 đọc SAI mã hợp chất trong
+bảng allocation — delta H xếp hạng thành +16.45s (thời gian Wet trên đường
+khô) thay vì +0.89s. Xếp hạng vẫn đúng (S→M→S thắng) nhưng vì lý do sai: H
+bị định giá chậm hơn S tới 16s/vòng nên không bao giờ thắng được, kể cả ở
+chặng mà H thực sự tốt.
+
+### Fixed — Bước 1: mapping WeekendTyreType `0=H, 1=M, 2=S, 3=I, 4=W` (`5694160`)
+- **Nguyên nhân gốc:** comment trong `src/parser/repositories/tyres.repo.ts`
+  ghi `0=W, 1=I, 2=S, 3=M, 4=H` — SAI. Kiểm chứng trên save thật
+  (Silverstone 2027 pre-race, bảng allocation 440 dòng, chỉ set mới):
+  mỗi type đúng 1 giá trị EstimatedLapTime — type 0 = 89.80s, type 1 =
+  89.48s, type 2 = 88.91s, type 3 = 95.32s (Inter), type 4 = 105.35s (Wet).
+  Nếu 3=M/4=H như comment cũ thì M/H chậm hơn S tới 6.4s/16.4s trên đường
+  khô — phi lý; practice BestLapTyre cũng đọc S=2, M=1, H=0; plan của game
+  chỉ dùng TyreType 0/1/2.
+- Sửa bảng map ở mọi chỗ dùng WeekendTyreType trong `tyre.engine.ts`:
+  `getAllocationPace`, `getCompoundCaps` ([[2,'S'],[1,'M'],[0,'H']]),
+  `buildWetPlan` (Inter = freshLife(3), Wet = freshLife(4)), wet lives
+  trong `buildTyreLab` (inters === 3, wets === 4) và hằng số `ALLOC_TYRE`.
+- Viết lại comment sai trong `tyres.repo.ts` (header + field
+  `RawTyreSet.weekendTyreType`) kèm nguồn kiểm chứng.
+- Fixture test mirror đúng mapping thật: `silverstoneAllocation` giờ mang
+  ĐỦ 5 type của save thật (Inter 95.32 / Wet 105.35 cạnh S/M/H) — với
+  mapping cũ M sẽ đọc 95.32 và test KHÔNG thể pass; fixture
+  `getCompoundCaps` dùng type 1/0 cho M/H; `buildWetPlan` đọc median của
+  3 set mỗi type 3/4.
+- Regression test khóa GIÁ TRỊ (không chỉ paceSource): `getAllocationPace`
+  trả S 88.91 / M +0.57 / H +0.89 kể cả khi có set Inter/Wet; caps
+  {S 23, M 35, H 53}; wet lives I 48 / W 62; assumption trích đúng
+  "(88.91 / 89.48 / 89.80s)".
+- Không đổi median/min, filter set mới, hằng số deg/cliff, công thức xếp
+  hạng — chỉ sửa mapping.
+
+### Fixed — Bước 2: 2 lỗi review 0.6.0 + câu "hòa" trên save thật (`ed897db`)
+- **B1 (hồi quy 0.6.0):** dòng verdict của chart "Vị trí leo được" trên
+  Home hiện nguyên key `wall.charts.gainedVerdict` kèm 2 console error
+  `IntlError: FORMATTING_ERROR` — chuỗi i18n cần 4 biến nhưng call chỉ
+  truyền 3. Đã thêm `races: sd.racesConsidered`.
+- **B2 (có sẵn từ trước):** Tyre Lab trắng trơn khi mở bằng link trực tiếp
+  `?view=tyres` không có `&race=` — view tự tìm ra chặng kế tiếp để hiển thị
+  nhưng vẫn truyền raceId thô (null) vào `useTyreLab`. Giờ truyền
+  `race?.raceId ?? null` (khớp hành vi RaceWeekendView); qua sidebar không
+  đổi gì.
+- **Wording "hòa":** trên save thật, plan kế tiếp (S→S→M) là hoán vị cùng
+  multiset với plan gợi ý, vsBestS đúng 0.0 — why viết "kế hoạch kế tiếp
+  (S→S→M) chậm hơn 0.0s". Nay viết "hòa (cùng tổng thời gian mô hình)".
+  Logic isTie, tieNote và thứ tự xếp hạng không đổi; unit test tái lập
+  đúng hình thế save thật (hoán vị 0.0 ở top, plan khác đầu tiên ≥ 2s).
+
+### Không đổi
+- Vách mòn (DEG_CLIFF), confidence pillars, số liệu pace/sim/finance/
+  results — nguyên vẹn từ 0.6.1. Backtest Bahrain giữ nguyên thứ hạng
+  (S→M tốt nhất); Silverstone: best S→M→S 75.7s, S→H ≥ 100s (nhờ vách mòn,
+  không còn nhờ delta sai), confidence LOW.
+
 ## [0.6.1] — Engine lốp trung thực: delta bị ép lộ mặt, vách mòn, confidence siết
 
 Đợt sửa engine lốp theo prompt v0.6.1 của chủ dự án, khởi nguồn từ Silverstone
