@@ -85,7 +85,9 @@ function PitWallSurface() {
 
   return (
     <div className="pitwall-grid-bg flex min-h-screen flex-col bg-void text-ink">
-      <WallSidebar />
+      <Suspense fallback={null}>
+        <WallSidebar />
+      </Suspense>
 
       <div className="flex min-h-screen flex-col lg:pl-60">
         <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/80 print:hidden">
