@@ -2,6 +2,65 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.5.4] — Pace đua (vòng trung bình) + nhãn pace đỉnh + sửa gap tower xe bị bắt vòng
+
+Đợt sửa theo báo cáo số liệu thật của chủ dự án, kiểm chứng trên save Bahrain
+mùa 2027 (Day 46507 — vừa đua xong Bahrain, 4/21 chặng, khô 28°C): đội **hạng
+11/11 về pace đỉnh (median 2.299s)** nhưng **hạng 7/11 về pace đua (median
+0.468s)** và leo +18 vị trí ở Bahrain — mô hình pace cũ chỉ có MỘT loại pace
+và trình bày như phán quyết cuối cùng. Prompt này thêm metric thứ hai, sửa
+cách trình bày, và sửa gap timing tower — **không đụng con số peak pace nào**
+(2.299s / hạng 11/11 / Alfa Romeo 0.274s giữ nguyên, có test khóa). 1 bước =
+1 commit Conventional, lint + typecheck + test xanh trước mỗi commit.
+
+### Added — Bước 1: engine pace đua (vòng trung bình) (`b1b450e`)
+- `buildRacePaceBoard` trong `src/engines/pace.engine.ts`: đo **vòng trung
+  bình thực sự chạy** (`Races_Results.Time / Laps`) thay vì một vòng push.
+  Cùng cấu trúc + logic đối thủ với pace đỉnh qua helper dùng chung
+  `assembleTeamBoard` (bài học 0.4.1 — hai board không bao giờ lệch nhau);
+  loại DNF / laps ≤ 0 / Time ≤ 0; median gap các chặng; window TREND_RACES;
+  confidence trần MEDIUM khi ≥ 3 chặng (proxy, chưa có LapHistory).
+- Assumption bắt buộc kèm theo: "Vòng trung bình tính cả vòng vào/ra pit —
+  tay đua ít pit hơn có lợi nhẹ; sẽ loại vòng pit khi có dữ liệu theo vòng".
+- Kiểm chứng (unit test khóa cả 2 board trên bộ số liệu đã đối chiếu SQL):
+  **CustomTeam 0.468s hạng 7/11**, per-race mới-nhất-trước
+  [1.113, 0.421, 0.493, 0.443]; Red Bull 0.000 hạng 1; Alfa Romeo 0.871 hạng
+  11; **pace đỉnh không đổi: 2.299s hạng 11/11, Alfa Romeo +0.274s**.
+
+### Changed — Bước 2: giao diện nói rõ hai loại pace + bằng chứng ngược (`61fb613`, `2488679`)
+- Mọi nhãn "pace" trơ trọi thành **"pace đỉnh (fastest lap)"**: sub KPI Home
+  ("Xếp hạng xe #11 — theo pace đỉnh (fastest lap)"), tiêu đề pace section
+  Home + Race Weekend, dòng rank.
+- Pace đua hiện cạnh pace đỉnh: Home thêm dòng "**Pace đua (vòng trung bình)
+  #7/11** · 0.005s/vòng chậm so với Alpine" + dòng vị trí leo được
+  ("Bahrain: Daniel Ricciardo +5, Patricio O'Ward +13 · tổng 4 chặng: +54",
+  tính từ startingPos − finishingPos của 2 xe đội); Race Weekend hiện cả 2
+  board trong cùng section + render pace recommendations.
+- Khuyến nghị pace mang theo **bằng chứng ngược** (engine tự ghép, test khóa):
+  title "**Pace đỉnh** đang chậm hơn Alfa Romeo 0.274s/vòng (fastest lap)";
+  why thêm "... nhưng pace đua (vòng trung bình) hạng 7/11 và leo +18 vị trí
+  ở Bahrain (Ricciardo +5, O'Ward +13, 14 điểm) — xe đua đường dài tốt hơn
+  một vòng nhanh nhất". Evidence thêm nguồn `Races_Results.Time / Laps`.
+- Fix layout nhỏ (`2488679`): hint của PaceBarChart tràn khỏi hộp cao độ cố
+  định, đè lên dòng rank/vsRival ngay dưới (xác định bằng browser, kiểm tra
+  hình học: hint bottom 1810.5px < rank top 1818.5px sau fix).
+
+### Fixed — Bước 3: gap timing tower sai với xe bị bắt vòng (`b0d2d29`)
+- Bug tái hiện trên save thật: gap = Time − winnerTime không trừ số vòng bị
+  bắt → **Sainz P8 +7.498s trong khi Ricciardo P4 +63.449s** (P8 gap nhỏ hơn
+  P4 là vô lý; Sainz/O'Ward 56 vòng, Ocon/Hulkenberg/Perez/Mini 55 vòng trên
+  chặng 57 vòng — tổng thời gian của họ thiếu ~1–2 vòng = ~90–180s).
+- Fix dùng chung 2 chỗ tính gap (tower + gazette) qua `src/lib/race-gap.ts`:
+  xe bị bắt vòng hiện **"+1 LAP" / "+2 LAPS"** theo quy ước F1 (bản VI giữ
+  nguyên chữ LAP); DNF giữ nguyên DNF; xe đủ vòng vẫn gap giây như cũ.
+  Gazette rows thêm `lapsDown` (gapS bị ẩn cho xe bị bắt vòng); winner quote
+  giữ nguyên hành vi qua raw P2 deficit.
+- Kiểm chứng: tower + gazette Bahrain hiện Sainz P8 "+1 LAP", O'Ward P9
+  "+1 LAP", Ocon/Hulkenberg/Perez/Mini "+2 LAPS", Ricciardo P4 vẫn
+  "+63.449s", Verstappen "người thắng". Unit test cho 1/2 vòng + cùng vòng.
+
+---
+
 ## [0.5.3] — Fix Personnel/Gazette/Research + dữ liệu thật thay placeholder + polish UI
 
 Đợt fix theo báo cáo bug của chủ dự án, kiểm chứng từng bước trên save thật
