@@ -56,9 +56,14 @@ export function PaceBarChart({
     }))
     .reverse();
 
+  // v0.5.4: give the chart an explicit pixel height instead of a fixed
+  // wrapper height — the old fixed box made the hint text overflow onto
+  // the line that follows the chart (rank / vsRival conclusions).
+  const chartHeight = rows.length * 26 + 24;
+
   return (
-    <div style={{ width: '100%', height: rows.length * 26 + 24 }} data-testid={testId ?? 'pace-chart'}>
-      <ResponsiveContainer>
+    <div data-testid={testId ?? 'pace-chart'}>
+      <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart data={data} layout="vertical" margin={{ top: 4, right: 56, bottom: 0, left: 0 }}>
           <XAxis type="number" hide domain={[0, 'dataMax']} />
           <YAxis
