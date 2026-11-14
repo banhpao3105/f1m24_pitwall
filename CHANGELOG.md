@@ -2,6 +2,74 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.5.6] — Bảng sức mạnh thực chiến cạnh bảng pace
+
+Đợt thêm theo báo cáo số liệu thật của chủ dự án, kiểm chứng trên save Miami
+mùa 2027 (6/21 chặng xong): bảng pace đo "pace của xe nhanh nhất mỗi đội" nên
+Alpine nhỉnh hơn đội bạn trên giấy (pace đỉnh #7 vs #11, pace đua #4 vs #5),
+nhưng **mọi thước đo kết quả đều nói ngược lại** — bạn P5 với **51 điểm** vs
+Alpine P7 với **11 điểm**, đối đầu trực tiếp **5–1**, DNF **1 vs 5**, vị trí
+leo được **+81 vs −4**. Kết quả mới là cuộc chơi, nên v0.5.6 thêm **bảng
+"Sức mạnh thực chiến"** ngay cạnh các bảng pace trong Race Weekend: điểm,
+điểm/chặng, median best finish (kèm số mẫu n=), DNF/lượt xuất phát, leo vị
+trí, đối đầu vs đội bạn. **Không gộp thành "điểm sức mạnh tổng hợp"** (cấm
+trọng số tự chế) — các số liệu thật đặt cạnh nhau, độc lập với số pace. Số
+pace không đổi: peak 2.299s #11/11 (Bahrain) và pace đua 0.468s #7/11 vẫn
+được test khóa nguyên. 1 bước = 1 commit Conventional, lint + typecheck +
+test xanh trước mỗi commit.
+
+### Added — Bước 1: results engine (`1afb399`)
+- `buildResultsBoard(model, options)` (`src/engines/results.engine.ts`): cửa
+  sổ 6 chặng đã xong gần nhất (cùng cửa sổ `TREND_RACES` với bảng pace); mỗi
+  đội một dòng: `points` (tổng `Races_Results.Points`), `pointsPerRace`,
+  `medianBestFinish` (median vị trí về đích tốt nhất từng chặng, chỉ đếm
+  chặng đội có ít nhất 1 xe về đích — cột `samples` ghi rõ n=), `dnfCount/
+  starts`, `positionsGained` (tổng startingPos − finishingPos của xe về đích,
+  loại DNF), `headToHead` vs đội bạn từ góc nhìn đội bạn (đội không có xe về
+  đích thua; cả 2 cùng không có thì chặng bị loại khỏi đếm).
+- Xếp hạng: điểm giảm dần → median best finish tăng dần → leo vị trí giảm
+  dần. Confidence: HIGH ≥4 chặng, MEDIUM 2–3, LOW <2. Hai assumption bắt buộc
+  hiển thị: thiên vị phân hạng của "leo vị trí" và việc median loại chặng
+  không có xe về đích (DNF nằm ở cột riêng, không bị giấu như bảng pace đỉnh).
+- **Kiểm chứng (unit test khóa trên bộ số liệu đã đối chiếu của chủ dự án —
+  save Miami 6 chặng): Red Bull 201 · Mercedes 149 · McLaren 99 · Ferrari 54
+  · CustomTeam 51 · Williams 36 · Alpine 11 · Haas 4 · AlphaTauri 1 · Aston
+  Martin 0 · Alfa Romeo 0; median best finish 1.0 / 2.5 / 4.5 / 7.0 / 7.0 /
+  7.0 / 11 (n=5) / 14.0 / 12.0 / 14.5 / 16 (n=5); DNF 1/1/1/0/1/1/5/1/2/0/6
+  trên 12 lượt; leo vị trí −9/−9/+28/−21/+81/+14/−4/+6/+28/+34/−6; đối đầu
+  Alpine 5–1, Williams 4–2, Ferrari 3–3, Haas 4–2, AlphaTauri 4–2, Aston
+  Martin 6–0, McLaren 1–5, Mercedes 1–5, Red Bull 0–6**. Fixture tổng hợp
+  132 dòng kết quả (tests/helpers/miami-fixture) — mọi số liệu đều do engine
+  tính từ dòng dữ liệu, assertion không hardcode. **Lưu ý Alfa Romeo: theo
+  đúng quy tắc đối đầu như viết (đội không có xe về đích thua — cùng cách
+  Miami vs Alpine được tính thắng), chặng Alfa không có xe về đích là THẮNG
+  của bạn → 6–0, không phải 5–0 kèm 1 chặng loại: đội bạn chỉ 1 DNF/12 lượt
+  và luôn có xe về đích nên không thể tồn tại chặng "cả 2 đội cùng không có
+  xe về đích" — đã ghi rõ trong header test, chờ chủ dự án đối chiếu save
+  thật.**
+- chore: gitignore `tool-results/`, dọn 2 file tool-output rác lỡ commit từ
+  phiên trước (đã kiểm chứng: bản copy tyre.engine.ts, không có dữ liệu save).
+
+### Added — Bước 2: bảng mới cạnh bảng pace + câu đối đầu trong recommendation (`968303d`)
+- `ResultsBoardCard` (Race Weekend → Overview, đặt ngay sau các bảng pace,
+  không tạo route/tab mới): hạng · đội · điểm · điểm/chặng · median best
+  finish (n=samples) · DNF/lượt · leo vị trí · đối đầu vs bạn. Dòng đội bạn
+  highlight; assumption + nguồn `Races_Results` trong mục thu gọn. VI/EN đủ.
+- `pace.engine`: **cả 2** recommendation pace (đỉnh + đua) thêm 1 câu đối đầu
+  với `rivalRef` của nó, viết theo đúng chiều số liệu — "Pace đua (vòng
+  trung bình) chậm hơn Alpine 0.105s/vòng, nhưng trên kết quả bạn hơn: đối
+  đầu thắng 5–1 (5/6 chặng), hơn 40 điểm (51 vs 11), DNF 1 vs 5." — nếu đội
+  đối thủ đang dẫn điểm thì câu tự đổi chiều ("trên kết quả bạn kém…"), không
+  bao giờ chỉ hiện khi có lợi cho bạn. Số liệu bảng pace (peak + race) giữ
+  nguyên 100%.
+- Race Weekend giờ render recommendation của **cả hai** board pace (rec pace
+  đua tồn tại từ v0.5.4 nhưng chưa từng được hiển thị — câu đối đầu của nó
+  sẽ vô hình nếu không sửa).
+- Component test: bảng ra đúng số liệu khóa trên màn hình (51 / 8.5 / +81 vs
+  11 / 1.8 / 5–1) và cả 2 câu đối đầu hiển thị trong recommendation.
+
+---
+
 ## [0.5.5] — Race sim xếp theo pace đua (vòng trung bình) thay vì fastest-lap
 
 Đợt sửa theo báo cáo số liệu thật của chủ dự án, kiểm chứng trên save Bahrain
