@@ -2,6 +2,118 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.6.0] — Đại tu dashboard-first: biểu đồ thay văn bản ở 6 view
+
+Đợt đại tu lớn nhất từ Phase 2, theo prompt v0.6.0 của chủ dự án (kiểm chứng
+trên save Miami 2027, Day 46524, 6/21 chặng xong). Nguyên tắc: **mọi view mở
+đầu bằng số liệu — KPI + biểu đồ; chữ chỉ còn verdict 1 dòng + bằng chứng sau
+toggle**; mỗi thẻ recommendation tối đa 2 dòng khi chưa mở toggle (title +
+action); mọi số headline đều có biểu đồ/thanh bar đi kèm. **Số liệu của mọi
+engine (pace, race pace, sim, lốp, finance, results) không đổi** — chỉ đổi
+cách trình bày; ngoại lệ duy nhất là Research (sửa cách đọc phiếu bầu vì dữ
+liệu đang đọc sai, đã kiểm chứng ở bước 6). Không thêm dependency mới
+(Recharts 2.15.4 có sẵn; heatmap dùng `<canvas>` thuần + devicePixelRatio).
+
+### Added — Bước 1: engine dữ liệu dashboard + vỏ chart dùng chung (`6217988`)
+- `buildSeasonSeries(model)` (`src/engines/dashboard.engine.ts`): chuỗi từng
+  chặng của mùa hiện tại (cửa sổ 6 chặng, cùng cửa sổ bảng pace): điểm
+  constructors tích lũy 11 đội, điểm từng chặng của đội bạn + rival gần nhất
+  (đội ngay trên bảng kết quả thực chiến), leo vị trí từng chặng từng đội,
+  best finish từng chặng, và **gap pace đỉnh + pace đua từng chặng lấy nguyên
+  văn từ `raceDeltasS` của 2 bảng pace — dashboard không tính lại pace**;
+  race identity được khôi phục bằng eligibility filter (không đẻ ra số mới).
+- **Test khóa số liệu mục 8 (save Miami, 6 chặng)**: tích lũy Red Bull
+  25→201 · Mercedes 4→149 · McLaren 33→99 · Ferrari 1→54 · bạn 20→51 ·
+  Williams 6→36 · Alpine 10→11; điểm từng chặng bạn [20,0,0,14,5,12] /
+  Alpine [10,1,0,0,0,0]; leo vị trí bạn [+29,−5,+10,+18,+14,+15] = +81 /
+  Alpine −4; pace đua từng chặng [0.657,0.911,1.113,0.421,0.493,0.443]
+  (median 0.575). Fixture riêng `tests/helpers/miami-trend-fixture.ts` tái
+  hiện phân bố từng chặng — fixture cũ v0.5.6 (khóa tổng cửa sổ) giữ nguyên.
+- Vỏ dùng chung: `ChartCard` (tiêu đề + biểu đồ + 1 dòng kết luận + toggle
+  "Xem bằng chứng") và `KpiCard`; định dạng số thống nhất: tiền 2 thập phân
+  ("4.28M"), giây 3 chữ số, `formatSigned` cho leo vị trí.
+
+### Changed — Bước 2: Home thành dashboard + thẻ recommendation gọn toàn app (`f181ed1`)
+- Home: KPI strip (nay là KpiCard dùng chung) → (a) **area điểm constructors
+  tích lũy** (top 5 đội + đội bạn tô nổi bật teal) → (b) **line gap pace từng
+  chặng** (pace đỉnh + pace đua, đường 0 của đội nhanh nhất) → (c) **bar vị
+  trí leo từng chặng** (xanh khi dương, đỏ khi âm). Không thêm view/route.
+- `RecommendationCard` toàn app: chỉ còn title (1 dòng) + action (1 dòng) +
+  badge confidence; why/expectedGain/risk/evidence/assumptions chuyển hết
+  sau toggle "Xem bằng chứng"; nút 👍/👎 giữ vị trí, thêm tooltip rõ nghĩa
+  "Đánh giá gợi ý này (không phải vote trong game)".
+
+### Changed — Bước 3: Race Weekend — biểu đồ lên trước (`00360f6`)
+- Section pace: 2 bảng bar thay bằng **line chart gap pace từng chặng** (đội
+  bạn vs 2 rival gần nhất theo median, tab chuyển pace đỉnh/pace đua); median
+  + gap vs rival vẫn nằm trong verdict 1 dòng. Bảng "Sức mạnh thực chiến"
+  (v0.5.6) giữ nguyên vị trí.
+- **Canvas pace heatmap** (`PaceHeatmap.tsx`, canvas thuần + devicePixelRatio,
+  không thêm lib): lưới 11 đội × 6 chặng tô theo gap pace đua từng chặng
+  (xanh lá = nhanh, đỏ = chậm), hàng đội bạn khoanh nổi teal, hover hiện
+  tooltip (đội · chặng · gap giây). Số lấy từ `paceGapPerTeam` của
+  `buildSeasonSeries` (verbatim từ race board).
+- `StintTimeline` nâng thành biểu đồ stint đầy đủ: trục vòng đua (L0→Llaps)
+  + vạch pit tô trên thanh stint; label/testid cũ giữ nguyên cho test.
+
+### Changed — Bước 4: Tyre Lab + Car Lab — nhìn là thấy (`de9da42`)
+- Tyre Lab: `CompoundCompareChart` (3 panel — đời lốp vòng, delta pace +s,
+  deg cuối đời +s/vòng — 3 thang đo riêng, không gộp điểm) + bảng kế hoạch
+  pit từng stint (stint/hợp chất/số vòng/phạm vi/pit); giữ DegCurveChart.
+- Car Lab: `PartPerformanceChart` (điều kiện trung bình từng nhóm part của
+  bạn vs **median giải** — median tính UI-side từ `Parts_Items.TeamID`, không
+  đụng engine car) + `DevPointsChart` (design points đã lưu theo nhóm part từ
+  hàng chờ phát triển). Không đổi công thức engine lốp/car.
+
+### Changed — Bước 5: Drivers / Season / Strategy — bảng số + sparkline (`c27e234`)
+- Drivers: mỗi tay đua có **sparkline điểm từng chặng** (SVG thuần) + leo vị
+  trí 6 chặng; panel đối đầu vẽ **bar song đôi** (điểm, vị trí TB về đích,
+  số chặng về trước) — cùng số liệu với các dòng cũ, không có metric mới.
+- Season: thêm **area điểm tích lũy** (dùng chung series bước 1) qua
+  ChartCard; ô lịch từng chặng nay hiển thị best finish + điểm (dải kết quả).
+  StandingsBarChart giữ nguyên.
+- Strategy: **bar expertise từng nhóm part** (Parts_Expertise) và **bar nhân
+  sự theo vai trò** (tay đua/nhân sự/sắp hết hạn) + 1 dòng verdict mỗi mục.
+  Không đổi engine personnel/finance.
+
+### Fixed — Bước 6: Research đọc đúng phiếu bầu (GroupID) (`6832026`)
+- **Dữ liệu đang sai đã kiểm chứng trên save thật**: `Regulations_TeamVotes`
+  có cột (ProposalID, TeamID, **GroupID**) — cột thứ 3 là **nhóm phương án
+  đội đó vote cho**, không phải YES/NO. Parser cũ đi tìm cột Vote không tồn
+  tại → mọi phiếu đọc thành null → "0 YES / 0 NO / 11 không rõ".
+- Parser (`regulations.repo.ts`): đọc GroupID làm phiếu; proposals map thêm
+  `TargetSeason` + `VoteDay`; tên nhóm format từ `LocKey`
+  (`RearWing_Major_02` → "Rear Wing Major — bản 02"; `HighEngineLimits` →
+  "High Engine Limits"); schema Vote cũ (YES/NO) vẫn được giữ cho save cũ.
+- Engine (`regulation.engine.ts`): tally theo nhóm + cờ lựa chọn của đội bạn;
+  **tên đề xuất lấy từ base của nhóm (không còn "Đề xuất không tên")**;
+  recommendation lấy **tối đa 3 đề xuất có TargetSeason >= mùa hiện tại, xếp
+  theo VoteDay giảm dần** (trên save này: #7 luật mùa 2028 VoteDay 46482
+  Suzuka tỉ số 6–5, rồi #6, #5 — không còn slice(0,3) trả về đề xuất 2026 đã
+  quyết xong).
+- **Tally chuẩn trên save Miami (test khóa)**: #1: 8 đội chọn Rear Wing Major
+  02 vs 3 chọn 01; #4: 8 chọn Airflow Minor 02 vs 3 chọn 01; #5: 7/7 High
+  Engine Limits; #6: 9/9 Alt Prize Share; #7: 6 chọn Chassis Redesign 02 vs
+  5 chọn 01 (đội bạn vote nhóm 35 = bản 02); #2: 0 phiếu; #3: 1 phiếu (chỉ
+  đội bạn, nhóm 6).
+- UI Research: mỗi đề xuất 1 **bar ngang tỉ lệ phiếu theo phương án** (lựa
+  chọn của bạn đánh dấu ✓); **expertise 2 cột song song** — tổng Expertise vs
+  điểm đã bank (NextSeasonExpertise) — vì số liệu thật: tổng expertise đội
+  bạn 20,435 (thấp nhất giải) nhưng bank 674.59 (duy nhất có bank); 10 đội
+  còn lại tổng ~25,000–27,000 nhưng bank 0. Bank làm tròn 1 chữ số thập phân
+  + đơn vị "điểm". Định nghĩa expertise banking không đổi. Nút 👍/👎 bỏ khỏi
+  thẻ đề xuất Research (tránh nhầm thành vote trong game).
+
+### Removed
+- Không có. Không đụng Gazette, không xóa view/route nào.
+
+### Notes kỹ thuật
+- 1 bước = 1 commit Conventional + push, verify hash thật: `6217988` →
+  `f181ed1` → `00360f6` → `de9da42` → `c27e234` → `6832026`; lint +
+  typecheck + test xanh trước mỗi commit (254 test / 26 file).
+- Không thêm dependency mới; không commit .sav hay dữ liệu save thật; engine
+  pace/sim/lốp/finance/results không đổi số liệu hay công thức.
+
 ## [0.5.6] — Bảng sức mạnh thực chiến cạnh bảng pace
 
 Đợt thêm theo báo cáo số liệu thật của chủ dự án, kiểm chứng trên save Miami
