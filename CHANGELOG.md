@@ -2,6 +2,30 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.5.2] — Fix deploy Vercel: Suspense cho WallSidebar + CI thêm bước build
+
+Deploy Vercel của v0.5.0 (commit `64ed70b`, 2026-11-14) thất bại ở prerender:
+`Error occurred prerendering page "/": useSearchParams() should be wrapped in
+a suspense boundary`. v0.5.0 bước 1 render `<WallSidebar />` vô điều kiện trong
+`page.tsx` — sidebar gọi `useWallNav()` → `useSearchParams()` mà phía trên không
+có Suspense nào (chỉ CommandPalette và WallViews được bọc). `next dev` không
+prerender nên chạy local bình thường; CI lại không có bước build nên không ai
+phát hiện. Đợt này chỉ sửa 2 chỗ đó — không đụng engine/parser/UI (fix lốp
+0.5.1 giữ nguyên).
+
+### Fixed (`5a489f6`)
+- Bọc `<Suspense fallback={null}>` quanh `<WallSidebar />` trong `src/app/page.tsx`
+  — fix chuẩn của Next.js cho `useSearchParams`, giữ trang `/` render **static**.
+  Verify local: `bun run build` pass, prerender 4/4 trang, route `/` hiện ○ (Static).
+
+### CI (`aee6447`)
+- Workflow thêm step **Build** (`bun run build`) ngay sau Unit tests — cùng script
+  từng ngã trên Vercel, giờ chạy trên mọi push/PR vào main.
+- Header comment ghi đúng thực tế: CI chạy lint + typecheck + unit tests + build
+  (Playwright E2E vẫn để riêng). Trigger, install, layout job không đổi.
+
+Không đổi gì ngoài 2 file trên (cộng CHANGELOG + version cho release).
+
 ## [0.5.1] — Fix engine lốp: delta cross-session, lives trung thực, plan của game + đồng hồ bằng chứng
 
 Đợt fix theo báo cáo bug của chủ dự án (Suzuka 2027, engine tái hiện được trên đúng file save): engine từng xếp hằng số model H (+1.05s) cạnh M đo được (+1.09s) và đề xuất S→H / H→S→H vô nghĩa (117.7s trên view sau chặng); lives sụp xuống S12/M18/H22 vì lấy số pit của chính chặng vừa xong làm "độ bền lốp". 3 bước, 1 bước = 1 commit Conventional.
