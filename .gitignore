@@ -20,3 +20,6 @@ tsconfig.tsbuildinfo
 
 # browser automation artifacts
 workspace/
+
+# AI tool scratch output — never in git
+tool-results/
