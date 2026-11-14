@@ -532,7 +532,7 @@
   "research": {
     "title": "Research — regulations & expertise banking",
     "proposals": "Regulation proposals",
-    "voteAssumption": "raw tally — assumes vote=1 is YES (unverified)",
+    "voteAssumption": "tally per option group — each team picks one group (Regulations_TeamVotes.GroupID)",
     "proposalUnnamed": "Unnamed proposal",
     "yourVote": "Your team: {vote}",
     "yes": "YES",
@@ -541,10 +541,17 @@
     "noProposals": "No regulation proposals in the save",
     "noProposalsHint": "Research enables itself when the game opens a vote.",
     "expertise": "Expertise banking for next season",
-    "expertiseHint": "Σ NextSeasonExpertise — decides next season's starting point",
+    "expertiseHint": "Two columns: current total expertise vs banked points (NextSeasonExpertise) — independent metrics, never read one as the other",
     "nextSeason": "Next season:",
     "noExpertise": "Parts_TeamExpertise unmapped",
-    "noExpertiseHint": "The banking ranking enables once NextSeasonExpertise is readable from the save."
+    "noExpertiseHint": "The banking ranking enables once NextSeasonExpertise is readable from the save.",
+    "yourChoice": "You chose: {option}",
+    "totalVotes": "{count} votes",
+    "votesFor": "{count} teams",
+    "noVotes": "0 votes",
+    "totalCol": "Total expertise",
+    "bankedCol": "Banked (next season)",
+    "pointsUnit": "pts"
   },
   "gazette": {
     "sidebarLabel": "Paper sidebar",

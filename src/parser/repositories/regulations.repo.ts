@@ -34,12 +34,20 @@ const PROPOSAL_CANDIDATES: Record<string, string[]> = {
   state: ['State', 'ProposalState', 'Status'],
   title: ['Title', 'Name', 'Description'],
   changeType: ['ChangeType', 'ChangeTypeID'],
+  /* v0.6.0 — verified on the Miami 2027 save (1.11.0): TargetSeason drives
+   * which proposals are still live, VoteDay orders them. */
+  targetSeason: ['TargetSeason'],
+  voteDay: ['VoteDay'],
 };
 
 const VOTE_CANDIDATES: Record<string, string[]> = {
   proposalId: [`${PROPOSALS_TABLE}ID`, 'ProposalID'],
   teamId: ['TeamID'],
+  /* 0.5.x legacy candidates — kept for older schemas. v0.6.0 verified on
+   * the real Miami save: Regulations_TeamVotes carries GroupID (the option
+   * group the team voted for), NOT a YES/NO Vote column. */
   vote: ['Vote', 'Approved', 'Decision', 'Support'],
+  groupId: ['GroupID'],
 };
 
 const GROUP_CANDIDATES: Record<string, string[]> = {
@@ -164,6 +172,23 @@ function resolveGroupLabels(db: SqlJsDatabase): Map<number, string> {
   return labels;
 }
 
+/**
+ * v0.6.0 — turn a raw Regulations_ChangeGroups.LocKey into a readable label.
+ * Verified shapes on the real save: "RearWing_Major_02" → "Rear Wing Major —
+ * bản 02", "HighEngineLimits" → "High Engine Limits", "AltPrizeShare" →
+ * "Alt Prize Share". Labels that already carry spaces are human text and
+ * pass through untouched ("Downforce -5%").
+ */
+export function formatLocKey(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.includes(' ')) return trimmed;
+  const m = /^(.*?)_(\d+)$/.exec(trimmed);
+  const base = m ? m[1] : trimmed;
+  const variant = m ? m[2] : null;
+  const spaced = base.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
+  return variant != null ? `${spaced} — bản ${variant}` : spaced;
+}
+
 export function getRegulations(db: SqlJsDatabase): RawRegulations {
   const prop = readTable(db, PROPOSALS_TABLE);
   const pMap = buildColumnMap(prop.columns, PROPOSAL_CANDIDATES);
@@ -175,12 +200,18 @@ export function getRegulations(db: SqlJsDatabase): RawRegulations {
     const pIdx = colIndex(votes.columns, vMap.proposalId);
     const tIdx = colIndex(votes.columns, vMap.teamId);
     const voteIdx = vMap.vote ? colIndex(votes.columns, vMap.vote) : -1;
+    /* v0.6.0: GroupID is the vote — the option group the team chose. */
+    const groupIdx = vMap.groupId ? colIndex(votes.columns, vMap.groupId) : -1;
     for (const row of votes.rows) {
       const proposalId = readNum(row, pIdx);
       const teamId = readNum(row, tIdx);
       if (proposalId == null || teamId == null) continue;
       const list = votesByProposal.get(proposalId) ?? [];
-      list.push({ teamId, vote: readNum(row, voteIdx) });
+      list.push({
+        teamId,
+        vote: voteIdx >= 0 ? readNum(row, voteIdx) : undefined,
+        groupId: groupIdx >= 0 ? readNum(row, groupIdx) : undefined,
+      });
       votesByProposal.set(proposalId, list);
     }
   }
@@ -240,7 +271,12 @@ export function getRegulations(db: SqlJsDatabase): RawRegulations {
           (groupId) => ({
             groupId,
             label:
-              labelByGroup.get(groupId) ??
+              /* v0.6.0: the raw group-table label (LocKey on real saves) is
+               * formatted first; content-derived labels (0.5.3) stay as the
+               * richer fallback, then the explicit no-detail note. */
+              (labelByGroup.get(groupId) != null
+                ? formatLocKey(labelByGroup.get(groupId) as string)
+                : undefined) ??
               resolvedLabels.get(groupId) ??
               `Nhóm thay đổi #${groupId} (chi tiết không có trong save)`,
           }),
@@ -257,6 +293,13 @@ export function getRegulations(db: SqlJsDatabase): RawRegulations {
             state: readNum(row, colIndex(prop.columns, pMap.state)),
             title: pMap.title
               ? readStr(row, colIndex(prop.columns, pMap.title))
+              : undefined,
+            /* v0.6.0 — live-proposal ordering fields (Miami-verified). */
+            targetSeason: pMap.targetSeason
+              ? readNum(row, colIndex(prop.columns, pMap.targetSeason))
+              : undefined,
+            voteDay: pMap.voteDay
+              ? readNum(row, colIndex(prop.columns, pMap.voteDay))
               : undefined,
             votes: votesByProposal.get(proposalId) ?? [],
             changes,

@@ -532,7 +532,7 @@
   "research": {
     "title": "Research — luật mới & expertise banking",
     "proposals": "Đề xuất luật",
-    "voteAssumption": "tally thô — giả định vote=1 là YES (chưa verify)",
+    "voteAssumption": "tally theo nhóm phương án — mỗi đội chọn 1 nhóm (Regulations_TeamVotes.GroupID)",
     "proposalUnnamed": "Đề xuất không tên",
     "yourVote": "Đội bạn: {vote}",
     "yes": "YES",
@@ -541,10 +541,17 @@
     "noProposals": "Không có đề xuất luật nào trong save",
     "noProposalsHint": "Research tự bật khi game mở kỳ bỏ phiếu.",
     "expertise": "Expertise banking cho mùa sau",
-    "expertiseHint": "Σ NextSeasonExpertise — quyết định khởi điểm mùa mới",
+    "expertiseHint": "Hai cột: tổng expertise hiện tại vs điểm đã bank (NextSeasonExpertise) — hai chỉ số độc lập, đừng đọc cột này thay cột kia",
     "nextSeason": "Mùa sau:",
     "noExpertise": "Parts_TeamExpertise chưa map được",
-    "noExpertiseHint": "Xếp hạng banking tự bật khi cột NextSeasonExpertise đọc được từ save."
+    "noExpertiseHint": "Xếp hạng banking tự bật khi cột NextSeasonExpertise đọc được từ save.",
+    "yourChoice": "Bạn đã chọn: {option}",
+    "totalVotes": "{count} phiếu",
+    "votesFor": "{count} đội",
+    "noVotes": "0 phiếu",
+    "totalCol": "Tổng expertise",
+    "bankedCol": "Đã bank (mùa sau)",
+    "pointsUnit": "điểm"
   },
   "gazette": {
     "sidebarLabel": "Phụ bản",

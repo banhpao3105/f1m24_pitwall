@@ -338,6 +338,12 @@ export interface RegulationVoteRow {
   teamId: number;
   /** Raw vote value — encoding not verified; engines treat 1 as YES. */
   vote?: number;
+  /**
+   * v0.6.0 (verified on the real Miami 2027 save): Regulations_TeamVotes
+   * carries GroupID — the OPTION GROUP the team voted for, not YES/NO.
+   * The tally is per group; null/undefined on old schemas without the column.
+   */
+  groupId?: number;
 }
 
 export interface RegulationChangeRow {
@@ -355,6 +361,13 @@ export interface RegulationProposal {
   changeTypeLabel?: string;
   state?: number;
   seasonId?: number;
+  /**
+   * v0.6.0 (Miami-verified): the season the regulation takes effect —
+   * proposals with TargetSeason >= the current season are still live.
+   */
+  targetSeason?: number;
+  /** v0.6.0: day of the vote (Regulations_Proposals.VoteDay) — recency order. */
+  voteDay?: number;
   votes: RegulationVoteRow[];
   changes: RegulationChangeRow[];
 }

@@ -29,9 +29,13 @@ import type { Recommendation } from '@/domain/provenance';
 export function RecommendationCard({
   recommendation,
   testId,
+  hideFeedback,
 }: {
   recommendation: Recommendation;
   testId?: string;
+  /** v0.6.0: Research proposal recs hide 👍/👎 — too easy to mistake for an
+   * in-game vote. Used only there; everywhere else keeps the buttons. */
+  hideFeedback?: boolean;
 }) {
   const t = useTranslations('recommendation');
   const [showEvidence, setShowEvidence] = useState(false);
@@ -67,41 +71,45 @@ export function RecommendationCard({
       <footer className="mt-3 flex flex-wrap items-center gap-1.5">
         {/* v0.6.0: icon-only feedback with an explicit tooltip — this rates
             the suggestion, it is NOT a vote inside the game. Local-only loop
-            (docs/03 §5.11). */}
-        <button
-          type="button"
-          onClick={() => toggleVote(recommendation.id, 'up')}
-          aria-pressed={vote === 'up'}
-          aria-label={`${t('feedbackUp')} — ${hint}`}
-          title={`${t('feedbackUp')} — ${hint}`}
-          data-testid={`fb-up-${recommendation.id}`}
-          className={cn(
-            'inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded border transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring',
-            vote === 'up'
-              ? 'border-good/50 bg-good/10 text-good'
-              : 'border-line bg-surface text-ink-faint hover:border-good/40 hover:text-good',
-          )}
-        >
-          <ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          onClick={() => toggleVote(recommendation.id, 'down')}
-          aria-pressed={vote === 'down'}
-          aria-label={`${t('feedbackDown')} — ${hint}`}
-          title={`${t('feedbackDown')} — ${hint}`}
-          data-testid={`fb-down-${recommendation.id}`}
-          className={cn(
-            'inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded border transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring',
-            vote === 'down'
-              ? 'border-danger/50 bg-danger/10 text-danger'
-              : 'border-line bg-surface text-ink-faint hover:border-danger/40 hover:text-danger',
-          )}
-        >
-          <ThumbsDown className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
-        {vote ? (
-          <span className="text-[10px] text-ink-faint">{t('feedbackSaved')}</span>
+            (docs/03 §5.11). Hidden on Research proposal cards. */}
+        {!hideFeedback ? (
+          <>
+            <button
+              type="button"
+              onClick={() => toggleVote(recommendation.id, 'up')}
+              aria-pressed={vote === 'up'}
+              aria-label={`${t('feedbackUp')} — ${hint}`}
+              title={`${t('feedbackUp')} — ${hint}`}
+              data-testid={`fb-up-${recommendation.id}`}
+              className={cn(
+                'inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded border transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring',
+                vote === 'up'
+                  ? 'border-good/50 bg-good/10 text-good'
+                  : 'border-line bg-surface text-ink-faint hover:border-good/40 hover:text-good',
+              )}
+            >
+              <ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleVote(recommendation.id, 'down')}
+              aria-pressed={vote === 'down'}
+              aria-label={`${t('feedbackDown')} — ${hint}`}
+              title={`${t('feedbackDown')} — ${hint}`}
+              data-testid={`fb-down-${recommendation.id}`}
+              className={cn(
+                'inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded border transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring',
+                vote === 'down'
+                  ? 'border-danger/50 bg-danger/10 text-danger'
+                  : 'border-line bg-surface text-ink-faint hover:border-danger/40 hover:text-danger',
+              )}
+            >
+              <ThumbsDown className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+            {vote ? (
+              <span className="text-[10px] text-ink-faint">{t('feedbackSaved')}</span>
+            ) : null}
+          </>
         ) : null}
 
         <button

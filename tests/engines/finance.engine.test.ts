@@ -245,10 +245,10 @@ describe('buildRegulations', () => {
     expect(rec?.action).not.toContain('trên median');
   });
 
-  it('0.5.3: titles fall back to the ChangeType name and never bare "group N"', () => {
-    // Real-save shape: proposals carry no Title — the card title must use
-    // the save's own ChangeType name and the why must show resolved group
-    // content instead of "group 18, group 19".
+  it('0.5.3/v0.6.0: titles fall back to resolved group content, never bare "group N"', () => {
+    // Real-save shape: proposals carry no Title — v0.6.0 composes the card
+    // title from the group content (LocKey-derived when the save carries
+    // LocKeys), falling back to the ChangeType name; never a bare "group N".
     const model = makeModel({
       regulations: [
         {
@@ -271,7 +271,7 @@ describe('buildRegulations', () => {
     });
     const regs = buildRegulations(model);
     const r4 = regs.recommendations.find((r) => r.id === 'regulation-vote-4');
-    expect(r4?.title).toBe('Đề xuất #4 — MinorTechnical');
+    expect(r4?.title).toBe('Đề xuất #4 — Giảm 30% trên 3 chỉ số xe');
     const r5 = regs.recommendations.find((r) => r.id === 'regulation-vote-5');
     expect(r5?.title).toBe('Đề xuất #5 — Sporting');
     expect(r5?.why).toContain('Nhóm thay đổi 99 (không có chi tiết trong save)');
