@@ -575,10 +575,12 @@ export interface PaceMeasuredEntry {
  * containing wet/unknown tyre encodings is not modelled here → null.
  */
 export function buildGamePlan(
-  section: PlayerStrategySection,
+  section: PlayerStrategySection | undefined,
   laps: number,
 ): TyreLab['gamePlan'] {
-  if (!section.tablePresent) return null;
+  // `section` may be undefined for models persisted by pre-0.5.1 builds
+  // (IndexedDB auto-restore) — degrade to null, never crash.
+  if (!section?.tablePresent) return null;
   const selected = section.plans.filter((p) => p.selected && p.stints.length > 0);
   if (selected.length === 0) return null;
   const plan = selected.find((p) => p.loadoutId === 0) ?? selected[0];
@@ -877,7 +879,7 @@ export function buildTyreLab(
     .sort((a, b) => a.day - b.day)[0];
   const gamePlan: TyreLab['gamePlan'] =
     race.raceId === activeRace?.raceId
-      ? buildGamePlan(model.playerStrategy, laps)
+      ? buildGamePlan(model.playerStrategy ?? { tablePresent: false, plans: [] }, laps)
       : null;
   if (gamePlan) {
     assumptions.push({
