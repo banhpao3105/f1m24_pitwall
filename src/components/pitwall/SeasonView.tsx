@@ -11,8 +11,12 @@ import { motion } from 'framer-motion';
 import { CalendarDays, Download, CloudRain } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
+import { useSeasonSeries } from '@/lib/engine-hooks';
 import { StandingsBarChart } from './charts/StandingsBarChart';
+import { PointsAreaChart } from './charts/PointsAreaChart';
+import { ChartCard } from './charts/ChartCard';
 import { TeamDot } from './TeamIdentity';
+import { ConfidenceBadge } from './ConfidenceBadge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -37,6 +41,7 @@ export function SeasonView({ model }: { model: SaveModel }) {
   const tChart = useTranslations('charts.season');
   const tSec = useTranslations('sec');
   const locale = useLocale() as 'vi' | 'en';
+  const series = useSeasonSeries();
   const seasonId = model.meta.seasonId;
   const races = model.races
     .filter((r) => r.seasonId === seasonId)
@@ -54,6 +59,15 @@ export function SeasonView({ model }: { model: SaveModel }) {
       .find((r) => r.raceId === raceId)
       ?.results.filter((res) => res.teamId === model.player.teamId)
       .reduce((sum, res) => sum + res.points, 0) ?? 0;
+  // v0.6.0 step 5 — the calendar cells double as the per-race result strip:
+  // each cell shows the best classified finish + points of the player team.
+  const playerBestFinishIn = (raceId: number): number | null => {
+    const finishes = model.races
+      .find((r) => r.raceId === raceId)
+      ?.results.filter((res) => res.teamId === model.player.teamId && !res.dnf)
+      .map((res) => res.finishingPos) ?? [];
+    return finishes.length > 0 ? Math.min(...finishes) : null;
+  };
   const countdownOf = (race: { day: number; state: number }): number | null => {
     if (race.state === 2) return null;
     const diff = race.day - model.meta.day;
@@ -101,6 +115,25 @@ export function SeasonView({ model }: { model: SaveModel }) {
         </Button>
       </header>
 
+      {/* v0.6.0 step 5 — cumulative points area (same series as Home) */}
+      {series && series.data.races.length > 0 ? (
+        <ChartCard
+          title={tChart('cumulative')}
+          badge={<ConfidenceBadge confidence={series.confidence} />}
+          verdict={tChart('cumulativeVerdict', {
+            points: series.data.pointsCumulative.find((r) => r.isPlayer)?.values.at(-1) ?? 0,
+            rank: series.data.pointsCumulative.findIndex((r) => r.isPlayer) + 1,
+            leader: series.data.pointsCumulative[0]?.teamName ?? '—',
+            leaderPoints: series.data.pointsCumulative[0]?.values.at(-1) ?? 0,
+          })}
+          evidence={series.evidence}
+          assumptions={series.assumptions}
+          testId="season-cumulative-chart"
+        >
+          <PointsAreaChart series={series.data} model={model} />
+        </ChartCard>
+      ) : null}
+
       {/* calendar */}
       <section aria-label={t('calendar')} className="rounded-lg border border-line bg-panel p-4">
         <h3 className="mb-3 text-[15px] font-semibold text-ink">
@@ -145,12 +178,15 @@ export function SeasonView({ model }: { model: SaveModel }) {
                   </span>
                 ) : null}
               </span>
-              {/* v0.5.0 step 2: team points scored / day countdown */}
+              {/* v0.5.0 step 2 + v0.6.0: best finish + team points scored,
+                  so the calendar doubles as the per-race result strip */}
               {r.state === 2 ? (
                 <span
                   className="pl-5 font-mono text-[10px] text-good"
                   data-testid={`race-pts-${r.raceId}`}
                 >
+                  {playerBestFinishIn(r.raceId) != null ? `P${playerBestFinishIn(r.raceId)}` : 'DNF'}
+                  {' · '}
                   {tChart('yourPoints', { points: playerPointsIn(r.raceId) })}
                 </span>
               ) : (

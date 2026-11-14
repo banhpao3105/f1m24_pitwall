@@ -119,7 +119,8 @@
       "playerBar": "Bạn",
       "medianBar": "Median giải",
       "partPerfHint": "Median tính trên điều kiện trung bình từng đội (Parts_Items, các đội có dữ liệu cùng nhóm part).",
-      "devHint": "Design points đã lưu của các thiết kế trong hàng chờ phát triển (Parts_Designs.Points)."
+      "devHint": "Design points đã lưu của các thiết kế trong hàng chờ phát triển (Parts_Designs.Points).",
+      "expertiseHint": "Điểm expertise của đội bạn theo nhóm part (Parts_Expertise)."
     },
     "series": {
       "peak": "Pace đỉnh (fastest lap)",
@@ -136,7 +137,9 @@
       "driversChart": "Điểm tay đua — top 8",
       "countdown": "còn {days} ngày",
       "raceWeek": "tuần race",
-      "yourPoints": "+{points} pts đội"
+      "yourPoints": "+{points} pts đội",
+      "cumulative": "Điểm tích lũy theo chặng (top 5 + đội bạn)",
+      "cumulativeVerdict": "Bạn {points} điểm tích lũy (hạng {rank}); {leader} dẫn {leaderPoints} điểm."
     },
     "tyre": {
       "life": "Đời lốp (vòng)",
@@ -451,7 +454,11 @@
     "points": "Điểm",
     "duelNoData": "Chưa có chặng nào cả hai đều có kết quả để so H2H.",
     "noData": "Chưa có tay đua nào trong save.",
-    "noDataHint": "Staff_BasicData + Staff_Contracts cần có trong save career."
+    "noDataHint": "Staff_BasicData + Staff_Contracts cần có trong save career.",
+    "form6": "Điểm 6 chặng",
+    "gained6": "Leo 6 chặng",
+    "avgFinish": "Vị trí TB về đích",
+    "racesAhead": "Số chặng về trước"
   },
   "season": {
     "title": "Season — lịch, standings, dữ liệu chặng",
@@ -514,7 +521,13 @@
     "noFinance": "Finance_* chưa có dữ liệu trong save này",
     "noFinanceHint": "Snapshot tự bật khi introspect save thật chốt được cột Balance/Transactions.",
     "noContracts": "Staff_Contracts chưa map được",
-    "noContractsHint": "Phần hợp đồng trống — dữ liệu race (form/duel) ở tab Drivers vẫn chạy đầy đủ."
+    "noContractsHint": "Phần hợp đồng trống — dữ liệu race (form/duel) ở tab Drivers vẫn chạy đầy đủ.",
+    "expertise": "Expertise từng nhóm part",
+    "expertiseVerdict": "Tổng {total} điểm expertise; mạnh nhất: {top} ({topPoints}).",
+    "noExpertise": "Chưa có dữ liệu expertise",
+    "noExpertiseHint": "Save không chứa bảng Parts_Expertise hoặc đội bạn chưa có điểm nào.",
+    "headcountVerdict": "{n} người trong đội: {d} tay đua · {s} nhân sự — {e} hợp đồng sắp hết hạn.",
+    "expiring": "Sắp hết hạn"
   },
   "research": {
     "title": "Research — luật mới & expertise banking",

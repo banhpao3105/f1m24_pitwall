@@ -18,7 +18,9 @@ import { RecommendationCard } from './RecommendationCard';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { DataUnavailable } from './DataUnavailable';
 import { DriverAvatar } from './TeamIdentity';
+import { Sparkline } from './charts/Sparkline';
 import { teamColour } from '@/lib/team-colours';
+import { formatSigned } from '@/lib/utils';
 import {
   Select,
   SelectContent,
@@ -55,9 +57,13 @@ function FormChips({ chips }: { chips: DriverCardModel['form'] }) {
 function DriverCardItem({
   driver,
   model,
+  pointsSeries,
+  gainedTotal,
 }: {
   driver: DriverCardModel;
   model: SaveModel;
+  pointsSeries: number[];
+  gainedTotal: number;
 }) {
   const t = useTranslations('drivers');
   const teamId = model.drivers.find((d) => d.staffId === driver.staffId)?.teamId;
@@ -85,6 +91,21 @@ function DriverCardItem({
           </span>
         ) : null}
       </header>
+      {/* v0.6.0 step 5 — per-race points sparkline + window gained */}
+      <div className="mt-2 flex items-center gap-2 text-[11px]">
+        <span className="shrink-0 text-ink-faint">{t('form6')}</span>
+        <Sparkline values={pointsSeries} testId={`driver-spark-${driver.staffId}`} />
+        <span className="ml-auto font-mono text-ink-faint">{t('gained6')}</span>
+        <span
+          className={cn(
+            'font-mono',
+            gainedTotal > 0 ? 'text-good' : gainedTotal < 0 ? 'text-danger' : 'text-ink-soft',
+          )}
+          data-testid={`driver-gained-${driver.staffId}`}
+        >
+          {formatSigned(gainedTotal)}
+        </span>
+      </div>
       <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
         <div className="flex items-center justify-between gap-1">
           <dt className="text-ink-faint">{t('form')}</dt>
@@ -129,6 +150,33 @@ export function DriversView({ model }: { model: SaveModel }) {
   const t = useTranslations('drivers');
   const personnel = usePersonnel();
 
+  /* v0.6.0 step 5 — per-driver per-race points (sparkline) + positions
+   * gained over the same 6-race window the pace boards use. Computed from
+   * Races_Results rows — no engine change. */
+  const windowRaces = model.races
+    .filter((r) => r.seasonId === model.meta.seasonId && r.state === 2)
+    .sort((a, b) => a.day - b.day)
+    .slice(-6);
+  const seriesByDriver = new Map<number, { points: number[]; gained: number }>();
+  for (const race of windowRaces) {
+    for (const res of race.results) {
+      const e = seriesByDriver.get(res.driverId) ?? { points: [], gained: 0 };
+      e.points.push(res.points);
+      if (!res.dnf && res.startingPos != null) e.gained += res.startingPos - res.finishingPos;
+      seriesByDriver.set(res.driverId, e);
+    }
+  }
+  const pointsSeriesOf = (staffId: number): number[] =>
+    seriesByDriver.get(staffId)?.points ?? windowRaces.map(() => 0);
+  const gainedOf = (staffId: number): number => seriesByDriver.get(staffId)?.gained ?? 0;
+  const avgFinishOf = (staffId: number): number | null => {
+    const vals = windowRaces
+      .flatMap((r) => r.results)
+      .filter((res) => res.driverId === staffId && !res.dnf)
+      .map((res) => res.finishingPos);
+    return vals.length > 0 ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+  };
+
   const drivers = personnel?.data.drivers ?? [];
   const playerFirst = [...drivers].sort((a, b) => {
     if (a.isPlayer !== b.isPlayer) return a.isPlayer ? -1 : 1;
@@ -172,7 +220,13 @@ export function DriversView({ model }: { model: SaveModel }) {
           >
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {playerFirst.map((d) => (
-                <DriverCardItem key={d.staffId} driver={d} model={model} />
+                <DriverCardItem
+                  key={d.staffId}
+                  driver={d}
+                  model={model}
+                  pointsSeries={pointsSeriesOf(d.staffId)}
+                  gainedTotal={gainedOf(d.staffId)}
+                />
               ))}
             </div>
           </section>
@@ -225,6 +279,58 @@ export function DriversView({ model }: { model: SaveModel }) {
                     {t('h2h')}
                   </span>
                   <span className="truncate font-mono text-ink">{duel.data.b.name}</span>
+                </div>
+                {/* v0.6.0 step 5 — the duel as paired bars: points, average
+                    finish, races finished ahead. Same numbers as the rows
+                    below, just drawn (no new metric). */}
+                <div className="space-y-1.5" data-testid="duel-bars">
+                  {([
+                    {
+                      key: 'points',
+                      label: t('points'),
+                      a: duel.data.a.points ?? 0,
+                      b: duel.data.b.points ?? 0,
+                      fmt: (v: number | null) => `${v ?? 0}`,
+                    },
+                    {
+                      key: 'avgFinish',
+                      label: t('avgFinish'),
+                      a: avgFinishOf(duel.data.a.staffId),
+                      b: avgFinishOf(duel.data.b.staffId),
+                      fmt: (v: number | null) => (v != null ? `P${v.toFixed(1)}` : '—'),
+                    },
+                    {
+                      key: 'ahead',
+                      label: t('racesAhead'),
+                      a: duel.data.h2h.raceA,
+                      b: duel.data.h2h.raceB,
+                      fmt: (v: number | null) => `${v ?? 0}`,
+                    },
+                  ] as const).map((row) => {
+                    const va = row.a;
+                    const vb = row.b;
+                    const invert = row.key === 'avgFinish'; // lower = better
+                    const wa =
+                      va == null || vb == null || (va + vb) === 0
+                        ? 50
+                        : invert
+                          ? (1 - va / (va + vb)) * 100
+                          : (va / (va + vb)) * 100;
+                    return (
+                      <div key={row.key} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-[11px]">
+                        <span className="h-1.5 justify-self-end rounded bg-teal/80" style={{ width: `${wa}%` }} />
+                        <span className="w-28 text-center text-ink-faint">{row.label}</span>
+                        <span
+                          className="h-1.5 justify-self-start rounded bg-amber/80"
+                          style={{ width: `${100 - wa}%` }}
+                        />
+                        <span className="col-span-3 flex justify-between font-mono text-[10px] text-ink-soft">
+                          <span>{row.fmt(va)}</span>
+                          <span>{row.fmt(vb)}</span>
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
                 <div className="grid grid-cols-3 items-center gap-2 text-xs">
                   <span className="text-right font-mono text-ink">{duel.data.h2h.qualiA}</span>

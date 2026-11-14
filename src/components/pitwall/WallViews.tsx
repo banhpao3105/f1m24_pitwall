@@ -43,7 +43,7 @@ export function WallViews() {
           case 'season':
             return <SeasonView model={model} />;
           case 'strategy':
-            return <StrategyView />;
+            return <StrategyView model={model} />;
           case 'research':
             return <ResearchView />;
           case 'gazette':

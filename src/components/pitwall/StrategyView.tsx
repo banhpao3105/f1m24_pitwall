@@ -8,17 +8,19 @@
 
 import { useTranslations } from 'next-intl';
 import { Briefcase, Wallet, Users } from 'lucide-react';
+import type { SaveModel } from '@/domain/types';
 import { useFinance, usePersonnel } from '@/lib/engine-hooks';
 import { RecommendationCard } from './RecommendationCard';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { DataUnavailable } from './DataUnavailable';
+import { ExpertiseBarsChart, RoleCountBars } from './charts/StrategyBars';
 import { cn, formatMoneyCompact } from '@/lib/utils';
 
 function money(value: number | null | undefined): string {
   return formatMoneyCompact(value);
 }
 
-export function StrategyView() {
+export function StrategyView({ model }: { model: SaveModel }) {
   const t = useTranslations('strategy');
   const finance = useFinance();
   const personnel = usePersonnel();
@@ -26,6 +28,19 @@ export function StrategyView() {
   if (!finance || !personnel) return null;
   const f = finance.data;
   const maxAbsSpend = Math.max(1, ...f.spendByCategory.map((s) => Math.abs(s.total)));
+
+  /* v0.6.0 step 5 — expertise + headcount as bars with 1-line verdicts */
+  const playerExpertise = model.parts.expertise.filter((e) => e.teamId === model.player.teamId);
+  const expertiseTotal = playerExpertise.reduce((s, e) => s + (e.expertise ?? 0), 0);
+  const topExpertise =
+    [...playerExpertise]
+      .filter((e) => e.partType && (e.expertise ?? 0) > 0)
+      .sort((a, b) => (b.expertise ?? 0) - (a.expertise ?? 0))[0] ?? null;
+  const contracts = personnel.data.contracts;
+  const driverCount = contracts.filter((c) => c.role === 'driver').length;
+  const staffCount = contracts.filter((c) => c.role === 'staff').length;
+  const expiringCount = contracts.filter((c) => c.expiring).length;
+  const hasExpertise = playerExpertise.some((e) => (e.expertise ?? 0) > 0);
 
   return (
     <div className="space-y-5" data-testid="strategy-view">
@@ -40,6 +55,27 @@ export function StrategyView() {
       {finance.recommendations.map((rec) => (
         <RecommendationCard key={rec.id} recommendation={rec} />
       ))}
+
+      {/* v0.6.0 step 5 — expertise per part group as bars + 1-line verdict */}
+      <section aria-label={t('expertise')} className="rounded-lg border border-line bg-panel p-4">
+        <header className="mb-3 flex flex-wrap items-center gap-2">
+          <h3 className="text-sm font-semibold text-ink">{t('expertise')}</h3>
+          {hasExpertise ? (
+            <p className="ml-auto font-mono text-[11px] text-ink-soft" data-testid="expertise-verdict">
+              {t('expertiseVerdict', {
+                total: expertiseTotal.toLocaleString('vi-VN'),
+                top: topExpertise?.partType ?? '—',
+                topPoints: (topExpertise?.expertise ?? 0).toLocaleString('vi-VN'),
+              })}
+            </p>
+          ) : null}
+        </header>
+        {hasExpertise ? (
+          <ExpertiseBarsChart expertise={model.parts.expertise} playerTeamId={model.player.teamId} />
+        ) : (
+          <DataUnavailable title={t('noExpertise')} detail={t('noExpertiseHint')} testId="expertise-unavailable" />
+        )}
+      </section>
 
       {/* finance snapshot */}
       <section aria-label={t('finance')} className="rounded-lg border border-line bg-panel p-4">
@@ -105,6 +141,17 @@ export function StrategyView() {
             </span>
           )}
         </header>
+        {personnel.data.hasContractData ? (
+          <>
+            {/* v0.6.0 step 5 — headcount by role as bars + 1-line verdict */}
+            <div className="mb-3 flex flex-wrap items-center gap-2" data-testid="headcount-verdict">
+              <p className="font-mono text-[11px] text-ink-soft">
+                {t('headcountVerdict', { n: contracts.length, d: driverCount, s: staffCount, e: expiringCount })}
+              </p>
+            </div>
+            <RoleCountBars contracts={contracts} />
+          </>
+        ) : null}
         {personnel.data.hasContractData ? (
           <div className="max-h-96 space-y-1.5 overflow-y-auto pr-1" data-testid="contract-list">
             {personnel.data.contracts.map((c) => (

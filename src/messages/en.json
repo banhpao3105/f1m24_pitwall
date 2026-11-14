@@ -119,7 +119,8 @@
       "playerBar": "You",
       "medianBar": "League median",
       "partPerfHint": "Median of every team’s average condition (Parts_Items, teams with data for the same group).",
-      "devHint": "Stored design points of the dev-queue designs (Parts_Designs.Points)."
+      "devHint": "Stored design points of the dev-queue designs (Parts_Designs.Points).",
+      "expertiseHint": "Your team’s expertise points per part group (Parts_Expertise)."
     },
     "series": {
       "peak": "Peak pace (fastest lap)",
@@ -136,7 +137,9 @@
       "driversChart": "Driver points — top 8",
       "countdown": "in {days} days",
       "raceWeek": "race week",
-      "yourPoints": "+{points} team pts"
+      "yourPoints": "+{points} team pts",
+      "cumulative": "Cumulative points per race (top 5 + you)",
+      "cumulativeVerdict": "You have {points} cumulative points (P{rank}); {leader} leads on {leaderPoints}."
     },
     "tyre": {
       "life": "Tyre life (laps)",
@@ -451,7 +454,11 @@
     "points": "Points",
     "duelNoData": "No race yet where both drivers finished for an H2H comparison.",
     "noData": "No drivers found in the save.",
-    "noDataHint": "Staff_BasicData + Staff_Contracts must exist in the career save."
+    "noDataHint": "Staff_BasicData + Staff_Contracts must exist in the career save.",
+    "form6": "Points last 6 races",
+    "gained6": "Gained 6 races",
+    "avgFinish": "Avg finish",
+    "racesAhead": "Races finished ahead"
   },
   "season": {
     "title": "Season — calendar, standings, race data",
@@ -514,7 +521,13 @@
     "noFinance": "Finance_* has no data in this save",
     "noFinanceHint": "The snapshot enables automatically once introspection of a real save confirms Balance/Transactions columns.",
     "noContracts": "Staff_Contracts unmapped",
-    "noContractsHint": "Contracts are empty — race data (form/duel) on the Drivers tab still works fully."
+    "noContractsHint": "Contracts are empty — race data (form/duel) on the Drivers tab still works fully.",
+    "expertise": "Expertise per part group",
+    "expertiseVerdict": "{total} expertise points total; strongest: {top} ({topPoints}).",
+    "noExpertise": "No expertise data yet",
+    "noExpertiseHint": "The save has no Parts_Expertise table or your team has no points yet.",
+    "headcountVerdict": "{n} people: {d} drivers · {s} staff — {e} contracts expiring.",
+    "expiring": "Expiring"
   },
   "research": {
     "title": "Research — regulations & expertise banking",

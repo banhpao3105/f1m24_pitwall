@@ -24,6 +24,19 @@ vi.mock('next/navigation', () => ({
 
 afterEach(cleanup);
 
+// v0.6.0: SeasonView mounts the cumulative Recharts area chart — jsdom
+// needs a ResizeObserver stub (same pattern as the other component tests).
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+});
+
 function withI18n(ui: React.ReactElement) {
   return (
     <NextIntlClientProvider locale="vi" messages={messages.vi} timeZone="Asia/Shanghai">
