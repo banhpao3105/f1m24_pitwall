@@ -2,6 +2,112 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.5.3] — Fix Personnel/Gazette/Research + dữ liệu thật thay placeholder + polish UI
+
+Đợt fix theo báo cáo bug của chủ dự án, kiểm chứng từng bước trên save thật
+Bahrain mùa 2027 (Day 46495 — sau quali, chưa đua, khô 28°C, CustomTeam hạng
+11/11). 4 bug P1 + 3 gap P2 + 6 mục polish, 1 bước = 1 commit Conventional.
+Không đụng engine lốp 0.5.1 (same-tier fallback), pace, stint factor, finance
+expertise 0.4.1 — số liệu các engine đó giữ nguyên.
+
+### Fixed — Bước 1 (P1): duel lốp so sai người + bịa chênh lệch (`5ba9a01`)
+- Duel lốp ở Personnel trước đây lấy 2 tay đua đầu tiên theo thứ tự mã nhân
+  viên và ép `null → 0`: trên save thật nó cho **Ricciardo đấu với Fittipaldi
+  (dự bị, chưa từng đua)** và bịa "chênh 57.5 vòng/stint" kèm chữ
+  "Pietro Fittipaldi null".
+- Fix: duel chỉ so giữa các tay đua **thực sự đua cho đội** (có median
+  laps/stint đo được + ≥1 chặng hoàn thành không DNF cho đúng đội), ưu tiên 2
+  người nhiều chặng nhất; dưới 2 người đủ dữ liệu → bỏ khuyến nghị, thay bằng
+  assumption ghi rõ, không bịa số. Không ép null → 0 ở bất kỳ phép so sánh nào
+  của personnel (`buildDriverDuel` lược biến chết `tyreA/tyreB`); chuỗi why
+  hiển thị `n/a` khi thiếu dữ liệu.
+- Kiểm chứng save thật: duel = **Ricciardo 57.5 vs O'Ward 56** (chênh 1.5,
+  số median thật từ pit history) — không còn Fittipaldi, không còn chữ "null".
+
+### Fixed — Bước 2 (P1): Gazette ghi sai số chặng với chặng chưa đua (`0ea9a37`)
+- `round` trước đây = số chặng **đã xong** (state 2) → Bahrain (chặng 4/21,
+  chưa đua) bị ghi "Chặng 3 · Bahrain" / "CHẶNG 3/21" / "TẬP III" trong khi
+  Season ghi đúng #4.
+- Fix: `round` = vị trí chặng trong lịch mùa (sort day rồi raceId) + 1.
+  `seasonRacesUpTo` giữ nguyên cho favorites/dark horse (chúng cần đúng chặng
+  đã xong).
+- Kiểm chứng save thật: **Bahrain 4/21**, Suzuka 3, Albert Park 1; 2 unit test
+  mới (chặng chưa đua + mảng race xáo trộn).
+
+### Fixed — Bước 3 (P1): tên tay đua dạng STRING_LITERAL hiện thành rác (`2565e1e`)
+- Save thật lưu tên người chơi nhập dưới dạng
+  `[STRING_LITERAL:Value=|Colton|]` (Herta 645, Emerson Fittipaldi Jr. 646,
+  Briatore 5) và mã xe `[STRING_LITERAL:Value=|LLO|]` (staffId 600+).
+  `cleanStaffName` rơi vào nhánh "giữ đuôi key" (split tại `_` của
+  STRING_LITERAL) → hiển thị "LITERAL:Value=|Colton| LITERAL:Value=|Herta|".
+- Fix: case STRING_LITERAL xử lý **trước** các case hiện có trong cả
+  `cleanStaffName` và `cleanDriverCode`; giá trị giữ nguyên khoảng trắng
+  ("Fittipaldi Jr."). Các shape `[StaffName_*]` / `[DriverCode_*]` / text trần
+  không đổi.
+- Kiểm chứng save thật: **0 tên chứa LITERAL/STRING_LITERAL** trong toàn bộ
+  model (drivers, kết quả, quali, standings, staff); "Colton Herta",
+  "Emerson Fittipaldi Jr." hiển thị đúng.
+
+### Fixed — Bước 4 (P1): Research vẫn nói "Bank đã trên median" khi cả giải 0 (`9330b7c`)
+- `>=` cho 0 ≥ 0 = true → Research ra "Bank đã trên median — không cần đốt
+  R&D" trong khi bank 0, median 0, hạng 11/11 — mâu thuẫn với Strategy (đã sửa
+  cùng lỗi ở finance.engine 0.4.1).
+- Fix: copy y hệt logic 3 trường hợp từ finance (so `>` nghiêm ngặt; hòa +
+  all-zero; hòa không all-zero). Title, confidence, evidence giữ nguyên.
+- Kiểm chứng save thật: Research và Strategy **cùng một câu** về expertise:
+  "Cả giải chưa bank expertise nào (toàn bộ 0) — …" (hạng 11/11).
+
+### Changed — Bước 5 (P2): Car Lab league bỏ khái niệm điểm + resolve tên đề xuất luật (`75e3f79`)
+- **5a — league xe (chọn hướng b: bỏ điểm)**: Parts_Designs trên save thật
+  **không có cột điểm** (Points/DesignPoints/StatPoints/ResearchPoints/
+  CDBPoints đều vắng) và tổng Parts_Designs_StatValues **không so sánh được
+  giữa các đội** (số dòng stat lệch nhau 92–122/team, cộng dồn chỉ phản ánh
+  khối lượng thiết kế). `CarLeagueRow` bỏ field `score` — league luôn xếp theo
+  pace board, ghi rõ ở UI + evidence; không còn `score: null` trá hình. Dev
+  queue giữ nguyên (đã trung thực từ 0.4.1).
+- **5b — tên đề xuất luật**: group ID giờ được resolve từ chính các bảng nội
+  dung trong save — sweeping ("Giảm toàn diện 50%"), giảm theo part
+  ("Giảm 70% RearWing" qua Parts_Enum_Type), giảm stat ("Giảm 30% trên 3 chỉ
+  số xe"), luật phi kỹ thuật ("quy tắc #2: 139.2M"); nhóm trống ghi rõ "chi
+  tiết không có trong save" — không còn "group N" trơ trọi. Title card rơi
+  về tên ChangeType của save ("Đề xuất #1 — MajorTechnical").
+- Kiểm chứng save thật: 3 card Research phân biệt được (#1 MajorTechnical /
+  #2 Sporting / #3 Financial) với nội dung đo được; league pace không còn
+  cột điểm null.
+
+### Fixed — Bước 6 (P2 + nhỏ): câu chữ cảnh báo + 5 mục polish giao diện (`22dfd6a`)
+- **Cảnh báo đỏ Tyre Lab nói đúng đồng hồ bằng chứng**: câu cũ "Plan đang dùng
+  M với delta CHƯA đo được" mâu thuẫn với chip "M đo được" — quy tắc cùng tầng
+  0.5.1 cố ý xếp cả M và H bằng hằng số model. Câu mới: "Xếp hạng đang dùng
+  hằng số model cho cả M và H vì H chưa đo được (đã đo được: M +0.85s) — coi
+  như ước lượng" (dữ liệu từ `paceMeasured`).
+- **Nhãn degradation chồng nhau**: khi |pitLap − lifeLap| < 12, nhãn "Trần đời
+  lốp S" hạ xuống 1 hàng text — "Pit tối ưu: vòng 23" và "Trần đời lốp S: vòng
+  29" không còn đè nhau (verify screenshot trên save thật).
+- **Chip "ĐANG ĐUA"**: chỉ hiện khi save mở đúng ngày đua (meta.day = race
+  day); state 1 thường dùng "tuần race" như Season, không pulse đỏ.
+- **Tên dính chữ**: forename key camelCase tách đủ khoảng trắng
+  ("AndreaKimi" → **"Andrea Kimi Antonelli"**); surname chỉ tách trước tiểu từ
+  (de/van/der/le/la/da/al/dos/del/della/von/ter/ten) — "deVries" →
+  **"Nyck de Vries"**, giữ nguyên MacPherson/DallAra/Vandoorne/O'Ward/
+  Ricciardo/Verstappen. Tách surname làm thủ công — regex `/i` làm
+  [A-ZÀ-Þ] match cả chữ thường và hỏng DallAra/Leclerc.
+- **Cost-per-point định dạng**: dùng formatter tiền chung
+  `formatMoneyCompact` (lib/utils) — "Cost-per-point: 3.2M / điểm" khớp
+  "CHI/ĐIỂM" ở snapshot Finance.
+- **Caption sơ đồ đường đua**: rút gọn "SƠ ĐỒ MINH HỌA — KHÔNG THEO TỈ LỆ" →
+  "Sơ đồ minh họa" — không còn ngắt 3 dòng trong card Race Weekend/Home.
+- Kiểm chứng bằng browser trên save thật (screenshot Tyre Lab, Home, Strategy,
+  Drivers, Research, Gazette).
+
+### Gates
+- Mỗi bước: `bun run lint` + `bun run typecheck` + `bun run test` xanh trước
+  khi commit (tổng 185 unit tests ở Bước 6); push xác minh bằng hash thật
+  (`git log` + `git ls-remote`).
+- Ngoại phạm vi như prompt: game plan 2 pit vs web 1 pit ở Bahrain là quyết
+  định chiến thuật (không đổi optimizer); LapHistory cần save giữa chặng;
+  dọn dependency/.env; Playwright E2E, Lighthouse, PWA, Phase 4.
+
 ## [0.5.2] — Fix deploy Vercel: Suspense cho WallSidebar + CI thêm bước build
 
 Deploy Vercel của v0.5.0 (commit `64ed70b`, 2026-11-14) thất bại ở prerender:
