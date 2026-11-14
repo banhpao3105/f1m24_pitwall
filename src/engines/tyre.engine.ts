@@ -34,8 +34,32 @@ export const PIT_STATIONARY_ESTIMATE = 2.2;
 export const MIN_STINT_LAPS = 4;
 export const MIN_PACE_SAMPLE = 3;
 export const TYRE_DURABILITY = { S: 0.43, M: 0.65, H: 1.0 } as const;
-export const DEG_FINAL = { S: 3.0, M: 2.0, H: 1.8 } as const;
+/**
+ * v0.6.1 backtest: DEG_FINAL.H 1.8 → 3.0 (old value 1.8). A cliff alone
+ * cannot separate the Silverstone contenders: the optimizer re-splits any
+ * H plan to keep the H stint just under 60% of its 53-lap life (20–21 laps
+ * S + 31–32 laps H — zero cliff by construction), so the end-of-life deg
+ * rate for H must carry the "long H stints are slow on high-energy tracks"
+ * reality (Ricciardo's H35 ran ~+3s/lap vs Soft). S/M unchanged; verified
+ * on the Bahrain (S→M 61.1s best, pit 23) and Suzuka (S→S→M best)
+ * backtests — scripts/tune-deg-cliff.ts.
+ */
+export const DEG_FINAL = { S: 3.0, M: 2.0, H: 3.0 } as const;
 export const DEG_EXP = 2.0;
+/**
+ * Tyre cliff (v0.6.1): a stint longer than DEG_CLIFF_THRESHOLD × life adds
+ * a penalty growing with the SQUARE of the overflow laps — the game's
+ * "still alive" life estimate says nothing about staying fast (Silverstone
+ * 2027: H 35-lap stint ≈ +3s/lap vs Soft at the end, race average 94.5s).
+ * Per-compound constants, tuned by backtest (scripts/tune-deg-cliff.ts):
+ * a single constant is mathematically incompatible with the two verified
+ * saves — Bahrain's S23/M34 stints (overflow 3.2/4 laps) must stay
+ * ~free (S→M 61.1s must remain best) while Silverstone's H35 (overflow
+ * 3.2 laps) must cost ≥ 31s. Same mechanism for all three compounds, like
+ * DEG_FINAL; the data only punishes the hard compound's cliff.
+ */
+export const DEG_CLIFF_THRESHOLD = 0.6;
+export const DEG_CLIFF: Record<Compound, number> = { S: 0.03, M: 0.02, H: 5.0 };
 
 export type Compound = 'S' | 'M' | 'H';
 export const DRY: Compound[] = ['S', 'M', 'H'];
@@ -63,15 +87,46 @@ export function median(values: number[]): number | null {
     : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-/** Closed form of DEG_FINAL × (laps/life)^EXP summed over a stint (oracle). */
-export function stintDegPenalty(
+/** Deg-formula constants — injectable so backtests can grid-search. */
+export interface DegConstants {
+  final: Record<Compound, number>;
+  cliff: Record<Compound, number>;
+  cliffThreshold: number;
+}
+
+export const ORACLE_DEG: DegConstants = {
+  final: DEG_FINAL,
+  cliff: DEG_CLIFF,
+  cliffThreshold: DEG_CLIFF_THRESHOLD,
+};
+
+/**
+ * Stint wear seconds: base oracle curve (DEG_FINAL × (laps/3) × frac²)
+ * plus the v0.6.1 cliff — beyond threshold × life the penalty grows with
+ * the square of the overflow laps (see DEG_CLIFF).
+ */
+export function stintDegPenaltyWith(
+  deg: DegConstants,
   compound: Compound,
   stintLaps: number,
   life: number,
 ): number {
   if (!life || life <= 0 || stintLaps <= 0) return 0;
   const frac = Math.min(1, stintLaps / life);
-  return DEG_FINAL[compound] * (stintLaps / (DEG_EXP + 1)) * Math.pow(frac, DEG_EXP);
+  const base =
+    deg.final[compound] * (stintLaps / (DEG_EXP + 1)) * Math.pow(frac, DEG_EXP);
+  const overflow = stintLaps - deg.cliffThreshold * life;
+  const cliff = overflow > 0 ? deg.cliff[compound] * overflow * overflow : 0;
+  return base + cliff;
+}
+
+/** Closed form of DEG_FINAL × (laps/life)^EXP summed over a stint (oracle). */
+export function stintDegPenalty(
+  compound: Compound,
+  stintLaps: number,
+  life: number,
+): number {
+  return stintDegPenaltyWith(ORACLE_DEG, compound, stintLaps, life);
 }
 
 /* ── data extraction from the normalized model ──────────────────────────── */
@@ -420,6 +475,7 @@ export function evaluateStrategy(
   maxStint: Record<Compound, number>,
   deltas: Record<Compound, number>,
   pitCostS: number,
+  deg: DegConstants = ORACLE_DEG,
 ): { timeS: number; stints: PlannedStint[] } | null {
   const n = stintCompounds.length;
   if (n < 1) return null;
@@ -449,7 +505,7 @@ export function evaluateStrategy(
         fromLap: 0,
         toLap: 0,
         deltaS: deltas[c],
-        degS: stintDegPenalty(c, l, life),
+        degS: stintDegPenaltyWith(deg, c, l, life),
       });
       rec(from + l, soFar);
       soFar.pop();
@@ -484,6 +540,7 @@ export function whatIfPitShift(
   deltas: Record<Compound, number>,
   pitCostS: number,
   shift: number,
+  deg: DegConstants = ORACLE_DEG,
 ): WhatIfPitShiftResult {
   const n = best.stints.length;
   if (n === 0 || shift === 0) {
@@ -534,7 +591,7 @@ export function whatIfPitShift(
       fromLap: from + 1,
       toLap: from + stintLaps,
       deltaS: deltas[compound],
-      degS: stintDegPenalty(compound, stintLaps, life),
+      degS: stintDegPenaltyWith(deg, compound, stintLaps, life),
     });
     from += stintLaps;
   }
@@ -549,7 +606,7 @@ export function whatIfPitShift(
       }
       last.laps += extra;
       last.toLap = laps;
-      last.degS = stintDegPenalty(last.compound, last.laps, life);
+      last.degS = stintDegPenaltyWith(deg, last.compound, last.laps, life);
       clamped = true;
     }
   }
@@ -751,6 +808,12 @@ export interface TyreLabOptions {
   excludeRaceId?: number;
   /** Local per-track correction record (UI loads it from IndexedDB). */
   prior?: TyreLabPrior;
+  /**
+   * v0.6.1 backtest hook (scripts/tune-deg-cliff.ts): override the deg
+   * constants for what-if analysis. Production code never sets this —
+   * the oracle constants are the shipped tuning.
+   */
+  degOverride?: Partial<DegConstants>;
 }
 
 export function buildTyreLab(
@@ -772,6 +835,7 @@ export function buildTyreLab(
 
   const laps = race.laps ?? 50;
   const exclude = options.excludeRaceId;
+  const deg: DegConstants = { ...ORACLE_DEG, ...options.degOverride };
   const trackRaces = (state: number): Race[] =>
     model.races.filter(
       (r) => r.trackId === race.trackId && r.state === state && r.raceId !== exclude,
@@ -910,12 +974,38 @@ export function buildTyreLab(
     }
   }
 
+  /* in-game strategist plan — normalized from Save_PlayerStrategyStints
+     (v0.5.1 P2). The table has no race reference; rows exist only for the
+     current weekend, so the plan attaches to the first non-completed race
+     of the CURRENT season (real saves keep placeholder state-0 calendars
+     for future seasons — filtering by season is what anchors the plan to
+     the actual weekend). Empty table / completed race → null.
+     Computed BEFORE ranking (v0.6.1): exact ties between order-equivalent
+     plans are broken in the game plan's favour — the model is order-
+     agnostic, and among equals the order the game itself runs is the one
+     worth suggesting. */
+  const activeRace = model.races
+    .filter((r) => r.seasonId === model.meta.seasonId && r.state !== 2)
+    .sort((a, b) => a.day - b.day)[0];
+  const gamePlan: TyreLab['gamePlan'] =
+    race.raceId === activeRace?.raceId
+      ? buildGamePlan(model.playerStrategy ?? { tablePresent: false, plans: [] }, laps)
+      : null;
+  const gameOrder = gamePlan ? gamePlan.compounds.join('→') : null;
+  const gameOrderRank = (s: { order: Compound[] }): number =>
+    gameOrder != null && s.order.join('→') === gameOrder ? 0 : 1;
+  if (gamePlan) {
+    assumptions.push({
+      text: 'Plan của game đọc từ Save_PlayerStrategyStints, hiển thị ở mức đội — chưa xác minh được LoadoutID (0/1) map sang xe nào',
+    });
+  }
+
   /* candidate strategies (oracle enumeration) */
   const maxStint: Record<Compound, number> = { ...lives };
   const strategies: (StrategyResult & { timeS: number })[] = [];
   const runOrders = (orders: Compound[][], stops: number): void => {
     for (const order of orders) {
-      const r = evaluateStrategy(order, laps, maxStint, deltas, pitCostS);
+      const r = evaluateStrategy(order, laps, maxStint, deltas, pitCostS, deg);
       if (r) {
         strategies.push({ order, stops, timeS: r.timeS, stints: r.stints, pitLaps: [], vsBestS: null });
       }
@@ -939,8 +1029,11 @@ export function buildTyreLab(
   runOrders(multiStop(3), 3);
   if (strategies.length === 0) runOrders(multiStop(4), 4);
 
-  /* rank, sanity-filter throwaway stints, mark vsBest (oracle) */
-  strategies.sort((a, b) => a.timeS - b.timeS || a.stops - b.stops);
+  /* rank, sanity-filter throwaway stints, mark vsBest (oracle). v0.6.1:
+     exact time+stops ties prefer the game's own compound order. */
+  strategies.sort(
+    (a, b) => a.timeS - b.timeS || a.stops - b.stops || gameOrderRank(a) - gameOrderRank(b),
+  );
   const minStintLaps = Math.max(MIN_STINT_LAPS + 1, Math.round(laps / 12));
   const sane = strategies.filter((s) => s.stints.every((st) => st.laps >= minStintLaps));
   const ranked = sane.length > 0 ? sane : strategies;
@@ -980,24 +1073,8 @@ export function buildTyreLab(
     };
   }
 
-  /* in-game strategist plan — normalized from Save_PlayerStrategyStints
-     (v0.5.1 P2). The table has no race reference; rows exist only for the
-     current weekend, so the plan attaches to the first non-completed race
-     of the CURRENT season (real saves keep placeholder state-0 calendars
-     for future seasons — filtering by season is what anchors the plan to
-     the actual weekend). Empty table / completed race → null. */
-  const activeRace = model.races
-    .filter((r) => r.seasonId === model.meta.seasonId && r.state !== 2)
-    .sort((a, b) => a.day - b.day)[0];
-  const gamePlan: TyreLab['gamePlan'] =
-    race.raceId === activeRace?.raceId
-      ? buildGamePlan(model.playerStrategy ?? { tablePresent: false, plans: [] }, laps)
-      : null;
-  if (gamePlan) {
-    assumptions.push({
-      text: 'Plan của game đọc từ Save_PlayerStrategyStints, hiển thị ở mức đội — chưa xác minh được LoadoutID (0/1) map sang xe nào',
-    });
-  }
+  /* in-game strategist plan — computed before ranking (game-order
+     tie-break); see the block above the strategy enumeration. */
 
   /* confidence — honest tiers (v0.5.1 P1). HIGH requires EVERY pillar:
      lives from the weekend allocation, BOTH M and H measured from practice

@@ -168,6 +168,33 @@ export function buildSilverstoneModel(
     standings: { drivers: [], teams: [] },
     tyres: silverstoneAllocation(!options.withoutEstimatedLapTime),
     ...emptyPhase2Sections(),
+    /* the game's own strategist plan (mục 5): S→M→S, stint 15/20/17,
+       pit 16/36 — reads back as stintLaps [15, 20, 17] on 52 laps */
+    playerStrategy: {
+      tablePresent: true,
+      plans: [
+        {
+          loadoutId: 0,
+          strategyId: 1,
+          selected: true,
+          stints: [
+            { stintIndex: 0, compound: 'S', pitWindowStart: null, pitWindowEnd: null, expectedPitLap: null, optimalPitLap: null },
+            { stintIndex: 1, compound: 'M', pitWindowStart: 14, pitWindowEnd: 18, expectedPitLap: 16, optimalPitLap: 16 },
+            { stintIndex: 2, compound: 'S', pitWindowStart: 34, pitWindowEnd: 38, expectedPitLap: 36, optimalPitLap: 36 },
+          ],
+        },
+        {
+          loadoutId: 1,
+          strategyId: 1,
+          selected: true,
+          stints: [
+            { stintIndex: 0, compound: 'S', pitWindowStart: null, pitWindowEnd: null, expectedPitLap: null, optimalPitLap: null },
+            { stintIndex: 1, compound: 'M', pitWindowStart: 14, pitWindowEnd: 18, expectedPitLap: 16, optimalPitLap: 16 },
+            { stintIndex: 2, compound: 'S', pitWindowStart: 34, pitWindowEnd: 38, expectedPitLap: 36, optimalPitLap: 36 },
+          ],
+        },
+      ],
+    },
     availability: [],
   };
 }

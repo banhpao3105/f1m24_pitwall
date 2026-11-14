@@ -24,6 +24,10 @@ import {
   SILVERSTONE_LAPS,
 } from '../helpers/silverstone-fixture';
 
+/** Ranking deltas of the Silverstone fixture after step 1 (M practice
+ * 0.711, H allocation 0.89) — mirrored here for direct plan evaluation. */
+const SILVERSTONE_DELTAS = { S: 0, M: 0.71, H: 0.89 } as const;
+
 /* ── helpers to build a minimal SaveModel ────────────────────────────────── */
 
 let nextRaceId = 1000;
@@ -82,15 +86,28 @@ function fieldResults(raceId: number, n = 6) {
 /* ── pure math ───────────────────────────────────────────────────────────── */
 
 describe('stintDegPenalty', () => {
-  it('matches the closed form at known points', () => {
-    expect(stintDegPenalty('S', 11, 14)).toBeCloseTo(3.0 * (11 / 3) * Math.pow(11 / 14, 2), 6);
-    expect(stintDegPenalty('M', 19, 22)).toBeCloseTo(2.0 * (19 / 3) * Math.pow(19 / 22, 2), 6);
+  it('matches the base+cliff closed form at known points (v0.6.1 cliff)', () => {
+    // base: DEG_FINAL × (laps/3) × frac²; cliff: DEG_CLIFF × overflow²
+    // S 11/14: overflow 11 − 0.6×14 = 3.2 → 0.03×3.2² = 0.307
+    expect(stintDegPenalty('S', 11, 14)).toBeCloseTo(
+      3.0 * (11 / 3) * Math.pow(11 / 14, 2) + 0.03 * Math.pow(11 - 0.6 * 14, 2), 6,
+    );
+    // M 19/22: overflow 19 − 13.2 = 5.8 → 0.02×5.8² = 0.673
+    expect(stintDegPenalty('M', 19, 22)).toBeCloseTo(
+      2.0 * (19 / 3) * Math.pow(19 / 22, 2) + 0.02 * Math.pow(19 - 0.6 * 22, 2), 6,
+    );
+    // H 35/53: overflow 35 − 31.8 = 3.2 → 5.0×3.2² = 51.2 (the Silverstone kill)
+    expect(stintDegPenalty('H', 35, 53)).toBeCloseTo(
+      3.0 * (35 / 3) * Math.pow(35 / 53, 2) + 5.0 * Math.pow(35 - 0.6 * 53, 2), 6,
+    );
+    // under the cliff threshold: base only
     expect(stintDegPenalty('S', 0, 14)).toBe(0);
+    expect(stintDegPenalty('M', 20, 35)).toBeCloseTo(2.0 * (20 / 3) * Math.pow(20 / 35, 2), 6);
   });
 });
 
 describe('evaluateStrategy', () => {
-  it('finds the hand-computed optimum (S→M split 11/19, 1 stop, 47.39s)', () => {
+  it('finds the hand-computed optimum (S→M split 11/19, 1 stop, 48.26s incl. cliff)', () => {
     const result = evaluateStrategy(
       ['S', 'M'],
       30,
@@ -101,7 +118,8 @@ describe('evaluateStrategy', () => {
     expect(result).not.toBeNull();
     expect(result!.stints[0].laps).toBe(11);
     expect(result!.stints[1].laps).toBe(19);
-    expect(result!.timeS).toBeCloseTo(47.39, 1);
+    // v0.6.1: 47.39 pre-cliff + cliffS(11,14) 0.307 + cliffM(19,22) 0.673
+    expect(result!.timeS).toBeCloseTo(48.26, 1);
   });
 
   it('rejects single-compound plans (dry rule)', () => {
@@ -342,7 +360,7 @@ describe('v0.5.1 cross-session pace (P0 Suzuka bug)', () => {
     expect(pace!.measured.H).toBeNull();
   });
 
-  it('ranks S→S→M best on measured deltas: 80.9s, pits [18,36]; S→H never best', () => {
+  it('ranks S→S→M best on measured deltas: 81.2s, pits [17,34]; S→H never best', () => {
     const lab = buildTyreLab(makeModel([target], { tyres: allocLives25_38_58() }), 300);
     const data: TyreLab = lab.data;
     expect(data.lives).toEqual({ S: 25, M: 38, H: 58 });
@@ -354,25 +372,23 @@ describe('v0.5.1 cross-session pace (P0 Suzuka bug)', () => {
     const best = data.best!;
     expect(best.order.join('→')).toBe('S→S→M');
     expect(best.stops).toBe(2);
-    expect(best.timeS).toBeCloseTo(80.9, 1);
-    expect(best.pitLaps).toEqual([18, 36]);
+    // v0.6.1: 80.9 pre-cliff + cliffS(17,25)×2 + cliffS... new optimum S17/S17/M19
+    expect(best.timeS).toBeCloseTo(81.2, 1);
+    expect(best.pitLaps).toEqual([17, 34]);
 
-    const byOrder = (o: string) =>
-      data.strategies.find((s) => s.order.join('→') === o);
-    expect(byOrder('S→M')!.timeS).toBeCloseTo(85.3, 1);
-    // S→H sits far below the best plan (owner's number: 97.6s) — verify the
-    // plan time directly; with honest deltas it no longer even makes top 6.
+    // S→H sits far below the best plan — verify the plan time directly; with
+    // honest deltas it no longer even makes top 6 (v0.6.1 cliff included).
     const sh = evaluateStrategy(['S', 'H'], 53, { S: 25, M: 38, H: 58 }, { S: 0, M: 1.09, H: 1.76 }, 20.7);
-    expect(sh!.timeS).toBeCloseTo(97.6, 1);
+    expect(sh!.timeS).toBeCloseTo(102.6, 1);
     expect(best.order.join('→')).not.toBe('S→H');
   });
 });
 
 describe('v0.5.1 same-tier fallback (Rule 2)', () => {
-  it('never ranks measured M against model H — best flips to S→M 68.2s', () => {
+  it('never ranks measured M against model H — S→H stays far behind (best S→S→M 70.4s)', () => {
     // One session: M measured (+0.72 vs S), H has ZERO practice samples.
     // Without Rule 2 the model H constant (+1.05) beats measured M (+0.72)
-    // and the plan flips to nonsense S→H 74.4s — the Suzuka failure mode.
+    // and the plan flips to nonsense S→H — the Suzuka failure mode.
     const rows = [
       prow(1, 1, 91671, 2), prow(2, 1, 91721, 2), prow(3, 1, 91771, 2),
       prow(4, 1, 92394, 1), prow(5, 1, 92444, 1), prow(6, 1, 92494, 1),
@@ -394,12 +410,14 @@ describe('v0.5.1 same-tier fallback (Rule 2)', () => {
     expect(lab.assumptions.some((a) => a.text.includes('chưa được đo'))).toBe(true);
 
     const best = data.best!;
-    expect(best.order.join('→')).toBe('S→M');
-    expect(best.timeS).toBeCloseTo(68.2, 1);
-    // Owner's direct check: with the SAME-TIER model deltas S→H costs 74.4s
+    // v0.6.1: the cliff makes the 2-stop S→S→M (S16/S16/M21, 70.4s) beat the
+    // 1-stop S→M (71.0s) — the Rule-2 intent is untouched: S→H must NOT win.
+    expect(best.order.join('→')).toBe('S→S→M');
+    expect(best.timeS).toBeCloseTo(70.4, 1);
+    // Owner's direct check: with the SAME-TIER model deltas S→H costs 79.5s
     // (evaluate directly — the ranked top-6 is all faster plans now).
     const sh = evaluateStrategy(['S', 'H'], 53, { S: 25, M: 38, H: 58 }, { S: 0, M: 0.55, H: 1.05 }, 20.7);
-    expect(sh!.timeS).toBeCloseTo(74.4, 1);
+    expect(sh!.timeS).toBeCloseTo(79.5, 1);
   });
 
   it('does not trigger when both compounds are measured (even cross-session)', () => {
@@ -485,7 +503,7 @@ describe('v0.5.1 post-race lives (P1 autosave-2 bug)', () => {
     expect(data.expectedStops).toBe(2); // own-race field average = reference
     expect(data.expectedSource).toBe('track');
     expect(data.best!.order.join('→')).toBe('S→M');
-    expect(data.best!.timeS).toBeCloseTo(64.7, 1);
+    expect(data.best!.timeS).toBeCloseTo(66.6, 1); // v0.6.1: 64.7 + cliff S21/M32
     expect(lab.confidence).toBe('MEDIUM'); // never HIGH without allocation
     expect(lab.warnings).toContain('RACE_ALREADY_COMPLETED');
   });
@@ -680,5 +698,78 @@ describe('v0.6.1 buildTyreLab — Silverstone forced-delta honesty', () => {
     const lab = buildTyreLab(makeModel([target], { tyres: allocLives25_38_58() }), 302);
     expect(lab.data.paceSource.H).toBe('cross-session');
     expect(lab.warnings).not.toContain('PACE_DELTA_FORCED');
+  });
+});
+
+/* ── v0.6.1 step 2: the tyre cliff — long stints past 60% life get expensive
+ * Ricciardo's real Silverstone H35 stint ran ~94.5s/lap (≈ +3s vs the
+ * winner) while the model priced the whole 35-lap stint at 9.2s of wear.
+ * The cliff (DEG_CLIFF × overflow², threshold 0.6×life) plus the retuned
+ * DEG_FINAL.H make S→H collapse; the Bahrain ranking must not move. */
+
+import { buildBahrainModel, BAHRAIN_RACE_ID } from '../helpers/bahrain-fixture';
+
+describe('v0.6.1 cliff — Silverstone (race 199, 52 laps, lives 23/35/53)', () => {
+  const lab = buildTyreLab(buildSilverstoneModel(), SILVERSTONE_RACE_ID);
+  const data: TyreLab = lab.data;
+
+  it('prices the H 35-lap stint at ≥ 40s of wear (was 9.2s)', () => {
+    expect(stintDegPenalty('H', 35, 53)).toBeGreaterThanOrEqual(40);
+  });
+
+  it('costs Ricciardo\u2019s S(17)→H(35) ≥ 100s in model time', () => {
+    const total =
+      SILVERSTONE_DELTAS.H * 35 +
+      stintDegPenalty('S', 17, 23) +
+      stintDegPenalty('H', 35, 53) +
+      20.7;
+    expect(total).toBeGreaterThanOrEqual(100);
+  });
+
+  it('suggests S→M→S (the game\u2019s order) — never S→H — with the lowest model total', () => {
+    expect(data.best).not.toBeNull();
+    expect(data.best!.order.join('→')).toBe('S→M→S');
+    for (const s of data.strategies) {
+      expect(s.timeS).toBeGreaterThanOrEqual(data.best!.timeS);
+    }
+    // the ranked S→H (any split) sits clearly behind
+    const sh = evaluateStrategy(
+      ['S', 'H'], SILVERSTONE_LAPS,
+      { S: 23, M: 35, H: 53 }, SILVERSTONE_DELTAS, 20.7,
+    )!;
+    expect(sh.timeS).toBeGreaterThan(data.best!.timeS + 1);
+  });
+
+  it('keeps the game plan readable and order-matched', () => {
+    expect(data.gamePlan).not.toBeNull();
+    expect(data.gamePlan!.compounds).toEqual(['S', 'M', 'S']);
+    expect(data.gamePlan!.stintLaps).toEqual([15, 20, 17]);
+    expect(data.gamePlan!.pitLaps).toEqual([16, 36]);
+  });
+});
+
+describe('v0.6.1 cliff — Bahrain backtest (57 laps, lives 33/50/77)', () => {
+  const lab = buildTyreLab(buildBahrainModel(), BAHRAIN_RACE_ID);
+  const data: TyreLab = lab.data;
+
+  it('keeps S→M best at pit lap 23 (61.1s pre-cliff, ~61.7s with cliff)', () => {
+    expect(data.best!.order.join('→')).toBe('S→M');
+    expect(data.best!.pitLaps[0]).toBe(23);
+    expect(data.best!.timeS).toBeGreaterThanOrEqual(61);
+    expect(data.best!.timeS).toBeLessThan(63);
+  });
+
+  it('keeps S→H behind S→M (71.6s pre-cliff)', () => {
+    const sh = evaluateStrategy(
+      ['S', 'H'], 57, { S: 33, M: 50, H: 77 }, { S: 0, M: 0.55, H: 1.05 }, 20.7,
+    )!;
+    expect(sh.timeS).toBeGreaterThan(data.best!.timeS + 10);
+  });
+
+  it('keeps the 2-stop S→S→M alternative behind S→M', () => {
+    const ssm = evaluateStrategy(
+      ['S', 'S', 'M'], 57, { S: 33, M: 50, H: 77 }, { S: 0, M: 0.55, H: 1.05 }, 20.7,
+    )!;
+    expect(ssm.timeS).toBeGreaterThan(data.best!.timeS);
   });
 });
