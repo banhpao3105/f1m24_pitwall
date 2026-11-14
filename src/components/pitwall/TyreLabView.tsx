@@ -362,6 +362,11 @@ export function TyreLabView({
                         .join(' · '),
                     })}
                   </span>
+                  {/* v0.6.1: the game plan's web-modelled total — makes any
+                      disagreement with the web visible in seconds */}
+                  <span className="rounded bg-raised px-1.5 py-0.5 font-mono text-[10px] text-ink-soft">
+                    {t('gamePlan.totalTime', { time: tyre.data.gamePlan.totalTimeS.toFixed(1) })}
+                  </span>
                 </div>
                 {tyre.data.best ? (
                   <div className="flex flex-wrap items-center gap-2">
@@ -379,6 +384,20 @@ export function TyreLabView({
                         {t('gamePlan.pitLaps', { laps: tyre.data.best.pitLaps.join(', ') })}
                       </span>
                     ) : null}
+                    <span className="rounded bg-raised px-1.5 py-0.5 font-mono text-[10px] text-ink-soft">
+                      {t('gamePlan.totalTime', { time: tyre.data.best.timeS.toFixed(1) })}
+                    </span>
+                    {(() => {
+                      const diff = Math.round((tyre.data.best.timeS - tyre.data.gamePlan!.totalTimeS) * 10) / 10;
+                      if (Math.abs(diff) < 0.05) return null;
+                      return (
+                        <span className="font-mono text-[10px] text-amber">
+                          {diff < 0
+                            ? t('gamePlan.webFaster', { delta: Math.abs(diff).toFixed(1) })
+                            : t('gamePlan.webSlower', { delta: diff.toFixed(1) })}
+                        </span>
+                      );
+                    })()}
                   </div>
                 ) : null}
               </div>

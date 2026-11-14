@@ -71,7 +71,7 @@ export function bahrainAllocation(): SaveModel['tyres'] {
   return sets;
 }
 
-export function buildBahrainModel(): SaveModel {
+export function buildBahrainModel(stopsPerDriver = 1): SaveModel {
   const target: Race = {
     raceId: BAHRAIN_RACE_ID,
     seasonId: 3,
@@ -103,7 +103,7 @@ export function buildBahrainModel(): SaveModel {
     drivers: [],
     staff: [],
     seasons: [{ seasonId: 3 }],
-    races: [...historyRaces(1), target],
+    races: [...historyRaces(stopsPerDriver), target],
     standings: { drivers: [], teams: [] },
     tyres: bahrainAllocation(),
     ...emptyPhase2Sections(),

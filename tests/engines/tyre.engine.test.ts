@@ -504,7 +504,11 @@ describe('v0.5.1 post-race lives (P1 autosave-2 bug)', () => {
     expect(data.expectedSource).toBe('track');
     expect(data.best!.order.join('→')).toBe('S→M');
     expect(data.best!.timeS).toBeCloseTo(66.6, 1); // v0.6.1: 64.7 + cliff S21/M32
-    expect(lab.confidence).toBe('MEDIUM'); // never HIGH without allocation
+    // v0.6.1 honest re-grade: model lives + same-tier pace + 0 samples +
+    // 1 pit < own-race field 2 = 4 missing pillars → LOW (was MEDIUM).
+    // The test's core claim — never HIGH without allocation — still holds.
+    expect(lab.confidence).toBe('LOW');
+    expect(lab.confidence).not.toBe('HIGH');
     expect(lab.warnings).toContain('RACE_ALREADY_COMPLETED');
   });
 });
@@ -555,7 +559,9 @@ describe('v0.5.1 confidence gates', () => {
     );
     expect(lab.warnings).toContain('PLAN_BELOW_FIELD_STOPS');
     expect(lab.assumptions.some((a) => a.text.includes('ít pit hơn mặt bằng'))).toBe(true);
-    expect(lab.confidence).toBe('MEDIUM');
+    // v0.6.1 honest re-grade: 1 track sample (< 3) + plan below field = 2
+    // missing pillars → LOW (was MEDIUM); the warning itself is unchanged.
+    expect(lab.confidence).toBe('LOW');
   });
 });
 
@@ -572,7 +578,9 @@ describe('v0.5.1 track-correction prior (P2, local IndexedDB)', () => {
       { prior: { predictedStops: 1, fieldAvgStops: 2.5, predictedPitLap: 19 } },
     );
     expect(lab.warnings).toContain('PLAN_BELOW_FIELD_STOPS_PRIOR');
-    expect(lab.confidence).toBe('MEDIUM');
+    // v0.6.1 honest re-grade: 0 stint samples + plan below prior = 2 missing
+    // pillars → LOW (was MEDIUM); warning + evidence assertions unchanged.
+    expect(lab.confidence).toBe('LOW');
     expect(lab.assumptions.some((a) => a.text.includes('Lần trước tại'))).toBe(true);
     expect(lab.evidence.some((e) => e.source.includes('track-corrections'))).toBe(true);
   });
@@ -771,5 +779,90 @@ describe('v0.6.1 cliff — Bahrain backtest (57 laps, lives 33/50/77)', () => {
       ['S', 'S', 'M'], 57, { S: 33, M: 50, H: 77 }, { S: 0, M: 0.55, H: 1.05 }, 20.7,
     )!;
     expect(ssm.timeS).toBeGreaterThan(data.best!.timeS);
+  });
+});
+
+/* ── v0.6.1 step 3: confidence pillars, the tie rule, game-plan total ──────
+ * v0.5.6 rated Silverstone HIGH on four false pillars: a forced delta
+ * counted as "measured", the pit check skipped when no observed/prior data
+ * existed (expectedStops = 2 was already known!), a 0.0s tie read as a
+ * win, and a single practice session passed for depth. */
+
+describe('v0.6.1 confidence + tie rule (Silverstone)', () => {
+  const lab = buildTyreLab(buildSilverstoneModel(), SILVERSTONE_RACE_ID);
+
+  it('drops to LOW and names the four real reasons', () => {
+    expect(lab.confidence).toBe('LOW');
+    const summary = lab.assumptions.find((a) => a.text.startsWith('Confidence LOW:'));
+    expect(summary).toBeDefined();
+    // 1. the forced delta
+    expect(summary!.text).toContain('delta H bị ép');
+    // 2. the ranking deltas are not both practice-measured (H = allocation)
+    expect(summary!.text).toContain('chưa đủ cả M và H từ practice');
+    // 3. a single practice session with an allocation mismatch > 0.2s
+    expect(summary!.text).toContain('1 session');
+    // 4. the top two plans are a tie
+    expect(summary!.text).toContain('hòa');
+    // NOTE: the prompt's "plan 1 pit < field 2" reason described the v0.5.6
+    // state — after the cliff the suggested plan is the 2-stop S→M→S, which
+    // matches the field reference, so (h) no longer fires HERE. The (h)
+    // pillar itself is exercised by the Bahrain 2-stop-meta variant below.
+    expect(lab.warnings).not.toContain('PLAN_BELOW_FIELD_STOPS');
+  });
+
+  it('why names the tie and the game plan carries its modelled total', () => {
+    const rec = lab.recommendations[0];
+    expect(rec.why).toContain('hòa');
+    const data = lab.data;
+    expect(data.gamePlan).not.toBeNull();
+    expect(data.gamePlan!.totalTimeS).toBeGreaterThan(0);
+    // the why always quotes the game plan's web-modelled cost
+    expect(rec.why).toContain(`tốn ${data.gamePlan!.totalTimeS.toFixed(1)}s`);
+    // game plan = S→M→S 15/20/17 pit 16/36 — same ORDER as the suggestion
+    expect(data.gamePlan!.compounds).toEqual(['S', 'M', 'S']);
+    expect(data.best!.order.join('→')).toBe('S→M→S');
+  });
+
+  it('recommends the game plan when the tie is real and the game plan is viable', () => {
+    /* unit-level check of the tie preference: a tied field with a viable
+       game plan must recommend the game-plan order. Silverstone's game plan
+       is 6.9s slower than the model optimum (> 2s), so the web plan stays —
+       assert that decision explicitly. */
+    const rec = lab.recommendations[0];
+    expect(rec.title).toContain('S(15)'); // the web's optimal split, not the game's 15/20/17
+    expect(rec.why).toContain('ưu tiên');
+  });
+});
+
+describe('v0.6.1 Bahrain confidence stays MEDIUM (not an unfair LOW)', () => {
+  const lab = buildTyreLab(buildBahrainModel(), BAHRAIN_RACE_ID);
+
+  it('keeps MEDIUM: allocation lives, ≥3 samples, ≥2s margin, field-matching stops', () => {
+    expect(lab.confidence).toBe('MEDIUM');
+    const summary = lab.assumptions.find((a) => a.text.startsWith('Confidence MEDIUM:'));
+    expect(summary).toBeDefined();
+    expect(summary!.text).toContain('chưa đủ cả M và H từ practice');
+    // exactly ONE missing pillar — no practice at all is priced by (b) alone
+    expect(lab.warnings).not.toContain('PLAN_BELOW_FIELD_STOPS');
+    expect(lab.data.expectedStops).toBe(1);
+    expect(lab.data.best!.stops).toBe(1);
+  });
+});
+
+describe('v0.6.1 pillar (h) — meta expectedStops joins the field-reference chain', () => {
+  /* Same Bahrain save but the 2027 field ran 2 stops/driver: the engine now
+     KNOWS the field reference (2) even with no observed/prior data, so the
+     1-pit best plan is flagged instead of silently passing (the Silverstone
+     v0.5.6 hole). */
+  const lab = buildTyreLab(buildBahrainModel(2), BAHRAIN_RACE_ID);
+
+  it('warns + drops confidence when the 1-pit plan sits below the meta field reference', () => {
+    expect(lab.data.expectedStops).toBe(2);
+    expect(lab.data.expectedSource).toBe('meta');
+    expect(lab.data.best!.stops).toBe(1);
+    expect(lab.warnings).toContain('PLAN_BELOW_FIELD_STOPS');
+    expect(lab.assumptions.some((a) => a.text.includes('ít pit hơn mặt bằng'))).toBe(true);
+    const summary = lab.assumptions.find((a) => a.text.startsWith('Confidence LOW:'));
+    expect(summary!.text).toContain('1 pit < mặt bằng 2 pit');
   });
 });

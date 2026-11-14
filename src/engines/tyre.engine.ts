@@ -702,17 +702,26 @@ export interface PaceMeasuredEntry {
   rawDelta?: number;
 }
 
-/**
- * Decode Save_PlayerStrategyStints into the game's plan for the active
+/** The game's own strategist plan, normalized (v0.5.1 P2). */
+export interface GamePlanShape {
+  compounds: Compound[];
+  stintLaps: number[];
+  pitLaps: number[];
+  /** Pit window per pit (stints 1..n-1) from the game rows. */
+  pitWindows: { start: number; end: number }[];
+  /** False when the two loadouts' selected plans differ (team-level caveat). */
+  loadoutsAgree: boolean;
+}
+
+/** Decode Save_PlayerStrategyStints into the game's plan for the active
  * weekend. LoadoutID → driver mapping is UNVERIFIED (both cars shared one
  * plan on the audited save) — the plan is reported at team level: loadout
  * 0's selected strategy, with `loadoutsAgree` flagging a split. A plan
- * containing wet/unknown tyre encodings is not modelled here → null.
- */
+ * containing wet/unknown tyre encodings is not modelled here → null. */
 export function buildGamePlan(
   section: PlayerStrategySection | undefined,
   laps: number,
-): TyreLab['gamePlan'] {
+): GamePlanShape | null {
   // `section` may be undefined for models persisted by pre-0.5.1 builds
   // (IndexedDB auto-restore) — degrade to null, never crash.
   if (!section?.tablePresent) return null;
@@ -752,6 +761,28 @@ export function buildGamePlan(
   return { compounds, stintLaps, pitLaps, pitWindows, loadoutsAgree };
 }
 
+/**
+ * v0.6.1: model the game plan with the SAME maths as the web ranking
+ * (pace delta + wear incl. cliff + pit costs) so the user sees the gap
+ * between the web suggestion and the game's own plan in seconds.
+ */
+export function gamePlanTotalTimeS(
+  plan: GamePlanShape,
+  deltas: Record<Compound, number>,
+  lives: Record<Compound, number>,
+  pitCostS: number,
+  deg: DegConstants = ORACLE_DEG,
+): number {
+  let total = 0;
+  for (let i = 0; i < plan.stintLaps.length; i++) {
+    const c = plan.compounds[i];
+    const stint = plan.stintLaps[i];
+    total += deltas[c] * stint + stintDegPenaltyWith(deg, c, stint, lives[c]);
+  }
+  total += plan.pitLaps.length * pitCostS;
+  return Math.round(total * 10) / 10;
+}
+
 export interface TyreLab {
   raceId: number;
   trackName: string;
@@ -785,15 +816,10 @@ export interface TyreLab {
   observedStops: ObservedStops | null;
   practiceSessions: number;
   /** The game's own strategist plan for the ACTIVE weekend (null otherwise). */
-  gamePlan: {
-    compounds: Compound[];
-    stintLaps: number[];
-    pitLaps: number[];
-    /** Pit window per pit (stints 1..n-1) from the game rows. */
-    pitWindows: { start: number; end: number }[];
-    /** False when the two loadouts' selected plans differ (team-level caveat). */
-    loadoutsAgree: boolean;
-  } | null;
+  gamePlan: (GamePlanShape & {
+    /** v0.6.1: the game plan modelled with the web's own maths (seconds). */
+    totalTimeS: number;
+  }) | null;
 }
 
 /** Prior from the local per-track correction store (v0.5.1 P2, IndexedDB). */
@@ -987,10 +1013,18 @@ export function buildTyreLab(
   const activeRace = model.races
     .filter((r) => r.seasonId === model.meta.seasonId && r.state !== 2)
     .sort((a, b) => a.day - b.day)[0];
-  const gamePlan: TyreLab['gamePlan'] =
+  const gamePlanBase =
     race.raceId === activeRace?.raceId
       ? buildGamePlan(model.playerStrategy ?? { tablePresent: false, plans: [] }, laps)
       : null;
+  /* v0.6.1: the game plan always carries its web-modelled total so the user
+     sees exactly how far the web disagrees with the game, in seconds. */
+  const gamePlan: TyreLab['gamePlan'] = gamePlanBase
+    ? {
+        ...gamePlanBase,
+        totalTimeS: gamePlanTotalTimeS(gamePlanBase, deltas, lives, pitCostS, deg),
+      }
+    : null;
   const gameOrder = gamePlan ? gamePlan.compounds.join('→') : null;
   const gameOrderRank = (s: { order: Compound[] }): number =>
     gameOrder != null && s.order.join('→') === gameOrder ? 0 : 1;
@@ -1053,6 +1087,18 @@ export function buildTyreLab(
   const top = ranked.slice(0, 6);
   const best = top[0] ?? null;
 
+  /* v0.6.1 tie detection (pillar g + tie rule): order permutations of the
+     same stint multiset tie EXACTLY and are not a rival — compare against
+     the first plan with a DIFFERENT stint signature (multiset compare). */
+  const planKey = (s: StrategyResult): string =>
+    s.stints.map((st) => `${st.compound}${st.laps}`).sort().join('/');
+  const bestKey = best ? planKey(best) : null;
+  const secondDistinct =
+    bestKey != null ? ranked.find((s) => planKey(s) !== bestKey) ?? null : null;
+  const tieGapS =
+    secondDistinct && best ? secondDistinct.timeS - best.timeS : null;
+  const isTie = tieGapS != null && tieGapS < 2.0;
+
   /* wet plan */
   const history = getTrackHistory(model, race.trackId);
   const forecastRain = race.state !== 2 && race.weather?.raceRain === true;
@@ -1088,26 +1134,105 @@ export function buildTyreLab(
     (paceSource.H === 'practice' || paceSource.H === 'cross-session');
   const fewStintSamples = stintFactor.samples < 3;
   // Field reference: the save's own observed stops win; the local per-track
-  // correction prior (v0.5.1 P2) fills in when this save has none.
+  // correction prior (v0.5.1 P2) fills in when this save has none; the meta
+  // expectedStops (v0.6.1 pillar h) fills in when neither exists — the
+  // engine already knows the field's stop count, ignoring it let a 1-pit
+  // plan rate HIGH at a 2-stop track (Silverstone 2027).
   const priorApplied = observed == null && options.prior?.fieldAvgStops != null;
-  const fieldRefStops = observed?.avgStopsPerDriver ?? options.prior?.fieldAvgStops ?? null;
+  const fieldRefStops =
+    observed?.avgStopsPerDriver ?? options.prior?.fieldAvgStops ?? expectedStops;
   const fewerPitsThanField = best != null && fieldRefStops != null && best.stops < fieldRefStops;
-  const lifeEvidence = livesFromAllocation;
-  const paceEvidence = paceMeasured.M != null || paceMeasured.H != null;
-  const stopsEvidence = expectedSource === 'track';
-  const evidenceCount = [lifeEvidence, paceEvidence, stopsEvidence].filter(Boolean).length;
+  /* v0.6.1 pillar e: no delta may carry the 'clamped' label. */
+  const noPaceClamped = !Object.values(paceSource).includes('clamped');
+  /* v0.6.1 pillar f: practice consistency — either ≥ 2 practice sessions,
+     or the allocation estimate agrees with the practice measurement within
+     0.2s for every compound both sources cover. With NO practice measured
+     at all there is nothing to contradict — the absence is already priced
+     by the pace pillar (b); this is what keeps honest no-practice saves
+     (Bahrain backtest) at MEDIUM instead of an unfair LOW. */
+  const paceConsistency = (() => {
+    if ((practicePace?.sessions ?? 0) >= 2) return true;
+    const measuredC = (['M', 'H'] as const).filter((c) => practicePace?.measured[c] != null);
+    if (measuredC.length === 0) return true;
+    if (!allocPace) return false;
+    return measuredC.every((c) => {
+      const raw = paceMeasured[c]?.delta;
+      return raw == null || Math.abs(allocPace.deltas[c] - raw) <= 0.2;
+    });
+  })();
+
+  /* v0.6.1 confidence — HIGH needs EVERY pillar; each missing one is named.
+     HIGH: (a) allocation lives · (b) both M+H measured from practice ·
+     ≥3 stint-factor samples · (e) no 'clamped' delta · (f) practice ≥2
+     sessions or allocation consistency within 0.2s · (g) best plan beats
+     the first DIFFERENT plan by ≥ 2.0s · (h) plan stops ≥ field reference
+     (observed → prior → meta expectedStops). One missing pillar = MEDIUM;
+     ≥ 2 missing or any forced delta = LOW — a HIGH badge must never rest
+     on a forced number or two weak legs. */
+  const missingPillars: string[] = [];
+  if (!livesFromAllocation) missingPillars.push('lives');
+  if (!bothPaceMeasured) missingPillars.push('pace');
+  if (fewStintSamples) missingPillars.push('samples');
+  if (!noPaceClamped) missingPillars.push('clamped');
+  if (!paceConsistency) missingPillars.push('consistency');
+  if (tieGapS == null || tieGapS < 2.0) missingPillars.push('margin');
+  if (fewerPitsThanField) missingPillars.push('fieldStops');
+  const forcedPaceDelta = hForced || paceSource.M === 'clamped';
   const confidence: Confidence =
-    livesFromAllocation && bothPaceMeasured && !fewStintSamples && !fewerPitsThanField
-      ? 'HIGH'
-      : evidenceCount >= 1
+    forcedPaceDelta || missingPillars.length >= 2
+      ? 'LOW'
+      : missingPillars.length === 1
         ? 'MEDIUM'
-        : 'LOW';
+        : 'HIGH';
   if (fewerPitsThanField) {
     warnings.push(priorApplied ? 'PLAN_BELOW_FIELD_STOPS_PRIOR' : 'PLAN_BELOW_FIELD_STOPS');
+  }
+  /* name every missing pillar (traceability contract, prompt mục 3) */
+  if (confidence !== 'HIGH') {
+    const reasons: string[] = [];
+    if (hForced) {
+      reasons.push(
+        `delta H bị ép (xếp hạng bằng ${paceSource.H === 'allocation' ? 'allocation' : 'model'}, không phải số đo practice)`,
+      );
+    } else if (paceSource.M === 'clamped') {
+      reasons.push('delta M bị ép');
+    }
+    if (missingPillars.includes('pace')) {
+      reasons.push('delta xếp hạng chưa đủ cả M và H từ practice');
+    }
+    if (missingPillars.includes('consistency')) {
+      reasons.push(
+        `practice chỉ ${practicePace?.sessions ?? 0} session và allocation lệch quá 0.2s so với practice`,
+      );
+    }
+    if (missingPillars.includes('margin')) {
+      reasons.push(
+        tieGapS == null
+          ? 'không có phương án kế tiếp để so'
+          : `hai phương án đầu chênh nhau ${tieGapS.toFixed(1)}s (<2s — hòa)`,
+      );
+    }
+    if (missingPillars.includes('fieldStops')) {
+      reasons.push(`plan ${best!.stops} pit < mặt bằng ${fieldRefStops!.toFixed(2).replace(/\.00$/, '')} pit`);
+    }
+    if (missingPillars.includes('lives')) {
+      reasons.push('lives không từ allocation của tuần lễ');
+    }
+    if (missingPillars.includes('samples')) {
+      reasons.push(`mẫu pit-stop lịch sử ${stintFactor.samples} < 3`);
+    }
+    if (missingPillars.includes('clamped')) {
+      reasons.push('có delta bị ép đơn điệu');
+    }
+    if (reasons.length > 0) {
+      assumptions.push({ text: `Confidence ${confidence}: ${reasons.join('; ')}` });
+    }
+  }
+  if (fewerPitsThanField) {
     assumptions.push({
       text: priorApplied
-        ? `Lần trước tại ${race.trackName} cả giải chạy ~${fieldRefStops!.toFixed(2)} pit/driver, plan hiện dùng ${best!.stops} pit — độ tin cậy bị hạ xuống MEDIUM`
-        : `Plan dùng ít pit hơn mặt bằng cả giải tại track này (plan ${best!.stops} vs ~${fieldRefStops!.toFixed(2)}/driver) — độ tin cậy bị hạ xuống MEDIUM`,
+        ? `Lần trước tại ${race.trackName} cả giải chạy ~${fieldRefStops!.toFixed(2)} pit/driver, plan hiện dùng ${best!.stops} pit — độ tin cậy bị hạ`
+        : `Plan dùng ít pit hơn mặt bằng cả giải tại track này (plan ${best!.stops} vs ~${fieldRefStops!.toFixed(2)}/driver) — độ tin cậy bị hạ`,
     });
   } else if (confidence === 'MEDIUM' && livesFromAllocation && bothPaceMeasured && fewStintSamples) {
     assumptions.push({
@@ -1186,28 +1311,50 @@ export function buildTyreLab(
     text: 'Chưa tính đặc thù tay đua (smoothness/adaptability) — sẽ bổ sung khi normalize Staff stats',
   });
 
-  /* recommendations — 6-field standard (docs/03 §5.11) */
+  /* recommendations — 6-field standard (docs/03 §5.11). v0.6.1 tie rule:
+     when the first DIFFERENT plan is within 2.0s the race is a coin flip —
+     say so, and prefer the game's own plan (or, without a game plan, the
+     tied plan whose longest stint is shortest). */
   const recommendations: Recommendation[] = [];
   if (best) {
-    const alt = top[1];
+    const longestStint = (s: StrategyResult): number => Math.max(...s.stints.map((st) => st.laps));
+    let recommended = best;
+    let tieNote = '';
+    if (isTie && secondDistinct) {
+      const gamePlanViable =
+        gamePlan != null &&
+        gamePlan.totalTimeS <= best.timeS + 2.0 &&
+        ranked.some((s) => s.order.join('→') === gamePlan.compounds.join('→'));
+      if (gamePlanViable) {
+        recommended =
+          ranked.find((s) => s.order.join('→') === gamePlan!.compounds.join('→')) ?? best;
+        tieNote = ` Hai phương án đầu chênh nhau ${tieGapS!.toFixed(1)}s (<2s) — coi như hòa; ưu tiên plan của game.`;
+      } else {
+        if (!gamePlan && longestStint(secondDistinct) < longestStint(best)) {
+          recommended = secondDistinct;
+        }
+        tieNote = ` Hai phương án đầu chênh nhau ${tieGapS!.toFixed(1)}s (<2s) — coi như hòa;${gamePlan ? ' plan của game chậm hơn quá 2s nên vẫn đề xuất web' : ' ưu tiên plan có stint dài nhất ngắn hơn'}.`;
+      }
+    }
+    const alt = top.find((s) => s !== recommended) ?? null;
     const pitWindow = (pitLap: number, life: number): string => {
       const lo = Math.max(minStintLaps, pitLap - 2, 2);
       const hi = Math.min(laps - 2, pitLap + 2, Math.max(life, pitLap));
       return hi > lo ? `${lo}–${hi}` : `${pitLap}`;
     };
-    const first = best.stints[0];
-    const action = best.stops === 0
-      ? `Không pit — chạy ${best.order.join('→')} toàn chặng`
-      : `Pit ở vòng ${pitWindow(best.pitLaps[0], lives[first.compound])} — chuyển sang ${best.stints[1]?.compound ?? ''}`;
+    const first = recommended.stints[0];
+    const action = recommended.stops === 0
+      ? `Không pit — chạy ${recommended.order.join('→')} toàn chặng`
+      : `Pit ở vòng ${pitWindow(recommended.pitLaps[0], lives[first.compound])} — chuyển sang ${recommended.stints[1]?.compound ?? ''}`;
     recommendations.push({
       id: `tyre-plan-${race.raceId}`,
-      title: `Chiến thuật đề xuất: ${best.stints.map((s) => `${s.compound}(${s.laps})`).join(' → ')} — ${best.stops} pit`,
+      title: `Chiến thuật đề xuất: ${recommended.stints.map((s) => `${s.compound}(${s.laps})`).join(' → ')} — ${recommended.stops} pit`,
       action,
-      why: `Tổng thời gian mô hình thấp nhất (${best.timeS.toFixed(1)}s: pace delta + deg + ${best.stops}×pit ${pitCostS.toFixed(1)}s). Lốp ${first.compound} sống ${lives[first.compound]} vòng (nguồn: ${lifeSource[first.compound]})${alt ? `; kế hoạch kế tiếp (${alt.stints.map((s) => s.compound).join('→')}) chậm hơn ${alt.vsBestS?.toFixed(1) ?? '?'}s` : ''}.`,
+      why: `Tổng thời gian mô hình ${recommended === best ? 'thấp nhất' : 'thấp nhất (cùng lâu)'} (${recommended.timeS.toFixed(1)}s: pace delta + deg + ${recommended.stops}×pit ${pitCostS.toFixed(1)}s). Lốp ${first.compound} sống ${lives[first.compound]} vòng (nguồn: ${lifeSource[first.compound]})${alt && !isTie ? `; kế hoạch kế tiếp (${alt.stints.map((s) => s.compound).join('→')}) chậm hơn ${alt.vsBestS?.toFixed(1) ?? '?'}s` : ''}.${tieNote}${gamePlan ? ` Plan của game (${gamePlan.compounds.join('→')}, pit ${gamePlan.pitLaps.join(', ') || '—'}) tốn ${gamePlan.totalTimeS.toFixed(1)}s theo mô hình web.` : ''}`,
       confidence,
       evidence,
       assumptions,
-      riskIfIgnored: best.stops > 0
+      riskIfIgnored: recommended.stops > 0
         ? `Ở lại ngoài ${lives[first.compound]} vòng: deg cuối đời ${DEG_FINAL[first.compound]}s/vòng + risk undercut từ đối thủ trực tiếp`
         : undefined,
       expectedGain: alt ? `${Math.abs(alt.vsBestS ?? 0).toFixed(1)}s vs ${alt.order.join('→')} (ước lượng mô hình)` : undefined,
