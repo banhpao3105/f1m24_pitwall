@@ -80,11 +80,18 @@ describe('whatIfPitShift', () => {
 describe('buildWetPlan', () => {
   const modelWithWet = (iLife: number | null, wLife: number | null): SaveModel => {
     const tyres: TyreAllocation[] = [];
+    let id = 0;
+    // 3 fresh sets per wet compound — the plan must read the MEDIAN of
+    // WeekendTyreType 3 (Inter) / 4 (Wet), v0.6.2 mapping.
     if (iLife != null) {
-      tyres.push({ carId: 1, tyreSetId: 1, weekendTyreType: 1, frontLeftWear: 1, availabilityState: 0, estimatedLapLifeRemaining: iLife });
+      for (const life of [iLife - 2, iLife, iLife + 2]) {
+        tyres.push({ carId: 1, tyreSetId: ++id, weekendTyreType: 3, frontLeftWear: 1, availabilityState: 0, estimatedLapLifeRemaining: life });
+      }
     }
     if (wLife != null) {
-      tyres.push({ carId: 1, tyreSetId: 2, weekendTyreType: 0, frontLeftWear: 1, availabilityState: 0, estimatedLapLifeRemaining: wLife });
+      for (const life of [wLife - 2, wLife, wLife + 2]) {
+        tyres.push({ carId: 1, tyreSetId: ++id, weekendTyreType: 4, frontLeftWear: 1, availabilityState: 0, estimatedLapLifeRemaining: life });
+      }
     }
     return {
       meta: {

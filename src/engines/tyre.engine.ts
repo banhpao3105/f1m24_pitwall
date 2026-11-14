@@ -64,9 +64,15 @@ export const DEG_CLIFF: Record<Compound, number> = { S: 0.03, M: 0.02, H: 5.0 };
 export type Compound = 'S' | 'M' | 'H';
 export const DRY: Compound[] = ['S', 'M', 'H'];
 
-/** Allocation WeekendTyreType → compound (oracle-verified encoding). */
+/**
+ * Allocation WeekendTyreType → compound. Verified on the Silverstone 2027
+ * pre-race save (v0.6.2): fresh sets carry exactly one EstimatedLapTime per
+ * type — 0=H 89.80s, 1=M 89.48s, 2=S 88.91s, 3=I 95.32s, 4=W 105.35s — and
+ * Races_PracticeResults.BestLapTyre on the same dry weekend reads S=2, M=1,
+ * H=0. The old "0=W 1=I 2=S 3=M 4=H" comment contradicted every dry row.
+ */
 export const ALLOC_TYRE: Record<number, Compound | 'I' | 'W'> = {
-  2: 'S', 3: 'M', 4: 'H', 1: 'I', 0: 'W',
+  2: 'S', 1: 'M', 0: 'H', 3: 'I', 4: 'W',
 };
 
 /** Practice BestLapTyre encoding (oracle-verified): 0=H, 1=M, 2=S. */
@@ -371,7 +377,10 @@ export function getCompoundCaps(model: SaveModel): Record<Compound, number> | nu
     }
   }
   const raw: Partial<Record<Compound, number>> = {};
-  for (const [type, c] of [[2, 'S'], [3, 'M'], [4, 'H']] as const) {
+  /* v0.6.2 mapping fix: WeekendTyreType 1 = M, 0 = H (verified on the
+     Silverstone 2027 save — the old 3=M/4=H read Inter/Wet medians as the
+     dry compounds' raw life caps on other weekends). */
+  for (const [type, c] of [[2, 'S'], [1, 'M'], [0, 'H']] as const) {
     const m = median(byType[type] ?? []);
     if (m != null) raw[c as Compound] = Math.round(m);
   }
@@ -408,7 +417,7 @@ export interface AllocationPace {
  * with a positive lap time.
  */
 export function getAllocationPace(model: SaveModel): AllocationPace | null {
-  const byType: Record<number, number[]> = { 2: [], 3: [], 4: [] };
+  const byType: Record<number, number[]> = { 0: [], 1: [], 2: [] };
   for (const set of model.tyres) {
     if (
       set.frontLeftWear >= 0.99 &&
@@ -421,7 +430,10 @@ export function getAllocationPace(model: SaveModel): AllocationPace | null {
   }
   const lapTime: Partial<Record<Compound, number>> = {};
   const samples: Partial<Record<Compound, number>> = {};
-  for (const [type, c] of [[2, 'S'], [3, 'M'], [4, 'H']] as const) {
+  /* v0.6.2 mapping fix: WeekendTyreType 1 = M, 0 = H. The old 3=M/4=H read
+     the Silverstone allocation as M 95.32 / H 105.35 (+6.41 / +16.45) —
+     those types are Inter/Wet (95.32/105.35 IS their wet-track pace). */
+  for (const [type, c] of [[2, 'S'], [1, 'M'], [0, 'H']] as const) {
     const m = median(byType[type]);
     if (m == null) return null;
     lapTime[c as Compound] = m;
@@ -657,8 +669,10 @@ export function buildWetPlan(model: SaveModel, laps: number): WetPlanResult | nu
     const m = median(values);
     return m != null ? Math.max(MIN_STINT_LAPS, Math.round(m)) : null;
   };
-  const iLife = freshLife(1);
-  const wLife = freshLife(0);
+  /* v0.6.2 mapping fix: Inter = WeekendTyreType 3, Wet = 4 (0 and 1 are the
+     dry Hard and Medium — verified on the Silverstone 2027 save). */
+  const iLife = freshLife(3);
+  const wLife = freshLife(4);
   if (iLife == null && wLife == null) {
     return null;
   }
@@ -1105,11 +1119,12 @@ export function buildTyreLab(
   const rainLikely = forecastRain || (history.rainRatio != null && history.rainRatio >= 0.35);
   let wet: TyreLab['wet'] = null;
   if (rainLikely) {
+    /* v0.6.2 mapping fix: inters = type 3, wets = type 4 (0/1 are dry H/M). */
     const inters = model.tyres
-      .filter((t) => t.weekendTyreType === 1 && t.frontLeftWear >= 0.99 && t.estimatedLapLifeRemaining != null)
+      .filter((t) => t.weekendTyreType === 3 && t.frontLeftWear >= 0.99 && t.estimatedLapLifeRemaining != null)
       .map((t) => t.estimatedLapLifeRemaining as number);
     const wets = model.tyres
-      .filter((t) => t.weekendTyreType === 0 && t.frontLeftWear >= 0.99 && t.estimatedLapLifeRemaining != null)
+      .filter((t) => t.weekendTyreType === 4 && t.frontLeftWear >= 0.99 && t.estimatedLapLifeRemaining != null)
       .map((t) => t.estimatedLapLifeRemaining as number);
     wet = {
       rainLikely,

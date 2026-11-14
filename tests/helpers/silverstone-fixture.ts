@@ -8,9 +8,14 @@
  *   S 90.759s (Piastri) · M 91.470s (+0.711) · H 91.365s (+0.606 thô —
  *   vòng H nhanh nhất là của Russell chạy long-run, không so được với M).
  *
- * Allocation fresh sets (giống nhau mọi xe):
- *   EstimatedLapLifeRemaining S 23 / M 35 / H 53;
- *   EstimatedLapTime          S 88.91 / M 89.48 / H 89.80 (+0.57 / +0.89).
+ * Allocation fresh sets (giống nhau mọi xe, 440 dòng thật rút gọn):
+ *   EstimatedLapLifeRemaining S 23 / M 35 / H 53; I 48 / W 62 (median thật
+ *   40–55 / 53–71);
+ *   EstimatedLapTime          S 88.91 / M 89.48 / H 89.80 (+0.57 / +0.89);
+ *   I 95.32 / W 105.35 (wet trên đường khô — đúng mức chậm hơn S).
+ * Mapping WeekendTyreType (v0.6.2, kiểm chứng từ bảng trên): 0=H, 1=M,
+ * 2=S, 3=I, 4=W — comment cũ "0=W, 1=I, 2=S, 3=M, 4=H" SAI và là gốc của
+ * bug delta H +16.45s ở v0.6.1.
  *
  * 3 chặng hoàn thành (track khác) với 2 pit/driver → stintFactor meta
  * samples 3 → expectedStops = 2 (meta) — giống save thật.
@@ -64,9 +69,13 @@ export function silverstonePracticeRows(): PracticeResult[] {
 }
 
 /**
- * Fresh allocation: lives S 23 / M 35 / H 53 + EstimatedLapTime
- * S 88.91 / M 89.48 / H 89.80. `withLapTime=false` strips EstimatedLapTime
- * to exercise the 'clamped' path (no allocation estimate available).
+ * Fresh allocation — full 5-type table of the real save (types mirrored
+ * from the v0.6.2 mapping audit): S type 2, M type 1, H type 0, Inter
+ * type 3, Wet type 4. Inter/Wet EstimatedLapTime (95.32/105.35) is the
+ * regression trap: with the old wrong mapping (3=M/4=H) the M/H medians
+ * jump to 95.32/105.35 and getAllocationPace cannot return +0.57/+0.89.
+ * `withLapTime=false` strips EstimatedLapTime to exercise the 'clamped'
+ * path (no allocation estimate available).
  */
 export function silverstoneAllocation(withLapTime = true): TyreAllocation[] {
   const sets: TyreAllocation[] = [];
@@ -84,9 +93,11 @@ export function silverstoneAllocation(withLapTime = true): TyreAllocation[] {
       });
     }
   };
-  add(3, 2, 23, 88.91); // S
-  add(3, 3, 35, 89.48); // M
-  add(3, 4, 53, 89.8); // H
+  add(3, 2, 23, 88.91); // S — WeekendTyreType 2
+  add(3, 1, 35, 89.48); // M — WeekendTyreType 1
+  add(3, 0, 53, 89.8); // H — WeekendTyreType 0
+  add(3, 3, 48, 95.32); // Inter — WeekendTyreType 3
+  add(3, 4, 62, 105.35); // Wet — WeekendTyreType 4
   return sets;
 }
 

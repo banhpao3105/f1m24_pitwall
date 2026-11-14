@@ -3,7 +3,12 @@
  *   Save_CarTyreAllocation: CarID, TyreSetID, WeekendTyreType, FrontLeftWear,
  *     AvailabilityState, EstimatedLapTime, EstimatedLapLifeRemaining,
  *     LapsCompleted
- * WeekendTyreType encoding (oracle-verified): 0=W, 1=I, 2=S, 3=M, 4=H.
+ * WeekendTyreType encoding: 0=H, 1=M, 2=S, 3=I(nter), 4=W(et) — v0.6.2,
+ * verified on the Silverstone 2027 pre-race save (fresh sets carry exactly
+ * one EstimatedLapTime per type: 0=89.80s, 1=89.48s, 2=88.91s, 3=95.32s,
+ * 4=105.35s; dry practice BestLapTyre reads S=2, M=1, H=0; the game's own
+ * S→M→S plan uses only TyreType 0/1/2). The earlier "0=W, 1=I, 2=S, 3=M,
+ * 4=H" note was WRONG and caused the +16.45s H delta in v0.6.1.
  * EstimatedLapTime (v0.6.1, verified on the Silverstone 2027 save probe):
  *   the game's own fresh-lap-time estimate per set, in seconds — identical
  *   across cars for the same compound. Column is selected only when present
@@ -16,7 +21,7 @@ import { tableColumns } from '../schema';
 export interface RawTyreSet {
   carId: number;
   tyreSetId: number;
-  /** 0=W, 1=I, 2=S, 3=M, 4=H (oracle encoding). */
+  /** 0=H, 1=M, 2=S, 3=I, 4=W — verified on the Silverstone 2027 save. */
   weekendTyreType: number;
   frontLeftWear: number;
   /** AvailabilityState 0 = available fresh. */

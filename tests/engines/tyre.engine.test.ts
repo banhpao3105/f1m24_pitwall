@@ -7,6 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildTyreLab,
+  buildWetPlan,
   evaluateStrategy,
   stintDegPenalty,
   getStintFactor,
@@ -198,10 +199,11 @@ describe('getCompoundCaps', () => {
       carId: 1, tyreSetId: i + 1, weekendTyreType: 2, frontLeftWear: 1,
       availabilityState: 0, estimatedLapLifeRemaining: 20,
     }));
+    /* v0.6.2 mapping: WeekendTyreType 1 = M, 0 = H (3/4 are Inter/Wet). */
     tyres.push(
-      { carId: 1, tyreSetId: 10, weekendTyreType: 3, frontLeftWear: 1, availabilityState: 0, estimatedLapLifeRemaining: 90 },
-      { carId: 1, tyreSetId: 11, weekendTyreType: 3, frontLeftWear: 1, availabilityState: 0, estimatedLapLifeRemaining: 90 },
-      { carId: 1, tyreSetId: 12, weekendTyreType: 4, frontLeftWear: 1, availabilityState: 0, estimatedLapLifeRemaining: 160 },
+      { carId: 1, tyreSetId: 10, weekendTyreType: 1, frontLeftWear: 1, availabilityState: 0, estimatedLapLifeRemaining: 90 },
+      { carId: 1, tyreSetId: 11, weekendTyreType: 1, frontLeftWear: 1, availabilityState: 0, estimatedLapLifeRemaining: 90 },
+      { carId: 1, tyreSetId: 12, weekendTyreType: 0, frontLeftWear: 1, availabilityState: 0, estimatedLapLifeRemaining: 160 },
     );
     const model = makeModel([], { tyres });
     const caps = getCompoundCaps(model);
@@ -619,6 +621,50 @@ describe('v0.6.1 getAllocationPace (EstimatedLapTime)', () => {
   });
 });
 
+/* ── v0.6.2: WeekendTyreType mapping 0=H, 1=M, 2=S, 3=I, 4=W ───────────────
+ * v0.6.1 ranked H at +16.45s because the engine (and every fixture) read
+ * the allocation through the WRONG repo comment "0=W,1=I,2=S,3=M,4=H" —
+ * the Silverstone "M" median was Inter 95.32 and "H" was Wet 105.35. The
+ * Silverstone fixture now carries the FULL real-save allocation (Inter/Wet
+ * beside the dry compounds), so a mapping regression cannot pass silently:
+ * with the old mapping M reads 95.32 and this block fails on values. */
+
+describe('v0.6.2 WeekendTyreType mapping (verified on the Silverstone save)', () => {
+  it('ranks dry compounds by types 0/1/2 even with Inter/Wet sets present', () => {
+    const pace = getAllocationPace(buildSilverstoneModel());
+    expect(pace).not.toBeNull();
+    expect(pace!.lapTime).toEqual({ S: 88.91, M: 89.48, H: 89.8 });
+    expect(pace!.deltas).toEqual({ S: 0, M: 0.57, H: 0.89 });
+    expect(pace!.samples).toEqual({ S: 3, M: 3, H: 3 });
+  });
+
+  it('reads M/H life caps from types 1/0 — never the Inter/Wet medians', () => {
+    const caps = getCompoundCaps(buildSilverstoneModel());
+    expect(caps).toEqual({ S: 23, M: 35, H: 53 });
+  });
+
+  it('wet lives come from types 3/4 (I 48 / W 62 medians of the real save)', () => {
+    const model = buildSilverstoneModel();
+    model.races = model.races.map((r) =>
+      r.raceId === SILVERSTONE_RACE_ID ? { ...r, weather: { raceRain: true } } : r,
+    );
+    const lab = buildTyreLab(model, SILVERSTONE_RACE_ID);
+    expect(lab.data.wet).not.toBeNull();
+    expect(lab.data.wet!.rainLikely).toBe(true);
+    expect(lab.data.wet!.intersLifeLaps).toBe(48);
+    expect(lab.data.wet!.wetLifeLaps).toBe(62);
+    expect(lab.data.wet!.source).toBe('allocation');
+  });
+
+  it('buildWetPlan uses I = median type 3, W = median type 4', () => {
+    const model = buildSilverstoneModel();
+    const plan = buildWetPlan(model, SILVERSTONE_LAPS);
+    expect(plan).not.toBeNull();
+    expect(plan!.lives).toEqual({ I: 48, W: 62 });
+    expect(plan!.source).toBe('allocation');
+  });
+});
+
 describe('v0.6.1 getPracticePace raw + clamped flags (Silverstone)', () => {
   it('records the raw +0.606 H delta and flags the monotonic clamp', () => {
     const model = buildSilverstoneModel();
@@ -674,6 +720,8 @@ describe('v0.6.1 buildTyreLab — Silverstone forced-delta honesty', () => {
     expect(paceEvidence!.label).toContain('không dùng được');
     expect(paceEvidence!.label).not.toMatch(/H \+0\.\d+s \(practice\)/);
     expect(lab.assumptions.some((a) => a.text.includes('allocation của game'))).toBe(true);
+    // v0.6.2: the assumption quotes the REAL dry-compound estimates
+    expect(lab.assumptions.some((a) => a.text.includes('(88.91 / 89.48 / 89.80s)'))).toBe(true);
     expect(lab.warnings).toContain('PACE_DELTA_FORCED');
     expect(lab.confidence).not.toBe('HIGH');
   });
