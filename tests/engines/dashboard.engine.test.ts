@@ -90,6 +90,29 @@ describe('buildSeasonSeries — Miami §8 trend (locked numbers)', () => {
     expect(data.paceGapPerRace.race).toEqual([...(racePlayer!.raceDeltasS)].reverse());
   });
 
+  it('per-team pace series (v0.6.0 step 3) stay board-aligned with rival flags', () => {
+    // race board: Alpine's §8 race pace — 0.470s in every race
+    const raceAlpine = data.paceGapPerTeam.race.find((r) => r.teamId === 6);
+    expect(raceAlpine?.values).toEqual([0.47, 0.47, 0.47, 0.47, 0.47, 0.47]);
+    // the player row mirrors paceGapPerRace exactly
+    const racePlayer = data.paceGapPerTeam.race.find((r) => r.isPlayer);
+    expect(racePlayer?.values).toEqual(data.paceGapPerRace.race);
+    const peakPlayer = data.paceGapPerTeam.peak.find((r) => r.isPlayer);
+    expect(peakPlayer?.values).toEqual(data.paceGapPerRace.peak);
+    // board order = median delta ascending; fastest team carries all zeros
+    expect(data.paceGapPerTeam.race[0].teamId).toBe(1);
+    expect(data.paceGapPerTeam.race[0].values).toEqual([0, 0, 0, 0, 0, 0]);
+    // rival flags: standings neighbours (Ferrari #4, Williams #6) + pace
+    // tolerance (±0.5s of the player's 0.575 median) — Alpine 0.470 qualifies
+    const flags = Object.fromEntries(
+      data.paceGapPerTeam.race.map((r) => [r.teamId, r.isRival]),
+    );
+    expect(flags[4]).toBe(true); // Ferrari — standings neighbour + within 0.5s
+    expect(flags[5]).toBe(true); // Williams — standings neighbour + within 0.5s
+    expect(flags[6]).toBe(true); // Alpine — within 0.5s (0.105)
+    expect(flags[32]).toBe(false); // the player is never their own rival
+  });
+
   it('best finish per race is the best classified finish of the player cars', () => {
     expect(data.bestFinishPerRace).toEqual([5, 8, 5, 1, 4, 6]);
   });

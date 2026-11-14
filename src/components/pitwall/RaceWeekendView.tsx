@@ -12,14 +12,16 @@ import { useState } from 'react';
 import { Flag, CloudRain, Thermometer, CircleAlert, Gauge, Timer } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
-import { useTyreLab, usePaceBoard, useRacePaceBoard, useResultsBoard, useSim } from '@/lib/engine-hooks';
+import { useTyreLab, usePaceBoard, useRacePaceBoard, useResultsBoard, useSim, useSeasonSeries } from '@/lib/engine-hooks';
 import { StintTimeline } from './StintTimeline';
 import { PitWindowBar } from './PitWindowBar';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { CompoundBadge, type CompoundKey } from './CompoundBadge';
 import { RecommendationCard } from './RecommendationCard';
 import { ResultsBoardCard } from './ResultsBoard';
-import { PaceBarChart } from './charts/PaceBarChart';
+import { ChartCard } from './charts/ChartCard';
+import { RacePaceLinesChart } from './charts/RacePaceLinesChart';
+import { PaceHeatmap } from './charts/PaceHeatmap';
 import { TimingTower } from './TimingTower';
 import { TrackSchematic } from './TrackSchematic';
 import { cn } from '@/lib/utils';
@@ -36,6 +38,8 @@ export function RaceWeekendView({
   const tSec = useTranslations('sec');
   const locale = useLocale() as 'vi' | 'en';
   const [tab, setTab] = useState<'overview' | 'sim'>('overview');
+  // v0.6.0 step 3 — pace metric tab (both boards' numbers stay engine-locked)
+  const [paceMetric, setPaceMetric] = useState<'peak' | 'race'>('race');
   const seasonRaces = model.races.filter((r) => r.seasonId === model.meta.seasonId);
   const race =
     seasonRaces.find((r) => r.raceId === raceId) ??
@@ -48,6 +52,7 @@ export function RaceWeekendView({
   const racePace = useRacePaceBoard();
   const results = useResultsBoard();
   const sim = useSim(race?.raceId ?? null);
+  const series = useSeasonSeries();
 
   if (!race) {
     return (
@@ -63,6 +68,25 @@ export function RaceWeekendView({
     : null;
   const fastest = tyre?.data.best ?? null;
   const firstStintCompound = fastest?.stints[0]?.compound as CompoundKey | undefined;
+
+  // v0.6.0 — one-line verdict for the pace card, following the active metric
+  const activePaceBoard = paceMetric === 'peak' ? pace : racePace;
+  const activePaceRow = activePaceBoard?.data.rows.find((r) => r.isPlayer) ?? null;
+  const paceVerdict =
+    activePaceBoard && activePaceRow
+      ? `${t(paceMetric === 'peak' ? 'paceRankPeak' : 'paceRankRace', {
+          rank: activePaceRow.rank,
+          total: activePaceBoard.data.rows.length,
+        })}${
+          activePaceBoard.data.playerVsRivalS != null && activePaceBoard.data.rivalRef
+            ? ` · ${t('paceValue', {
+                gap: `${Math.abs(activePaceBoard.data.playerVsRivalS).toFixed(3)}s`,
+                dir: activePaceBoard.data.playerVsRivalS > 0 ? t('paceSlower') : t('paceFaster'),
+                rival: activePaceBoard.data.rivalRef.teamName,
+              })}`
+            : ''
+        }`
+      : undefined;
 
   const tabs: { key: 'overview' | 'sim'; label: string; icon: React.ReactNode }[] = [
     { key: 'overview', label: t('tabOverview'), icon: <Flag className="h-3.5 w-3.5" /> },
@@ -159,65 +183,50 @@ export function RaceWeekendView({
             </section>
           ) : null}
 
-          {pace && pace.data.rows.length > 0 ? (
-            <section aria-label={t('pace')} className="rounded-lg border border-line bg-panel p-4">
-              <header className="mb-2 flex items-center gap-2">
-                <span className="font-mono text-[11px] uppercase tracking-wider text-teal">{tSec('pace')}</span>
-                <h3 className="text-[15px] font-semibold text-ink">{t('pace')}</h3>
-                <ConfidenceBadge confidence={pace.confidence} />
-              </header>
-              <PaceBarChart rows={pace.data.rows} model={model} testId="race-pace-chart" />
-              {pace.data.playerVsRivalS != null ? (
-                <p className="mt-2 text-xs text-ink-soft">
-                  {t('paceValue', {
-                    gap: `${Math.abs(pace.data.playerVsRivalS).toFixed(3)}s`,
-                    dir: pace.data.playerVsRivalS > 0 ? t('paceSlower') : t('paceFaster'),
-                    // 0.4.1 bug fix: quote the reference rival of playerVsRivalS
-                    // (closest pace), never rivals[0] (which is the fastest rival).
-                    rival: pace.data.rivalRef?.teamName ?? '—',
-                  })}
-                  {pace.data.rows.find((r) => r.isPlayer) ? (
-                    <span className="ml-2 font-mono text-[11px] text-ink-faint">
-                      {t('paceRankPeak', {
-                        rank: pace.data.rows.find((r) => r.isPlayer)!.rank,
-                        total: pace.data.rows.length,
-                      })}
-                    </span>
-                  ) : null}
-                </p>
-              ) : null}
-
-              {/* v0.5.4 — second board in the same section: average raced lap */}
-              {racePace && racePace.data.rows.length > 0 ? (
-                <div className="mt-4 border-t border-line pt-3" data-testid="race-pace-board">
-                  <div className="mb-2 flex items-center gap-2">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
-                      {t('paceRace')}
-                    </h4>
-                    <ConfidenceBadge confidence={racePace.confidence} />
-                  </div>
-                  <PaceBarChart rows={racePace.data.rows} model={model} testId="race-pace-avg-chart" />
-                  <p className="mt-2 text-xs text-ink-soft">
-                    {racePace.data.rows.find((r) => r.isPlayer)
-                      ? t('paceRankRace', {
-                          rank: racePace.data.rows.find((r) => r.isPlayer)!.rank,
-                          total: racePace.data.rows.length,
-                        })
-                      : null}
-                    {racePace.data.playerVsRivalS != null && racePace.data.rivalRef ? (
-                      <span>
-                        {' · '}
-                        {t('paceValue', {
-                          gap: `${Math.abs(racePace.data.playerVsRivalS).toFixed(3)}s`,
-                          dir: racePace.data.playerVsRivalS > 0 ? t('paceSlower') : t('paceFaster'),
-                          rival: racePace.data.rivalRef.teamName,
-                        })}
-                      </span>
-                    ) : null}
-                  </p>
+          {/* v0.6.0 step 3 — pace as per-race lines (player vs the two
+              nearest rivals) with a peak/race metric tab; the boards' medians
+              stay locked in the verdict line. */}
+          {pace && pace.data.rows.length > 0 && series && series.data.races.length > 0 ? (
+            <>
+              <ChartCard
+                title={t('pace')}
+                badge={<ConfidenceBadge confidence={pace.confidence} />}
+                verdict={paceVerdict}
+                evidence={series.evidence}
+                assumptions={series.assumptions}
+                testId="race-pace-lines"
+              >
+                <div className="mb-3 flex gap-1.5" role="group" aria-label={t('pace')}>
+                  {(['peak', 'race'] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setPaceMetric(m)}
+                      aria-pressed={paceMetric === m}
+                      className={cn(
+                        'cursor-pointer rounded-md border px-3 py-1.5 text-xs font-medium transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring',
+                        paceMetric === m
+                          ? 'border-teal/50 bg-teal/10 text-teal'
+                          : 'border-line bg-surface text-ink-soft hover:border-line-strong hover:text-ink',
+                      )}
+                    >
+                      {m === 'peak' ? t('paceTabPeak') : t('paceTabRace')}
+                    </button>
+                  ))}
                 </div>
-              ) : null}
-            </section>
+                <RacePaceLinesChart series={series.data} metric={paceMetric} />
+              </ChartCard>
+
+              {/* the only canvas surface in the app — 11 teams × 6 races */}
+              <ChartCard
+                title={t('heatmap')}
+                badge={<ConfidenceBadge confidence={racePace?.confidence ?? pace.confidence} />}
+                hint={t('heatmapHint')}
+                testId="race-pace-heatmap-card"
+              >
+                <PaceHeatmap series={series.data} model={model} />
+              </ChartCard>
+            </>
           ) : null}
 
           {/* v0.5.6 — real-race results board right after the pace boards:

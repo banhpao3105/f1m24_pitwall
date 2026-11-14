@@ -122,6 +122,7 @@
       "race": "Race pace (avg lap)",
       "zero": "Fastest team",
       "gained": "Positions gained",
+      "you": "You",
       "noData": "Not enough season-series data."
     },
     "season": {
@@ -356,6 +357,10 @@
     "paceSlower": "slower",
     "paceFaster": "faster",
     "alreadyDone": "This race is completed — the plan below is for reference.",
+    "paceTabPeak": "Peak pace",
+    "paceTabRace": "Race pace",
+    "heatmap": "Race-pace heatmap — every team, every race",
+    "heatmapHint": "Green = fast (small gap), red = slow — per-race race-pace gaps taken from the race pace board; your row is outlined, hover for the number.",
     "recs": "Recommendations",
     "noRace": "No race to display.",
     "tabOverview": "Overview",

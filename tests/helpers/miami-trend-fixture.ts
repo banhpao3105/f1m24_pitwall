@@ -79,7 +79,7 @@ const R2: RowSpec[] = [
   row({ teamId: 32, teamName: 'CustomTeam', driverId: 321, driverName: 'Ricciardo', start: 3, finish: 8, points: 0 }, 700, 911),
   row({ teamId: 32, teamName: 'CustomTeam', driverId: 322, driverName: "O'Ward", start: 12, finish: 12, points: 0 }, 900, 1000),
   // Alpine 1 / −2
-  row({ teamId: 6, teamName: 'Alpine', driverId: 61, driverName: 'Gasly', start: 7, finish: 9, points: 1 }, 620, 480),
+  row({ teamId: 6, teamName: 'Alpine', driverId: 61, driverName: 'Gasly', start: 7, finish: 9, points: 1 }, 620, 470),
   row({ teamId: 6, teamName: 'Alpine', driverId: 62, driverName: 'Ocon', start: 13, finish: 13, points: 0 }, 800, 950),
   // Red Bull 22
   row({ teamId: 1, teamName: 'Red Bull Racing', driverId: 11, driverName: 'Verstappen', start: 1, finish: 1, points: 18 }, 0, 0),

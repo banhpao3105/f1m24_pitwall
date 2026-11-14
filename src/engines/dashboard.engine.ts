@@ -62,9 +62,28 @@ export interface SeasonSeries {
   /** Player per-race pace gaps in seconds (peak = fastest lap board,
    * race = average raced lap board); null where that race has no delta. */
   paceGapPerRace: { peak: (number | null)[]; race: (number | null)[] };
+  /** v0.6.0 step 3 — per-team per-race pace gaps (same verbatim rule),
+   * board order = median delta ascending. Feeds the Race Weekend lines and
+   * the canvas heatmap without recomputing any pace number. */
+  paceGapPerTeam: {
+    peak: PaceGapTeamRow[];
+    race: PaceGapTeamRow[];
+  };
   /** Player best classified finish per race; null when no car finished. */
   bestFinishPerRace: (number | null)[];
   racesConsidered: number;
+}
+
+export interface PaceGapTeamRow {
+  teamId: number;
+  teamName: string;
+  isPlayer: boolean;
+  /** Pace-board rival flag (standings neighbours + pace tolerance). */
+  isRival: boolean;
+  /** The board's median delta (s) — for rival sorting in the UI. */
+  medianS: number;
+  /** Chronological per-race gap (s); null where the team has no delta. */
+  values: (number | null)[];
 }
 
 export interface SeasonSeriesOptions {
@@ -87,17 +106,17 @@ const teamNameOf = (model: SaveModel, id: number): string =>
   model.races.flatMap((r) => r.results).find((res) => res.teamId === id)?.teamName ??
   `Team ${id}`;
 
-/** Does this race carry a session benchmark AND a valid player car?
+/** Does this race carry a session benchmark AND a valid car of `teamId`?
  *  Mirrors the pace boards' row filter EXACTLY (non-DNF + valid metric) —
  *  this re-derives the eligibility filter only; gap values themselves are
  *  consumed from the boards' raceDeltasS, never recomputed. */
-function playerPaceEligibility(
+function teamPaceEligibility(
   race: SaveModel['races'][number],
-  playerTeamId: number,
+  teamId: number,
   metric: 'fastestLap' | 'avgLap',
 ): boolean {
   let sessionBest = Infinity;
-  let playerValid = false;
+  let teamValid = false;
   for (const res of race.results) {
     if (res.dnf) continue;
     let valid = false;
@@ -115,9 +134,9 @@ function playerPaceEligibility(
     }
     if (!valid) continue;
     if (value < sessionBest) sessionBest = value;
-    if (res.teamId === playerTeamId) playerValid = true;
+    if (res.teamId === teamId) teamValid = true;
   }
-  return sessionBest < Infinity && playerValid;
+  return sessionBest < Infinity && teamValid;
 }
 
 export function buildSeasonSeries(
@@ -240,7 +259,7 @@ export function buildSeasonSeries(
     const chronological: (number | null)[] = races.map(() => null);
     if (!row) return chronological;
     const eligible = latestFirstRaces.filter((race) =>
-      playerPaceEligibility(race, playerTeamId, metric),
+      teamPaceEligibility(race, playerTeamId, metric),
     );
     if (eligible.length !== row.raceDeltasS.length) {
       warnings.push('PACE_SERIES_MISALIGNED');
@@ -255,9 +274,51 @@ export function buildSeasonSeries(
     return chronological;
   };
 
+  /** Per-team chronological series for a whole board (same alignment rule
+   * as alignPaceSeries, one row per board team). */
+  const alignPaceBoard = (
+    rows: {
+      teamId: number;
+      teamName: string;
+      isPlayer: boolean;
+      isRival: boolean;
+      paceDeltaS: number;
+      raceDeltasS: number[];
+    }[],
+    metric: 'fastestLap' | 'avgLap',
+  ): PaceGapTeamRow[] => {
+    const aligned = rows.map((row) => {
+      const eligible = latestFirstRaces.filter((race) =>
+        teamPaceEligibility(race, row.teamId, metric),
+      );
+      const chronological: (number | null)[] = races.map(() => null);
+      if (eligible.length === row.raceDeltasS.length) {
+        eligible.forEach((race, i) => {
+          const idx = races.findIndex((r) => r.raceId === race.raceId);
+          if (idx >= 0) chronological[idx] = row.raceDeltasS[i];
+        });
+      } else {
+        warnings.push('PACE_SERIES_MISALIGNED');
+      }
+      return {
+        teamId: row.teamId,
+        teamName: row.teamName,
+        isPlayer: row.isPlayer,
+        isRival: row.isRival,
+        medianS: row.paceDeltaS,
+        values: chronological,
+      } satisfies PaceGapTeamRow;
+    });
+    return aligned;
+  };
+
   const paceGapPerRace = {
     peak: alignPaceSeries(peakRow, 'fastestLap'),
     race: alignPaceSeries(raceRow, 'avgLap'),
+  };
+  const paceGapPerTeam = {
+    peak: alignPaceBoard(peakBoard.data.rows, 'fastestLap'),
+    race: alignPaceBoard(raceBoard.data.rows, 'avgLap'),
   };
 
   /* ── confidence / evidence / assumptions / recommendation ────────────── */
@@ -345,6 +406,7 @@ export function buildSeasonSeries(
       positionsGainedPerRace,
       gainedPerTeam,
       paceGapPerRace,
+      paceGapPerTeam,
       bestFinishPerRace: [...playerBestFinish],
       racesConsidered: races.length,
     },

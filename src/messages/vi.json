@@ -122,6 +122,7 @@
       "race": "Pace đua (vòng TB)",
       "zero": "Đội nhanh nhất",
       "gained": "Leo vị trí",
+      "you": "Bạn",
       "noData": "Chưa đủ dữ liệu chuỗi mùa giải."
     },
     "season": {
@@ -356,6 +357,10 @@
     "paceSlower": "chậm",
     "paceFaster": "nhanh",
     "alreadyDone": "Chặng này đã đua xong — kế hoạch dưới đây mang tham chiếu.",
+    "paceTabPeak": "Pace đỉnh",
+    "paceTabRace": "Pace đua",
+    "heatmap": "Heatmap pace đua — mỗi đội mỗi chặng",
+    "heatmapHint": "Xanh lá = nhanh (gap nhỏ), đỏ = chậm — gap pace đua từng chặng lấy từ race pace board; hàng đội bạn được khoanh nổi, di chuột để xem số.",
     "recs": "Khuyến nghị",
     "noRace": "Không có chặng nào để hiển thị.",
     "tabOverview": "Overview",
