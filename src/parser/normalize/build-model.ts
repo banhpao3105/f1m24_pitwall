@@ -31,7 +31,7 @@ import { getPitTimings } from '../repositories/pitstops.repo';
 import { getTyreAllocations } from '../repositories/tyres.repo';
 import { getQualifyingResults } from '../repositories/quali.repo';
 import { getGridPenalties, getPenaltyTypes } from '../repositories/grid-penalties.repo';
-import { getCarConfig } from '../repositories/car-config.repo';
+import { getCarConfig, carConfigPairsVerified } from '../repositories/car-config.repo';
 import { getPlayerStrategyStints } from '../repositories/player-strategy.repo';
 import { getPartsSnapshot } from '../repositories/parts.repo';
 import { getFinanceSnapshot } from '../repositories/finance.repo';
@@ -313,7 +313,11 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
   /* v0.7.0 — CarID (0–21) → F1 team mapping. F1 teams in TeamID order own
      the car pairs (0,1), (2,3), … The Save_CarConfig sequential team index
      (1..11, verified on real saves) is the independent check: any mismatch
-     flags the mapping unverified and the UI degrades to team-level labels. */
+     flags the mapping unverified and the UI degrades to team-level labels.
+     v0.7.1 — the check is the exact pair-set {(t,0),(t,1): t ∈ 1..11}
+     (LoadoutID is a per-team seat index, NOT a global car index); the old
+     floor(loadoutId/2)+1 formula evaluated to 1 on every real row and
+     failed on the second row of any save, permanently disabling the cap. */
   const f1Teams = teams.filter((t) => t.formula === 1).sort((a, b) => a.teamId - b.teamId);
   const carTeams = f1Teams.flatMap((t, i) => [
     { carId: i * 2, teamId: t.teamId },
@@ -321,19 +325,8 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
   ]);
   let carTeamsVerified = true;
   const carConfigRows = safe('Save_CarConfig', () => getCarConfig(db), []);
-  if (carConfigRows.length > 0) {
-    if (carConfigRows.length !== carTeams.length) {
-      carTeamsVerified = false;
-    } else {
-      for (const row of carConfigRows) {
-        /* expected team index (1-based) for a car = floor(carId / 2) + 1 —
-           the strictly sequential layout verified on real 1.11 saves */
-        if (row.teamIndex !== Math.floor(row.loadoutId / 2) + 1) {
-          carTeamsVerified = false;
-          break;
-        }
-      }
-    }
+  if (carConfigRows.length > 0 && !carConfigPairsVerified(carConfigRows)) {
+    carTeamsVerified = false;
   }
   if (!carTeamsVerified) {
     phase2Warnings.push('CAR_TEAM_MAP_UNVERIFIED');
