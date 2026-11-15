@@ -2,6 +2,72 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.9.2] — What-if SC/VSC: re-price chi phí pit bằng cột thật của track
+
+Hoàn thành phần việc v0.9 (§2.2.3) còn dang dở — prompt v0.9.0 gốc bị bỏ
+dở dang ở bước probe (`2be48ca`), phần feature chưa từng được commit; release
+này đóng nó lại như phiên bản 0.9.2 (0.9.1 đã phát hành trước đó). Câu hỏi
+người dùng: *"Nếu Safety Car/VSC ra ở vòng X thì nên pit không, plan nào
+rẻ nhất?"* — trả lời bằng số thật, không bịa.
+
+### Added — parser: 4 cột SC/pit từ Races_Tracks vào model (D1)
+
+- `Races_Tracks` mang sẵn chi phí pit theo điều kiện của từng track:
+  `PitLaneTimeLoss` (green), `GreenFlagTimeLoss`, `SafetyCarTimeLoss` (SC)
+  và `SafetyCarChance` (0..1). Probe đã xác nhận trên save thật: Pit − Green
+  = đúng 2.0s trên cả 26 track; MarinaBay = 29/27/16 · chance 2/3.
+- `getRaces` (soft-select — schema cũ thiếu cột → `undefined`, không vỡ
+  parse), `SaveModel.races[]` thêm `trackSafetyCarChance`,
+  `trackPitLaneTimeLossS`, `trackGreenFlagTimeLossS`, `trackSafetyCarTimeLossS`
+  (đơn vị GIÂY — hằng số chi phí engine, precedent `estimatedLapTimeS`).
+- `scripts/audit-sc-v092.ts` in các cột này từ SaveModel trên save thật
+  (23 track đều khớp probe, Pit−Green 2.0) + lịch sử SC/VSC mùa.
+
+### Added — engine `whatIfSCVSC` (D2)
+
+- Re-price mọi plan khả thi của lab dưới kịch bản SC/VSC do người dùng
+  chọn (vòng bắt đầu + độ dài cửa sổ — save KHÔNG lưu lịch sử SC theo vòng,
+  cửa sổ là input, engine chỉ cung cấp giá hợp lý).
+- **Giá pit trong SC = chi phí pit green của model × (SafetyCarTimeLoss /
+  PitLaneTimeLoss) của track** — MarinaBay: 20.7 × 16/29 = 11.4s. Chi phí
+  green giữ nguyên hằng số đã backtest (20.7s), KHÔNG thay bằng 29s thô của
+  game. VSC không có cột riêng → trung điểm green↔SC = 16.1s, gán nhãn
+  giả định rõ ràng.
+- Chỉ re-price chi phí pit trong cửa sổ; deg/delta/bộ lốp giữ nguyên — mọi
+  row đều là plan đã qua luật khả thi số bộ của từng xe (v0.9.1), không plan
+  mới xuất hiện. Rows xếp lại theo thời gian kịch bản; mỗi row hiển thị
+  green → scenario, số giây tiết kiệm, số pit trong cửa sổ.
+- Lưu ý có cấu trúc (key + params, UI dịch): `scRatio`, `vscMidpoint`,
+  `repricedOnly`, `userWindow`.
+
+### Added — UI Tyre Lab: card "What-if SC/VSC" (D3)
+
+- Card riêng dưới card What-if: toggle bật/tắt, chọn SC/VSC, slider vòng
+  bắt đầu (mặc định = pit đầu tiên của plan lead) + độ dài cửa sổ.
+- Dòng ngữ cảnh: khả năng SC của track (%), cột game pit/green/SC (giây),
+  lịch sử mùa từ Races_Results (20/44 chặng có SC · 12/44 có VSC trên save
+  thật).
+- Save thiếu cột → card báo "what-if SC/VSC tắt, không bịa số" thay vì
+  đoán. i18n vi/en đầy đủ.
+
+### Số liệu khóa trên save MarinaBay (fixture mirror autosave-4.sav)
+
+- SC, cửa sổ [17,19] (mặc định = pit đầu lead): lead S→S→M
+  **97.1s → 87.8s (−9.3s, 1 pit trong cửa sổ)**; trail M→S→S giữ 97.1s.
+- SC, cửa sổ [27,44] phủ cả 2 pit trail: M→S→S
+  **97.1s → 78.5s (−18.6s)** — hòa green 97.1/97.1 bị phá, plan 2-stop
+  hedge thành nhanh nhất dưới SC.
+- VSC [17,19]: lead 97.1 → 92.5s (−4.6s).
+
+### Tests
+
+- 13 test mới (tổng 433/433 xanh): 9 engine (giá SC/VSC đúng tỉ lệ cột
+  thật, tiết kiệm từng row, cửa sổ trượt → không đổi, không hồi sinh plan
+  2-M, assumptions có cấu trúc, null khi thiếu cột) + 4 component (context
+  line số thật, rows re-price, hero green không đổi, i18n vi/en).
+- Audit script trên save thật chứng minh D1 end-to-end (láb pre-weekend →
+  what-if tắt trung thực, phần giá khóa bằng fixture).
+
 ## [0.9.1] — Chiến thuật lốp phải chạy được trên đúng số bộ còn dùng được
 
 Minor bump theo prompt v0.9.1 (sửa lỗi logic nghiêm trọng, không phải patch).
