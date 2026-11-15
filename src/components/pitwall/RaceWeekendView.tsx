@@ -122,11 +122,14 @@ export function RaceWeekendView({
           </div>
         </div>
         {lastResult ? (
-          <p className="mt-2 text-xs text-ink-soft">
+          <p className="mt-2 text-xs text-ink-soft" data-testid="last-result">
             {t('lastResult', {
               pos: lastResult.finishingPos,
               points: lastResult.points,
-              dnf: String(lastResult.dnf),
+              /* v0.7.0: String(false) leaked the literal word "false" into the
+                 sentence on every finished race — the slot is a suffix, so an
+                 DNF appends the marker and a classified finish appends ''. */
+              dnf: lastResult.dnf ? ' — DNF' : '',
             })}
           </p>
         ) : null}
