@@ -2,6 +2,65 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.8.1] — F5 đọc lại ĐÚNG file save trên đĩa (không cần bấm Đổi save + nạp lại)
+
+Patch bump theo prompt v0.8.1. Yêu cầu của Nguyen 2026-11-15: đang chơi game
+ghi đè file save sau mỗi chặng, nhưng web chỉ hiện bản parse cached trong
+IndexedDB — muốn dữ liệu mới phải bấm "Đổi save" rồi chọn lại file nhiều
+lần trong một buổi. Giờ **F5 là đủ**: nếu file trên đĩa đã đổi, app tự đọc
+lại và parse lại; file chưa đổi thì giữ nguyên bản cache (không tốn công
+parse vô ích).
+
+### Added — giữ FileSystemFileHandle lúc chọn file (`3ce1914`)
+
+- Đường click (dropzone + nút Đổi save) trên **Chromium** dùng
+  `showOpenFilePicker` thay cho `<input type=file>` → giữ lại
+  `FileSystemFileHandle` của đúng file đã chọn, lưu vào cùng store IndexedDB
+  `pitwall-db` (key `pitwall:last-active-handle`, cạnh `pitwall:last-active`).
+  Handle chỉ nằm trên máy người dùng; file .sav thô VẪN KHÔNG BAO GIỜ được
+  lưu/upload (hợp đồng local-first giữ nguyên). Firefox/Safari không có API
+  này → mọi đường đều fallback về hành vi cũ, không vỡ gì.
+- Record handle gắn `saveId` (SHA của save lúc capture): mở save khác bằng
+  kéo-thả (không có handle) KHÔNG bao giờ ghi đè/xóa handle cũ — và boot
+  bỏ qua handle không thuộc save đang mở (không bao giờ nạp nhầm file khác).
+- `StoredSave` thêm `fileLastModified` (tương thích ngược — record cũ coi
+  như "không rõ", so sánh rơi về tên + kích thước).
+- Người dùng bấm hủy hộp chọn file (`AbortError`) → im lặng hoàn toàn.
+
+### Added — F5 đọc lại + UI trạng thái trung thực (`4449257`)
+
+- Boot (`SaveAutoRestore`) chỉ gọi `queryPermission` — KHÔNG BAO GIỜ gọi
+  `requestPermission` lúc boot (cần thao tác người dùng) và không tự mở
+  picker dưới mọi hình thức:
+  - quyền `granted` + file **đổi** (`lastModified`/size/tên) → parse lại
+    từ đĩa qua đúng luồng cũ (progress → ghi đè cache → entry SHA cũ vẫn
+    nằm trong thư viện) + toast "Save đã được đọc lại (Day …)";
+  - `granted` + file **chưa đổi** → khôi phục cache như cũ, `parsedAt`
+    giữ nguyên (không parse lại vô ích);
+  - `prompt`/`denied`/không có API → khôi phục cache + sidebar hiện nút
+    một-click **"Cho phép đọc lại file save"** (gọi `requestPermission`
+    từ cú click — đúng 1 click thay vì chọn lại file; từ chối thì mọi
+    thứ vẫn như cũ);
+  - file bị xóa/dời (`NotFoundError`) → khôi phục cache + toast "Không
+    tìm thấy file save ở vị trí cũ…" + xóa handle cũ (không thử lại mãi).
+- Footer sidebar có 3 trạng thái trung thực (không hứa quá): "Tự động đọc
+  lại khi F5" khi handle hoạt động; nút một-click khi cần cấp lại quyền;
+  dòng "Trình duyệt này không hỗ trợ đọc lại tự động — dùng Đổi save như
+  trước" trên trình duyệt khác Chromium.
+- **Giới hạn đã nói thẳng:** quyền đọc lại theo origin và có thể bị thu
+  hồi — Chrome thường giữ sau F5, nhưng khi hết quyền thì vẫn còn nút
+  một-click. Handle trỏ đúng **file đã chọn** (vd `save4.sav`), không
+  phải "file mới nhất trong thư mục" — game tạo file tên khác thì vẫn
+  phải chọn lần đầu.
+
+### Tests
+
+- 29 test mới (tổng 396/396 xanh): matrix outcome boot (granted đổi/chưa
+  đổi, prompt, NotFoundError, không API), luồng một-click (đọc lại, từ
+  chối, chưa đổi, file mất, handle ngoại lai), tương thích record cũ
+  không `fileLastModified`, cascade xóa handle (deleteSave /
+  clear last-active), sidebar render đúng 3 trạng thái + click.
+
 ## [0.8.0] — Đánh giá sức mạnh xe: aero theo từng bộ phận, % so với mạnh nhất / trung bình grid, head-to-head
 
 Tính năng mới (minor bump) theo prompt v0.8.0. 3 bước + release, mỗi bước 1
