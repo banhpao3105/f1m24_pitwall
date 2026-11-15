@@ -151,6 +151,66 @@ export function stintDegPenalty(
   return stintDegPenaltyWith(ORACLE_DEG, compound, stintLaps, life);
 }
 
+/** v0.9.4 — per-stint wear correction (seconds, rounded 0.1 each). */
+export interface WearCorrectionResult {
+  totalS: number;
+  perStint: number[];
+}
+
+/**
+ * v0.9.4 — price a plan on the PHYSICAL sets it runs (the wear→price law).
+ *
+ * The plan price above (pace delta + deg + pits) assumes fresh tyres at the
+ * priced lives; the game itself prices each SET via
+ * Save_CarTyreAllocation.EstimatedLapTime (verified on a real save: a soft
+ * worn to 0.888 estimates +0.01s/lap, a hard worn to 0.504 +1.50s/lap over
+ * its fresh median). Two correction parts per assigned stint:
+ *
+ *   · pace: (set.estimatedLapTime − allocPace.lapTime[compound]) × laps —
+ *     the game's own number for THIS set against the fresh-set median of
+ *     `getAllocationPace` (game data only — no invented constant);
+ *   · deg:  stintDegPenaltyWith(deg, c, laps, assignedSet.life) −
+ *           stintDegPenaltyWith(deg, c, laps, pricedLives[c]) — the deg at
+ *     the life the set ACTUALLY has vs the life the plan was priced on.
+ *
+ * Null-safe by contract: a stint without an assignment, a set missing its
+ * EstimatedLapTime, or a null `allocPace` contribute 0 pace (the deg part
+ * still prices from the assigned life). Per-stint values are rounded to
+ * 0.1s FIRST and the total is the rounded sum of those — the stint lines
+ * shown to the user add up to the plan line, always.
+ */
+export function wearCorrection(
+  stints: ReadonlyArray<{
+    compound: Compound;
+    laps: number;
+    setUsed?: { tyreSetId: number; life: number } | null;
+  }>,
+  sets: InventorySet[],
+  allocPace: AllocationPace | null,
+  pricedLives: Record<Compound, number>,
+  deg: DegConstants = ORACLE_DEG,
+): WearCorrectionResult {
+  const perStint = stints.map((st) => {
+    const used = st.setUsed;
+    if (!used) return 0;
+    const set = sets.find((s) => s.tyreSetId === used.tyreSetId);
+    const pace =
+      set?.estimatedLapTime != null &&
+      allocPace != null &&
+      allocPace.lapTime[st.compound] != null
+        ? (set.estimatedLapTime - allocPace.lapTime[st.compound]) * st.laps
+        : 0;
+    const degPart =
+      stintDegPenaltyWith(deg, st.compound, st.laps, used.life) -
+      stintDegPenaltyWith(deg, st.compound, st.laps, pricedLives[st.compound]);
+    return Math.round((pace + degPart) * 10) / 10;
+  });
+  return {
+    perStint,
+    totalS: Math.round(perStint.reduce((sum, v) => sum + v, 0) * 10) / 10,
+  };
+}
+
 /* ── data extraction from the normalized model ──────────────────────────── */
 
 export interface StintFactor {
@@ -509,9 +569,16 @@ export interface PlannedStint {
    * the REAL per-car greedy assignment (`assignSetsForCar`) — longest stint
    * ↔ longest-life set — never an independent best-fit pick that could
    * point two stints of one plan at the same physical set. null when no
-   * inventory applies (pre-gate / no rows).
+   * inventory applies (pre-gate / no rows). v0.9.4: the never-set `spare`
+   * flag is GONE — the fresh/used label reads `fresh` alone.
    */
-  setUsed?: { tyreSetId: number; fresh: boolean; life: number; spare: boolean } | null;
+  setUsed?: { tyreSetId: number; fresh: boolean; life: number } | null;
+  /**
+   * v0.9.4 — this stint's wear correction (seconds, rounded 0.1): the
+   * assigned set's pace gap vs the fresh-set median + the deg at the
+   * assigned set's life vs the priced life. Absent when 0.
+   */
+  wearS?: number;
 }
 
 export interface StrategyResult {
@@ -529,6 +596,13 @@ export interface StrategyResult {
    * inventory price and modelTimeS preserves the rank price for display.
    */
   modelTimeS?: number;
+  /**
+   * v0.9.4 — the plan's total wear correction (seconds, rounded 0.1):
+   * pace gap of the ASSIGNED sets vs the fresh-set median + deg at the
+   * assigned set lives vs the priced lives. Absent when 0 — a zero
+   * correction must never masquerade as a measured one.
+   */
+  wearS?: number;
 }
 
 /**
@@ -1066,6 +1140,12 @@ export interface TyreLab {
   gamePlan: (GamePlanShape & {
     /** v0.6.1: the game plan modelled with the web's own maths (seconds). */
     totalTimeS: number;
+    /**
+     * v0.9.4 — the wear correction priced on car 1's stock (same basis as
+     * the lead card). Absent when 0 or when the game plan cannot be
+     * assigned sets on that garage (total stays the team-cap price then).
+     */
+    wearS?: number;
   }) | null;
   /**
    * v0.7.0 strategy data gate (spec bước 2): no plan may exist until the
@@ -1106,6 +1186,13 @@ export interface CarPlan {
   reason: 'diff-compound' | 'pit-gap' | 'shifted' | null;
   /** Extra laps gained by the fallback pit shift (shifted reason only). */
   shiftedBy?: number;
+  /**
+   * v0.9.4 — which GARAGE this card prices on (the inventory car's label:
+   * "Xe 1"/"Xe 2" while the seats are unverified, the driver's name once
+   * verified). The card is a per-CAR briefing — the driver name + grid
+   * slot are context, the label names the garage the sets come from.
+   */
+  carLabel?: string;
 }
 
 export interface CarPlans {
@@ -1468,6 +1555,36 @@ export function buildTyreLab(
         totalTimeS: gamePlanTotalTimeS(gamePlanBase, deltas, invCap, pitCostS, deg),
       }
     : null;
+  /* v0.9.4 — same-basis pricing for the game plan too (the v0.7.1 rule):
+     the total above is the TEAM-cap price, but every plan card it is
+     compared against is priced on car 1's stock (the ranked list's basis).
+     Re-running the set-assignment law on car 1's sets and adding the wear
+     correction puts the GAME/WEB row on the same basis as the lead card.
+     Not assignable on car 1 → the team-cap total stays, honestly noted. */
+  if (gamePlan && inventory && inventory.cars[0]) {
+    const car0 = inventory.cars[0];
+    const gameStints = gamePlan.stintLaps.map((l, i) => ({
+      compound: gamePlan.compounds[i] as Compound,
+      laps: l,
+    }));
+    const gameAssigns = assignSetsForCar(car0.sets, gameStints);
+    if (gameAssigns) {
+      const withSets = gameStints.map((st, i) => {
+        const a = gameAssigns.find((x) => x.stintIndex === i)!;
+        return { ...st, setUsed: { tyreSetId: a.tyreSetId, life: a.life } };
+      });
+      const corr = wearCorrection(withSets, car0.sets, allocPace, invCap, deg);
+      if (corr.totalS !== 0) {
+        gamePlan.totalTimeS = Math.round((gamePlan.totalTimeS + corr.totalS) * 10) / 10;
+        gamePlan.wearS = corr.totalS;
+      }
+    } else {
+      assumptions.push({
+        text:
+          'Plan của game không gán được bộ lốp trên kho Xe 1 — tổng thời gian giữ nguyên cap đội (chưa hiệu chỉnh mòn bộ được gán)',
+      });
+    }
+  }
   const gameOrder = gamePlan ? gamePlan.compounds.join('→') : null;
   const gameOrderRank = (s: { order: Compound[] }): number =>
     gameOrder != null && s.order.join('→') === gameOrder ? 0 : 1;
@@ -1613,8 +1730,30 @@ export function buildTyreLab(
           tyreSetId: a.tyreSetId,
           fresh: a.fresh,
           life: a.life,
-          spare: false,
         };
+      }
+      /* v0.9.4 — the wear correction on the ranked price: the stints above
+         now name the physical sets of car 1 (the ranked list's basis, see
+         garageFor); pricing the pace gap of THOSE sets (game's
+         EstimatedLapTime vs the fresh median) and the deg at their real
+         lives turns the team-cap price into the EXECUTION price. The rank
+         order is the optimizer's output and stays untouched — only the
+         price and the per-stint wear lines move. */
+      if (inventory.cars[0]) {
+        const corr = wearCorrection(
+          split,
+          inventory.cars[0].sets,
+          allocPace,
+          invCap,
+          deg,
+        );
+        if (corr.totalS !== 0) {
+          plan.timeS = Math.round((plan.timeS + corr.totalS) * 10) / 10;
+          plan.wearS = corr.totalS;
+          for (let i = 0; i < plan.stints.length; i++) {
+            if (corr.perStint[i] !== 0) plan.stints[i]!.wearS = corr.perStint[i];
+          }
+        }
       }
       surviving.push(plan);
     }
@@ -1849,17 +1988,36 @@ export function buildTyreLab(
        unverified seat guess is exactly the v0.6/v0.7 failure shape. On the
        Monza pre-race save both cars cap identically → both paths give the
        same numbers (locked in tests so a future divergence is not lost). */
-    /* v0.9.1 — carOfDriver also exposes the car's OWN sets: pricing a plan
-       on one car's garage re-runs the set-assignment law on THAT stock and
-       attaches THAT car's set info to every stint. Seats unverified → the
-       conservative team cap + null sets (the team-level law already ran). */
-    const carOfDriver = (
+    /* v0.9.4 — the CARD-ORDER garage (spec bước 1d): the two plan cards are
+       briefings per CAR, not per driver. A verified seat keeps the old
+       carOfDriver path (priced on the driver's own verified car); an
+       unverified seat prices on inventory.cars[cardIndex] — lead ← car 1,
+       trail ← car 2 — with THAT car's own cap and sets. No seat guessing:
+       the driver name + grid slot on the card are pit-timing context, the
+       label names the garage (hence carLabel). */
+    const garageFor = (
       driverId: number,
-    ): { cap: Record<Compound, number>; sets: InventorySet[] | null } => {
-      const car = inventory?.cars.find((c) => c.driverId === driverId && c.seatVerified);
-      return car && inventory
-        ? { cap: { ...lives, ...inventory.perCarMaxStint[car.carId]! }, sets: car.sets }
-        : { cap: invCap, sets: null };
+      cardIndex: number,
+    ): { cap: Record<Compound, number>; sets: InventorySet[] | null; carLabel: string } => {
+      const verified = inventory?.cars.find(
+        (c) => c.driverId === driverId && c.seatVerified,
+      );
+      if (verified && inventory) {
+        return {
+          cap: { ...lives, ...inventory.perCarMaxStint[verified.carId]! },
+          sets: verified.sets,
+          carLabel: verified.label,
+        };
+      }
+      const byCard = inventory?.cars[cardIndex];
+      if (byCard && inventory) {
+        return {
+          cap: { ...lives, ...inventory.perCarMaxStint[byCard.carId]! },
+          sets: byCard.sets,
+          carLabel: byCard.label,
+        };
+      }
+      return { cap: invCap, sets: null, carLabel: `Xe ${cardIndex + 1}` };
     };
     const priceOn = (
       plan: StrategyResult,
@@ -1868,8 +2026,11 @@ export function buildTyreLab(
     ): StrategyResult | null => {
       const sameCap = (['S', 'M', 'H'] as const).every((c) => cap[c] === invCap[c]);
       if (sameCap && !sets) return plan;
+      /* v0.9.4 — the base price is the UNCORRECTED one: a ranked plan may
+         already carry car 1's wear correction, and this car's own
+         correction must REPLACE it, never stack on top of it. */
       let stints = plan.stints;
-      let timeS = plan.timeS;
+      let timeS = plan.timeS - (plan.wearS ?? 0);
       if (!sameCap) {
         const r = evaluateStrategy(plan.order, laps, cap, deltas, pitCostS, deg);
         if (!r) return null;
@@ -1882,30 +2043,63 @@ export function buildTyreLab(
           st.toLap = lap;
         }
       }
+      let wearS: number | undefined;
       if (sets) {
         const assigns = assignSetsForCar(sets, stints);
         if (!assigns) return null;
         stints = stints.map((st, i) => {
+          /* strip the ranked plan's per-stint wear — this car's sets are
+             priced fresh below */
+          const { wearS: _stintWear, ...rest } = st;
           const a = assigns.find((x) => x.stintIndex === i)!;
           return {
-            ...st,
-            setUsed: { tyreSetId: a.tyreSetId, fresh: a.fresh, life: a.life, spare: false },
+            ...rest,
+            setUsed: { tyreSetId: a.tyreSetId, fresh: a.fresh, life: a.life },
           };
         });
+        const corr = wearCorrection(stints, sets, allocPace, sameCap ? invCap : cap, deg);
+        if (corr.totalS !== 0) {
+          timeS = Math.round((timeS + corr.totalS) * 10) / 10;
+          wearS = corr.totalS;
+          stints = stints.map((st, i) =>
+            corr.perStint[i] !== 0 ? { ...st, wearS: corr.perStint[i] } : st,
+          );
+        }
       }
+      /* v0.9.4 — strip the ranked plan's wearS here: a zero correction must
+         leave NO wearS at all (the ranked number belongs to a different
+         garage's basis, and the spread would otherwise keep it). */
+      const { wearS: _rankedWear, ...planRest } = plan;
       return {
-        ...plan,
+        ...planRest,
         modelTimeS: plan.modelTimeS ?? plan.timeS,
         timeS,
         stints,
         pitLaps: stints.slice(0, -1).map((st) => st.toLap),
+        ...(wearS !== undefined ? { wearS } : {}),
       };
     };
-    const leadGarage = carOfDriver(leadGrid.driverId);
+    const leadGarage = garageFor(leadGrid.driverId, 0);
     const leadPlan = priceOn(best, leadGarage.cap, leadGarage.sets) ?? best;
-    if (leadPlan !== best) {
+    /* v0.9.4 — say so only when the lead card's price/split actually moved
+       off the ranked entry: re-attaching sets with a zero correction on the
+       same cap changes nothing the user must know about. */
+    const leadRepriced =
+      leadPlan.timeS !== best.timeS ||
+      leadPlan.stints.some((st, i) => st.laps !== best.stints[i]?.laps);
+    if (leadPlan !== best && leadRepriced) {
       assumptions.push({
-        text: 'Plan của xe lead tính lại giá trên kho lốp đúng xe đó (cap xe khác cap đội) — bảng xếp hạng phía trên vẫn xếp theo cap đội',
+        text: 'Plan của xe lead tính lại giá trên kho lốp đúng xe đó (bộ được gán theo kho xe, cap xe có thể khác cap đội) — bảng xếp hạng phía trên vẫn xếp theo cap đội',
+      });
+    }
+    /* v0.9.4 — the split cards are per-car briefings; while at least one
+       seat is unverified the mapping card↔car is the garage order, and the
+       user can swap the two plans safely (pits stay ≥ 3 laps apart on the
+       candidate path — the offset rule). */
+    if (inventory && inventory.cars.some((c) => !c.seatVerified)) {
+      assumptions.push({
+        text:
+          'Ghế lái chưa xác minh — plan Xe 1 / Xe 2 theo thứ tự xe trong kho, không theo tên tay đua; nếu tay đua xếp trên của bạn ngồi xe 2, đổi 2 plan cho nhau (pit đã tách ≥ 3 vòng nên đổi được)',
       });
     }
     const gapOk = (p: StrategyResult): boolean =>
@@ -1916,13 +2110,18 @@ export function buildTyreLab(
        offset rules run — a re-split can move pit laps, so the gap check
        applies AFTER pricing */
     const candidates: StrategyResult[] = [];
-    const trailGarage = carOfDriver(trailGrid.driverId);
+    const trailGarage = garageFor(trailGrid.driverId, 1);
     for (const p of ranked) {
       if (p === best) continue; // the lead's ranked entry (clone or not)
       /* v0.9.1 — a trail candidate the TRAIL car cannot run on its own sets
          is skipped, never proposed */
       const priced = priceOn(p, trailGarage.cap, trailGarage.sets);
-      if (priced && gapOk(priced)) candidates.push(priced);
+      if (!priced) continue;
+      /* v0.9.4 — re-base the tie-band input on the lead CARD's execution
+         price: vsBestS still carries the ranked-list gap (car-1 basis),
+         which is not the gap the user will actually run */
+      priced.vsBestS = Math.round((priced.timeS - leadPlan.timeS) * 10) / 10;
+      if (gapOk(priced)) candidates.push(priced);
     }
     /* (a) different starting compound, within the 2.0s tie band of the
        optimal plan — the spec's preference order */
@@ -1933,7 +2132,11 @@ export function buildTyreLab(
     let reason: CarPlan['reason'] = null;
     let shiftedBy: number | undefined;
     if (trailPlan) {
-      reason = trailPlan.order[0] !== leadPlan.order[0] ? 'diff-compound' : 'pit-gap';
+      /* v0.9.4 — the reason records HOW the plan was chosen: 'diff-compound'
+         only when it came through the 2.0s execution-tie band; a fallback
+         candidate that merely clears the pit gap is 'pit-gap' even when its
+         starting compound differs (the gap, not the compound, chose it). */
+      reason = trailPlan === diffCompound[0] ? 'diff-compound' : 'pit-gap';
     } else {
       /* fallback: keep the optimal plan but push its pits as far from the
          lead's as the tyres allow — never reach ≥3 is stated, not hidden.
@@ -1958,21 +2161,59 @@ export function buildTyreLab(
         }
       }
       if (bestShifted) {
-        trailPlan = bestShifted.plan;
-        reason = 'shifted';
-        shiftedBy = bestShifted.shift;
+        /* v0.9.4 — the shifted plan must CARRY the trail car's real sets and
+           wear, not just be feasible on them: attach the assignment, strip
+           any stale wear, and price the correction on the trail cap. A
+           shifted plan that cannot be assigned is dropped (the same shape
+           as the feasibility gate above). */
+        let shifted = bestShifted.plan;
+        if (trailGarage.sets) {
+          const assigns = assignSetsForCar(trailGarage.sets, shifted.stints);
+          if (!assigns) {
+            shifted = null as unknown as StrategyResult;
+          } else {
+            shifted.stints = shifted.stints.map((st, i) => {
+              const { wearS: _stale, ...rest } = st;
+              const a = assigns.find((x) => x.stintIndex === i)!;
+              return {
+                ...rest,
+                setUsed: { tyreSetId: a.tyreSetId, fresh: a.fresh, life: a.life },
+              };
+            });
+            const corr = wearCorrection(
+              shifted.stints,
+              trailGarage.sets,
+              allocPace,
+              trailCap,
+              deg,
+            );
+            shifted.wearS = undefined;
+            if (corr.totalS !== 0) {
+              shifted.timeS = Math.round((shifted.timeS + corr.totalS) * 10) / 10;
+              shifted.wearS = corr.totalS;
+              shifted.stints = shifted.stints.map((st, i) =>
+                corr.perStint[i] !== 0 ? { ...st, wearS: corr.perStint[i] } : st,
+              );
+            }
+          }
+        }
+        if (shifted) {
+          trailPlan = shifted;
+          reason = 'shifted';
+          shiftedBy = bestShifted.shift;
+        }
       }
     }
+    /* v0.9.4 — the tie is an EXECUTION-time fact now: two plans tie when
+       their prices on their own garages land within 2.0s. The old planKey
+       branch is gone — the same stint multiset can price differently on
+       two different garages, so the multiset alone is not a tie. */
     const tie =
       trailPlan != null &&
-      (planKey(leadPlan) === planKey(trailPlan) ||
-        Math.abs(
-          (trailPlan.modelTimeS ?? trailPlan.timeS) -
-            (leadPlan.modelTimeS ?? leadPlan.timeS),
-        ) < 2.0);
+      Math.abs(trailPlan.timeS - leadPlan.timeS) < 2.0;
     if (tie) {
       assumptions.push({
-        text: 'Hai plan hòa nhau về tổng thời gian mô hình — tách để tránh dẫm chân + hedge, không phải vì nhanh hơn',
+        text: 'Hai plan hòa nhau về tổng thời gian thực thi — tách để tránh dẫm chân + hedge, không phải vì nhanh hơn',
       });
     }
     /* documented model limitation (spec bước 4): fuel load makes early
@@ -1989,6 +2230,7 @@ export function buildTyreLab(
         plan: leadPlan,
         confidence: planConfidenceFor(leadPlan.stops),
         reason: null,
+        carLabel: leadGarage.carLabel,
       },
       trail:
         trailPlan != null
@@ -2001,6 +2243,7 @@ export function buildTyreLab(
               confidence: planConfidenceFor(trailPlan.stops),
               reason,
               ...(shiftedBy != null ? { shiftedBy } : {}),
+              carLabel: trailGarage.carLabel,
             }
           : null,
       tie,

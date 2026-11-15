@@ -334,6 +334,14 @@ export interface InventorySet {
   available: boolean;
   /** Repo convention: FrontLeftWear >= 0.99 (unchanged since v0.6.x). */
   fresh: boolean;
+  /**
+   * v0.9.4 — EstimatedLapTime (the game's own pace estimate for THIS set,
+   * seconds). The wear correction prices a stint's pace gap from it against
+   * the fresh-set median (`getAllocationPace`); no SQL change — the column
+   * was already parsed onto every tyre row and is surfaced here per set.
+   * null/undefined on rows without the column (legacy fixtures).
+   */
+  estimatedLapTime?: number | null;
 }
 
 export interface InventoryCar {
@@ -468,6 +476,7 @@ export function buildTyreInventory(
         sessionLastUsedIn: t.sessionLastUsedIn ?? null,
         available: t.availabilityState === 0,
         fresh: t.frontLeftWear >= 0.99,
+        estimatedLapTime: t.estimatedLapTimeS ?? null,
       }))
       .sort((a, b) => a.tyreSetId - b.tyreSetId);
 

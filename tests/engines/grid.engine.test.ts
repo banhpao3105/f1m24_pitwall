@@ -608,7 +608,7 @@ describe('buildTyreInventory v0.7.1 — player scope + per-car caps', () => {
     // not the team-min (M 30) re-split the ranked list carries
     expect(split.lead.plan.stints.map((s) => `${s.compound}(${s.laps})`)).toEqual(['S(19)', 'M(34)']);
     expect(split.lead.plan.timeS).toBeCloseTo(57.6, 1);
-    expect(lab.assumptions.some((a) => a.text.includes('cap xe khác cap đội'))).toBe(true);
+    expect(lab.assumptions.some((a) => a.text.includes('Plan của xe lead tính lại giá trên kho lốp đúng xe đó'))).toBe(true);
     // the trail (13, car 20) is priced on its own shorter garage: the M
     // stint can never exceed 30 laps
     expect(split.trail!.driverId).toBe(13);

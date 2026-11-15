@@ -191,9 +191,11 @@ describe('buildTyreLab — MarinaBay autosave-4.sav (Day 46663, race 204, 62 lap
   it('each stint carries its REAL assigned set — the M stint runs fresh set #8 (life 31)', () => {
     const stints = data.best!.stints;
     // longest stint first: S18 → pool[0] (#1), S17 → #2 — both fresh life 21
-    expect(stints[0]!.setUsed).toMatchObject({ tyreSetId: 2, fresh: true, life: 21, spare: false });
-    expect(stints[1]!.setUsed).toMatchObject({ tyreSetId: 1, fresh: true, life: 21, spare: false });
-    expect(stints[2]!.setUsed).toMatchObject({ tyreSetId: 8, fresh: true, life: 31, spare: false });
+    // (v0.9.4: the never-set `spare` flag is gone — the label reads `fresh`)
+    expect(stints[0]!.setUsed).toMatchObject({ tyreSetId: 2, fresh: true, life: 21 });
+    expect(stints[1]!.setUsed).toMatchObject({ tyreSetId: 1, fresh: true, life: 21 });
+    expect(stints[2]!.setUsed).toMatchObject({ tyreSetId: 8, fresh: true, life: 31 });
+    expect(Object.keys(stints[0]!.setUsed!)).not.toContain('spare');
   });
 
   it('trail M→S→S (M27/S17/S18), pit 27,44 · 97.1s — dead tie, hedge split', () => {

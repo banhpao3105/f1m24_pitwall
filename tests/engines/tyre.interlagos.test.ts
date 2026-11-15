@@ -165,9 +165,10 @@ describe('v0.9.3 buildTyreLab — Interlagos DoD (prompt §4, save2.sav numbers)
 
   it('lead set assignment: S20 = #0 (27), S20 = #2 (27), M31 = #9 (42) — all fresh', () => {
     const sets = data.best!.stints.map((s) => s.setUsed);
-    expect(sets[0]).toEqual({ tyreSetId: 0, fresh: true, life: 27, spare: false });
-    expect(sets[1]).toEqual({ tyreSetId: 2, fresh: true, life: 27, spare: false });
-    expect(sets[2]).toEqual({ tyreSetId: 9, fresh: true, life: 42, spare: false });
+    // v0.9.4: the never-set `spare` flag is gone — the label reads `fresh`
+    expect(sets[0]).toEqual({ tyreSetId: 0, fresh: true, life: 27 });
+    expect(sets[1]).toEqual({ tyreSetId: 2, fresh: true, life: 27 });
+    expect(sets[2]).toEqual({ tyreSetId: 9, fresh: true, life: 42 });
   });
 
   it('trail: M→S→S pit 31,51 · 93.2s — exact tie, pits 11 and 11 laps clear', () => {
@@ -194,7 +195,7 @@ describe('v0.9.3 buildTyreLab — Interlagos DoD (prompt §4, save2.sav numbers)
     expect(sms.stints.map((s) => s.laps).sort((a, b) => b - a)).toEqual([31, 20, 20]);
   });
 
-  it('top 6: SSM/MSS/SMS 93.2 · SSMS/SMSS 96.2 · SSH 105.6 (+12.4)', () => {
+  it('top 6: SSM/MSS/SMS 93.2 · SSMS/SMSS 96.6 (wear +0.4) · SSH 105.6 (+12.4)', () => {
     expect(data.strategies.map((s) => s.order.join('→'))).toEqual([
       'S→S→M',
       'M→S→S',
@@ -203,8 +204,15 @@ describe('v0.9.3 buildTyreLab — Interlagos DoD (prompt §4, save2.sav numbers)
       'S→M→S→S',
       'S→S→H',
     ]);
-    expect(data.strategies.map((s) => s.timeS)).toEqual([93.2, 93.2, 93.2, 96.2, 96.2, 105.6]);
-    expect(data.strategies.map((s) => s.vsBestS)).toEqual([0, 0, 0, 3, 3, 12.4]);
+    /* v0.9.4 — the wear correction moves ONLY the 4-stint plans: their 3rd
+       S stint runs a fresh 26-life set (#1/#3) against the 27 cap, pricing
+       +0.4s of real deg (S16@26 − S16@27 = +0.445 → +0.4). The 2-stint
+       plans and the game-order plan run 27/27/42-life sets = their caps →
+       wear 0 → every v0.9.3 number holds. Rank order is untouched. */
+    expect(data.strategies.map((s) => s.timeS)).toEqual([93.2, 93.2, 93.2, 96.6, 96.6, 105.6]);
+    expect(data.strategies.map((s) => s.vsBestS)).toEqual([0, 0, 0, 3.4, 3.4, 12.4]);
+    expect(data.strategies[3]!.wearS).toBe(0.4);
+    expect(data.strategies[5]!.wearS).toBeUndefined();
   });
 
   it('the infeasible note names S→M→M with the exact §4 wording', () => {
