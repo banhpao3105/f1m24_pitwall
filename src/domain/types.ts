@@ -165,6 +165,17 @@ export interface Race {
   trackFastestLapMs?: number;
   trackFastestLapDriverId?: number;
   trackFastestLapYear?: number;
+  /* ── v0.9.2 — SC/pit semantics columns (Races_Tracks, probe §2.2.3) ──
+   * Kept in SECONDS like the other engine cost constants (estimatedLapTimeS
+   * precedent) — they price pit stops, they are not lap-time displays. */
+  /** SafetyCarChance — the game's own per-race Safety Car probability, 0..1. */
+  trackSafetyCarChance?: number;
+  /** PitLaneTimeLoss (s) — the game's pit cost under green on this track. */
+  trackPitLaneTimeLossS?: number;
+  /** GreenFlagTimeLoss (s) — the game's green-flag baseline (Pit − Green = 2.0s on all tracks). */
+  trackGreenFlagTimeLossS?: number;
+  /** SafetyCarTimeLoss (s) — the game's pit cost under Safety Car. */
+  trackSafetyCarTimeLossS?: number;
   sprintResults?: {
     driverId: number;
     teamId: number;

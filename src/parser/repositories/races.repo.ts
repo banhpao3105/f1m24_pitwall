@@ -45,6 +45,13 @@ export interface RawRace {
   trackFastestLapMs?: number;
   trackFastestLapDriverId?: number;
   trackFastestLapYear?: number;
+  /* v0.9.2 — the SC/pit semantics columns (probe §2.2.3, verified on F1M 24).
+   * Losses stay in SECONDS on purpose: they feed engine cost constants
+   * (pitCostS family), not lap-time displays. SafetyCarChance is 0..1. */
+  trackSafetyCarChance?: number;
+  trackPitLaneTimeLossS?: number;
+  trackGreenFlagTimeLossS?: number;
+  trackSafetyCarTimeLossS?: number;
 }
 
 export interface RawRaceResult {
@@ -111,6 +118,11 @@ export function getRaces(db: SqlJsDatabase): RawRace[] {
     ['t.FastestLap', 'FastestLap'],
     ['t.FastestLapDriverID', 'FastestLapDriverID'],
     ['t.FastestLapYear', 'FastestLapYear'],
+    /* v0.9.2 — the SC/pit columns (soft: older schemas degrade to undefined). */
+    ['t.SafetyCarChance', 'SafetyCarChance'],
+    ['t.PitLaneTimeLoss', 'PitLaneTimeLoss'],
+    ['t.GreenFlagTimeLoss', 'GreenFlagTimeLoss'],
+    ['t.SafetyCarTimeLoss', 'SafetyCarTimeLoss'],
   ]);
   const RACES_OFFSET = 5; // mandatory block: RaceID..State
   const TRACK_OFFSET = RACES_OFFSET + racesSpec.length;
@@ -130,6 +142,10 @@ export function getRaces(db: SqlJsDatabase): RawRace[] {
     trackFastestLapMs: slotAt(trackSpec, 5, TRACK_OFFSET),
     trackFastestLapDriverId: slotAt(trackSpec, 6, TRACK_OFFSET),
     trackFastestLapYear: slotAt(trackSpec, 7, TRACK_OFFSET),
+    trackSafetyCarChance: slotAt(trackSpec, 8, TRACK_OFFSET),
+    trackPitLaneTimeLossS: slotAt(trackSpec, 9, TRACK_OFFSET),
+    trackGreenFlagTimeLossS: slotAt(trackSpec, 10, TRACK_OFFSET),
+    trackSafetyCarTimeLossS: slotAt(trackSpec, 11, TRACK_OFFSET),
   } as const;
 
   const exprs: string[] = [
@@ -178,6 +194,10 @@ export function getRaces(db: SqlJsDatabase): RawRace[] {
       trackFastestLapMs: fastestLapMs == null ? undefined : Math.round(fastestLapMs * 1000),
       trackFastestLapDriverId: num(row, T.trackFastestLapDriverId),
       trackFastestLapYear: num(row, T.trackFastestLapYear),
+      trackSafetyCarChance: num(row, T.trackSafetyCarChance),
+      trackPitLaneTimeLossS: num(row, T.trackPitLaneTimeLossS),
+      trackGreenFlagTimeLossS: num(row, T.trackGreenFlagTimeLossS),
+      trackSafetyCarTimeLossS: num(row, T.trackSafetyCarTimeLossS),
     };
   });
 }

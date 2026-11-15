@@ -212,6 +212,13 @@ export function buildMarinaBayModel(): SaveModel {
     results: [],
     practice: marinaPractice(),
     qualifying: marinaQualifying(),
+    /* v0.9.2 — the REAL MarinaBay Races_Tracks SC/pit columns (TrackID 15,
+     * read from a real F1M 24 save by scripts/probe-v090-pitcost.ts):
+     * SafetyCarChance 0.667, Pit 29s / Green 27s / SC 16s (Pit − Green 2.0). */
+    trackSafetyCarChance: 2 / 3,
+    trackPitLaneTimeLossS: 29,
+    trackGreenFlagTimeLossS: 27,
+    trackSafetyCarTimeLossS: 16,
   };
   return {
     meta: {

@@ -108,6 +108,11 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
     trackFastestLapMs: r.trackFastestLapMs,
     trackFastestLapDriverId: r.trackFastestLapDriverId,
     trackFastestLapYear: r.trackFastestLapYear,
+    /* v0.9.2 — SC/pit semantics columns (seconds, see types.ts). */
+    trackSafetyCarChance: r.trackSafetyCarChance,
+    trackPitLaneTimeLossS: r.trackPitLaneTimeLossS,
+    trackGreenFlagTimeLossS: r.trackGreenFlagTimeLossS,
+    trackSafetyCarTimeLossS: r.trackSafetyCarTimeLossS,
   }));
 
   const raceById = new Map(raceModels.map((r) => [r.raceId, r]));
