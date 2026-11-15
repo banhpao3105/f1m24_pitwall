@@ -549,6 +549,7 @@
     "noProposalsHint": "Research enables itself when the game opens a vote.",
     "expertise": "Expertise banking for next season",
     "expertiseHint": "Two columns: current total expertise vs banked points (NextSeasonExpertise) — independent metrics, never read one as the other",
+    "expertiseHintPlayer": "Two independent columns — on this save: your total expertise is the league's lowest ({total}) but your bank is the highest ({bank}) — never read one as the other",
     "nextSeason": "Next season:",
     "noExpertise": "Parts_TeamExpertise unmapped",
     "noExpertiseHint": "The banking ranking enables once NextSeasonExpertise is readable from the save.",

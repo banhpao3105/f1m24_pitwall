@@ -25,6 +25,25 @@ export function ResearchView() {
   if (!regs) return null;
   const r = regs.data;
 
+  /* v0.6.3: say BOTH faces of the expertise split — the player's TOTAL can
+   * be the league's lowest while the BANK is the highest (Miami 2027: total
+   * 20,435 lowest of 11, bank 674.59 the only one > 0). The numbers come
+   * from the save's rows — never hardcoded; the generic hint renders when
+   * this save doesn't show the split. */
+  const playerExpRow = r.expertise.rows.find((row) => row.isPlayer) ?? null;
+  const totals = r.expertise.rows.map((x) => x.current).filter((v): v is number => v != null);
+  const lowestTotal = totals.length > 1 ? Math.min(...totals) : null;
+  const highestBank = r.expertise.rows.length > 1
+    ? Math.max(...r.expertise.rows.map((x) => x.nextSeason))
+    : null;
+  const showsTwoFaces =
+    playerExpRow?.current != null &&
+    lowestTotal != null &&
+    playerExpRow.current === lowestTotal &&
+    highestBank != null &&
+    highestBank > 0 &&
+    playerExpRow.nextSeason === highestBank;
+
   return (
     <div className="space-y-5" data-testid="research-view">
       <header className="flex flex-wrap items-center gap-2">
@@ -35,9 +54,13 @@ export function ResearchView() {
         </span>
       </header>
 
-      {/* v0.6.0: proposal recs carry no 👍/👎 (not an in-game vote) */}
+      {/* v0.6.0: proposal recs carry no 👍/👎 (not an in-game vote).
+          v0.6.3: actionLines 3 — the option-label actions ("Đội bạn đã
+          chọn Sporting High Engine Limits — …") truncate mid-sentence at
+          one line on card width; the clamp is a cap so short actions are
+          unaffected. */}
       {regs.recommendations.map((rec) => (
-        <RecommendationCard key={rec.id} recommendation={rec} hideFeedback />
+        <RecommendationCard key={rec.id} recommendation={rec} hideFeedback actionLines={3} />
       ))}
 
       {/* proposals — vote-share bars per option group */}
@@ -140,13 +163,19 @@ export function ResearchView() {
         )}
       </section>
 
-      {/* expertise — BOTH columns: total vs banked (v0.6.0) */}
+      {/* expertise — BOTH columns: total vs banked (v0.6.0); v0.6.3 the hint
+          names the save's own two faces (lowest total, highest bank) */}
       <section aria-label={t('expertise')} className="rounded-lg border border-line bg-panel p-4">
         <header className="mb-3 flex flex-wrap items-center gap-2">
           <PiggyBank className="h-4 w-4 text-ink-faint" aria-hidden="true" />
           <h3 className="text-sm font-semibold text-ink">{t('expertise')}</h3>
           <span className="font-mono text-[10px] text-ink-faint">
-            {t('expertiseHint')}
+            {showsTwoFaces
+              ? t('expertiseHintPlayer', {
+                  total: playerExpRow!.current!.toLocaleString('vi-VN'),
+                  bank: playerExpRow!.nextSeason.toFixed(2),
+                })
+              : t('expertiseHint')}
           </span>
         </header>
         {r.expertise.rows.length === 0 ? (

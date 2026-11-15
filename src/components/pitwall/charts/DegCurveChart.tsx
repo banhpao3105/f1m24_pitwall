@@ -75,9 +75,12 @@ export function DegCurveChart({ data }: { data: DegCurveData }) {
   const cap = capCompound ? data.lives[capCompound] : null;
   /* 0.5.3: when the pit line and the life-cap line sit close together their
    * top labels collide ("Pit tối ưu: vòng 23" vs "S: vòng 33" — 10 laps
-   * apart). Stack the cap label one text row lower instead. */
-  const capLabelDy =
-    data.pitLap != null && cap != null && Math.abs(cap - data.pitLap) < 12 ? 14 : 0;
+   * apart). Stack the cap label one text row lower instead.
+   * v0.6.3: stagger UNCONDITIONALLY when both lines exist — the 12-lap
+   * threshold was not enough (Montreal: pit 21 vs S-cap 36, 15 laps apart,
+   * still collided: the pit label grows rightward from insideTopLeft while
+   * the cap label grows leftward from insideTopRight). */
+  const capLabelDy = data.pitLap != null && cap != null ? 14 : 0;
   const maxDelta = Math.max(
     ...['S', 'M', 'H'].map((c) => {
       const vals = series[c as Compound].filter((v): v is number => v != null);

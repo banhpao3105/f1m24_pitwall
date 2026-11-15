@@ -26,16 +26,30 @@ import { useFeedbackStore } from '@/store/feedback.store';
 import { cn } from '@/lib/utils';
 import type { Recommendation } from '@/domain/provenance';
 
+/** Max lines the action paragraph may wrap to (clamp = a cap, 1-line
+ * actions are unaffected). Research cards carry long option labels
+ * ("Đội bạn đã chọn Sporting High Engine Limits — …") that one line
+ * truncates mid-sentence — v0.6.3 lets the view raise the cap. */
+const ACTION_CLAMP: Record<number, string> = {
+  1: 'line-clamp-1',
+  2: 'line-clamp-2',
+  3: 'line-clamp-3',
+};
+
 export function RecommendationCard({
   recommendation,
   testId,
   hideFeedback,
+  actionLines = 1,
 }: {
   recommendation: Recommendation;
   testId?: string;
   /** v0.6.0: Research proposal recs hide 👍/👎 — too easy to mistake for an
    * in-game vote. Used only there; everywhere else keeps the buttons. */
   hideFeedback?: boolean;
+  /** v0.6.3: raise the action clamp (1–3 lines) when the action text is
+   * longer than one line at card width. Default stays the v0.6.0 rule. */
+  actionLines?: 1 | 2 | 3;
 }) {
   const t = useTranslations('recommendation');
   const [showEvidence, setShowEvidence] = useState(false);
@@ -62,7 +76,10 @@ export function RecommendationCard({
       </header>
 
       <p
-        className="line-clamp-1 rounded border border-teal/30 bg-teal/5 px-3 py-2 text-sm font-medium text-teal"
+        className={cn(
+          'rounded border border-teal/30 bg-teal/5 px-3 py-2 text-sm font-medium text-teal',
+          ACTION_CLAMP[actionLines],
+        )}
         title={recommendation.action}
       >
         {recommendation.action}

@@ -56,7 +56,10 @@ export function PointsAreaChart({
   return (
     <div data-testid={testId ?? 'points-area-chart'}>
       <ResponsiveContainer width="100%" height={280}>
-        <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -18 }}>
+        {/* v0.6.3: generous horizontal margins — with interval={0} the first
+            and last tick labels ("Albert Park", "Miami") were clipped to
+            half their text by the tight margins. */}
+        <AreaChart data={data} margin={{ top: 8, right: 28, bottom: 0, left: 0 }}>
           <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="race" tick={TICK_STYLE} tickLine={false} axisLine={{ stroke: CHART_COLORS.grid }} interval={0} />
           <YAxis tick={TICK_STYLE} tickLine={false} axisLine={false} width={48} />
