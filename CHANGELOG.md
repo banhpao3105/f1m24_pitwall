@@ -2,6 +2,98 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.6.3] — Timeline stint 1 hàng + nhãn vòng pit, retune vách mòn cho đời lốp H thật, 4 cosmetic
+
+Ba nhóm việc theo prompt v0.6.3: (1) hồi quy UI v0.6.0 — chart stint bị tách
+3 hàng; (2) hằng số vách mòn H không còn khớp dữ liệu tune sau khi mapping
+v0.6.2 sửa xong (đời lốp H thật là 43 vòng, không phải 53 suy từ tỉ lệ);
+(3) 4 cosmetic tồn từ review 0.6.0. Không đổi mapping lốp, không đổi
+DEG_FINAL/DEG_EXP/ngưỡng cliff, không đổi pillars confidence, không đổi
+công thức xếp hạng, không đổi số liệu practice thô.
+
+### Fixed — Bước 1: timeline stint về 1 hàng, mỗi stint ghi vòng pit (`040e0b3`)
+- **Nguyên nhân:** bước 3 của v0.6.0 đổi container thanh stint từ
+  `flex h-9` thành `relative h-9` (để gắn cờ pit absolute lên trục vòng) —
+  mất flex khiến các motion.div stint chồng thành 1 hàng mỗi stint, hàng
+  cuối còn bị `overflow-hidden` cắt khuất (Montreal S21/S22/M27 thành 3 hàng).
+- Container là `relative flex h-9` trở lại: cờ pit amber vẫn absolute trên
+  trục vòng, stint ngồi cạnh nhau đúng 1 hàng (hành vi v0.5.6).
+- Mỗi segment giờ ghi 2 dòng: dòng 1 hợp chất + số vòng (`S 21v`), dòng 2
+  vòng pit của chính stint đó = toLap của stint (`pit V21`), khớp cột PIT
+  của bảng stint và pitLaps của engine; stint cuối ghi `về đích`. Segment
+  hẹp (< 12% thanh) rơi về dạng gọn `S·15` / `V37` — vòng pit không bao
+  giờ bị mất khi truncate trên mobile (nhãn qua i18n `tyres.timeline`,
+  vi/en; không hardcode tiếng Việt trong component).
+- Hero plan ghi luôn vòng pit: `S(21) → S(22) → M(27) — 2 pit (V21, V43)`
+  — biến `{pits}` mới trong `tyres.heroPlan` (vi/en), lấy từ
+  `best.pitLaps`. Giữ nguyên: trục L0/L18/L35/L53/L70, cờ pit amber, dòng
+  footer `Pit: 21, 43`, bảng stint, scroll ngang mobile.
+- Regression test: container có flex + nhãn chứa V21/V43 (plan Montreal 3
+  stint) + fallback dạng gọn segment hẹp.
+
+### Changed — Bước 2: retune DEG_CLIFF.H cho đời lốp H thật 43 vòng (`65a58b3`)
+- **Nguyên nhân:** 5.0 được grid-search ở v0.6.1 trên đời lốp H 53 (suy từ
+  tỉ lệ durability — sai). Đời lốp H thật của save Silverstone 2027 là 43
+  (audit v0.6.2 chỉ sửa mapping, không rà lại lives): stint H 35 vòng giờ
+  vượt vách 0.6×43 = 25.8 tới 9.2 vòng (chứ không phải 3.2) và cliff bình
+  phương theo số vòng vượt — `stintDegPenalty('H', 35, 43)` = 446s thay vì
+  ~70s. Optimizer không chọn split đó nên xếp hạng vẫn đúng, nhưng con số
+  mòn đã phi thực tế.
+- **Hằng số mới: DEG_CLIFF.H = 0.55** (cũ 5.0) — chỉ hằng số này đổi; tune
+  lại bằng `scripts/tune-deg-cliff.ts` (giờ là grid 1 chiều trên lives
+  thật): H35 deg = **69.7s**, nằm trong dải mục tiêu 50–90s dựa trên số
+  thật (stint H35 của Ricciardo chạy ~94.5s/vòng vs H mới ~91.4s ⇒ ~108s
+  thiệt hại, trừ pace delta 0.9×35 = 31.5s ⇒ mòn ≈ 77s; 0.55 cho 69.7s).
+  `bun scripts/tune-deg-cliff.ts --verify` xanh: Silverstone best S→M→S
+  76.0s, S17→H35 = 131.2s ≥ 100s, S→H tốt nhất (optimizer) = 90.9s ≥ 83s
+  (thua best 14.9s); Bahrain S→M @ pit 24 = 64.0s; Suzuka S→S→M giữ nguyên.
+- **Fixture Silverstone cập nhật theo save thật:** lives S 23 / M 34 /
+  H 43 (bộ cũ 23/35/53 — M 35 và H 53 là số suy, sai).
+- **Fixture Bahrain cập nhật theo save thật:** lives S 33 / M 46 / H 59
+  trên ĐÚNG type đã verify (S=2, M=1, H=0) — bộ cũ gán M/H vào type 3/4
+  (= I/W sau khi sửa mapping) nên getCompoundCaps bỏ qua và lives 50/77
+  lọt qua đường dẫn xuất durability; đồng thời 3 chặng lịch sử chạy 3
+  pit/driver → expectedStops = 3 (meta) đúng mặt bằng save.
+- **Test cập nhật theo đời lốp thật** (bài học 0.6.2: test cũ dùng life 53
+  nên con số 446s lọt qua): closed form H 35/43, caps {S 23, M 34, H 43},
+  dải H35 [50, 90], S17→H35 ≥ 100s với life 43, S→H optimizer ≥ 83s và
+  thua best ≥ 7s; Bahrain describe theo lives 33/46/59 (pit 24, ~64.0s).
+
+### Fixed — Bước 3: 4 cosmetic tồn từ review 0.6.0 (`224b577`)
+- **Nhãn deg chồng nhau:** nhãn cap trên DegCurveChart giờ LUÔN stagger
+  xuống 1 dòng khi cả đường pit lẫn đường cap cùng hiện — ngưỡng 12 vòng
+  của bản vá 0.5.3 không đủ (Montreal: pit 21 vs trần đời S 36, cách 15
+  vòng, vẫn đè nhau vì nhãn pit tràn sang phải từ insideTopLeft trong khi
+  nhãn cap tràn sang trái từ insideTopRight). Silverstone (pit 16 vs cap
+  23) hiển thị như cũ.
+- **Tick đầu/cuối chart Home bị cắt:** margin ngang của PointsAreaChart +
+  GainedBarChart tăng từ right 12 / left −18 lên right 28 / left 0 — với
+  `interval={0}`, tick đầu ("Albert Park") và cuối ("Miami") bị cắt nửa
+  chữ; giờ đọc đủ.
+- **Card Research #5 bị cắt chữ:** text hành động dài (ví dụ đề xuất #5
+  Sporting HighEngineLimits nhóm 10: "Đội bạn đã chọn Sporting High Engine
+  Limits — theo dõi tally tới deadline") bị cắt mất nửa câu ở clamp 1 dòng.
+  Card đề xuất trong Research nhận `actionLines={3}` (clamp là trần — action
+  ngắn không đổi, các view khác giữ luật compact 0.6.0).
+- **Card expertise chưa nói tổng thấp nhất:** hint của section expertise
+  giờ nói rõ CẢ HAI mặt khi save có dạng này — tổng expertise của bạn thấp
+  nhất giải ({total}) nhưng bank cao nhất ({bank}) — số tính từ rows của
+  save (Miami 2027: tổng 20,435 thấp nhất 11 đội, bank 674.59 duy nhất > 0),
+  không hardcode; key i18n mới `research.expertiseHintPlayer` (vi/en);
+  bảng 2 cột không đổi.
+
+### Đính chính số liệu 0.6.2 (hệ quả của lives thật — xếp hạng không đổi)
+- CHANGELOG 0.6.2 ghi "Silverstone: best S→M→S **75.7s**" — đó là số với
+  lives sai (M 35 / H 53). Trên lives thật (23/34/43): best S→M→S =
+  **76.0s** (S16/M21/S15, pit V16/V37), game plan 76.2s.
+- Backtest Bahrain từ 0.6.1 ghi "S→M **61.1s**, pit 23, **MEDIUM**" — đó
+  là số với lives 33/50/77 suy từ tỉ lệ. Trên lives thật (33/46/59) và
+  mặt bằng meta thật (3 pit): S→M = **64.0s**, pit **24**, confidence
+  **LOW** (delta xếp hạng là hằng số model — không có practice — cộng plan
+  1 pit dưới mặt bằng 3 pit, pillar h). Thứ hạng S→M tốt nhất giữ nguyên.
+- Cả hai đều là hệ quả của việc lives thật sau khi sửa mapping v0.6.2,
+  không phải hồi quy engine mới.
+
 ## [0.6.2] — Sửa mapping WeekendTyreType (delta H về đúng +0.89) + 2 lỗi review 0.6.0
 
 Đợt sửa sau khi chủ dự án audit v0.6.1 trên save Silverstone 2027 pre-race:
