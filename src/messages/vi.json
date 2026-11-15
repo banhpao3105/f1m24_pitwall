@@ -56,7 +56,11 @@
     "confirmDelete": "Xoá save này khỏi trình duyệt?",
     "active": "đang mở",
     "restoredTitle": "Đã khôi phục save",
-    "restoredDesc": "Mở lại {name} từ bộ nhớ trình duyệt — không cần nạp lại file."
+    "restoredDesc": "Mở lại {name} từ bộ nhớ trình duyệt — không cần nạp lại file.",
+    "reloadedTitle": "Save đã được đọc lại",
+    "reloadedDesc": "Đọc lại {name} từ đĩa — Day {day}, dữ liệu mới nhất.",
+    "reloadMissingTitle": "Không tìm thấy file save",
+    "reloadMissingDesc": "Không tìm thấy file save ở vị trí cũ — đang hiện bản lưu lần trước."
   },
   "privacy": {
     "localOnly": "Generated locally — no data leaves your device.",
@@ -278,7 +282,10 @@
       "changeSave": "Đổi save",
       "noSave": "Chưa có save nào được mở.",
       "more": "Thêm",
-      "moreTitle": "Các module khác"
+      "moreTitle": "Các module khác",
+      "reloadAuto": "Tự động đọc lại khi F5",
+      "reloadPermission": "Cho phép đọc lại file save",
+      "reloadUnsupported": "Trình duyệt này không hỗ trợ đọc lại tự động — dùng Đổi save như trước"
     },
     "recent": {
       "title": "Chặng vừa rồi",

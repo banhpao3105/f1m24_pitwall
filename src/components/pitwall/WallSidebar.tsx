@@ -13,7 +13,7 @@
  * (deep-link contract docs/02 §3.4).
  */
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   Gauge,
@@ -27,12 +27,17 @@ import {
   Newspaper,
   MoreHorizontal,
   FileHeart,
+  KeyRound,
+  RefreshCw,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { WallView } from './WallNav';
 import { useWallNav } from './WallNav';
 import { useSaveStore } from '@/store/save.store';
+import { useSaveReloadStore } from '@/store/save-reload.store';
+import { requestAndReloadSave } from '@/lib/save-reload';
+import { toast } from '@/hooks/use-toast';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 
 interface NavItemDef {
@@ -107,10 +112,41 @@ export function WallSidebar() {
   const t = useTranslations('wall');
   const tNav = useTranslations('wall.nav');
   const tSidebar = useTranslations('wall.sidebar');
+  const tLib = useTranslations('library');
   const { view, raceId, setView } = useWallNav();
   const model = useSaveStore((s) => s.model);
   const reset = useSaveStore((s) => s.reset);
+  const reloadCapability = useSaveReloadStore((s) => s.capability);
+  const reloadSaveId = useSaveReloadStore((s) => s.saveId);
+  const reloadFileName = useSaveReloadStore((s) => s.fileName);
   const [moreOpen, setMoreOpen] = useState(false);
+
+  // v0.8.1: the re-read state only renders while it belongs to the open save.
+  const reloadActive =
+    model != null && reloadSaveId === model.meta.id && reloadCapability !== 'none';
+
+  /** One-click "allow re-read" — user gesture; requestPermission is only
+   * ever called from this click handler, never at boot. */
+  const onGrantReload = useCallback(async () => {
+    const outcome = await requestAndReloadSave();
+    if (outcome.kind === 'granted-reloaded') {
+      toast({
+        title: tLib('reloadedTitle'),
+        description: tLib('reloadedDesc', {
+          day: outcome.day,
+          name: outcome.fileName,
+        }),
+        duration: 2500,
+      });
+    } else if (outcome.kind === 'granted-missing') {
+      toast({
+        title: tLib('reloadMissingTitle'),
+        description: tLib('reloadMissingDesc'),
+        duration: 4000,
+      });
+    }
+    // denied / unchanged / failed stay silent — the cache is still on screen.
+  }, [tLib]);
 
   // Deep-link contract (docs/02 §3.4): non-home views carry the active race
   // (explicit ?race= or the next unfinished race), exactly like the old pill nav.
@@ -236,6 +272,35 @@ export function WallSidebar() {
                 <FileHeart className="h-3.5 w-3.5" aria-hidden="true" />
                 {tSidebar('changeSave')}
               </button>
+              {reloadActive ? (
+                reloadCapability === 'auto' ? (
+                  <p
+                    className="mt-1.5 flex items-center gap-1 text-[10px] text-teal"
+                    title={reloadFileName ?? model.meta.fileName}
+                    data-testid="sidebar-reload-auto"
+                  >
+                    <RefreshCw className="h-3 w-3 shrink-0" aria-hidden="true" />
+                    {tSidebar('reloadAuto')}
+                  </p>
+                ) : reloadCapability === 'needs-permission' ? (
+                  <button
+                    type="button"
+                    onClick={() => void onGrantReload()}
+                    data-testid="sidebar-reload-permission"
+                    className="mt-1.5 inline-flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-md border border-amber/40 bg-amber/5 px-2 py-1.5 text-[11px] text-amber transition-colors duration-150 hover:border-amber hover:bg-amber/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                  >
+                    <KeyRound className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    {tSidebar('reloadPermission')}
+                  </button>
+                ) : (
+                  <p
+                    className="mt-1.5 text-[10px] leading-snug text-ink-faint"
+                    data-testid="sidebar-reload-unsupported"
+                  >
+                    {tSidebar('reloadUnsupported')}
+                  </p>
+                )
+              ) : null}
             </>
           ) : (
             <p className="text-[11px] text-ink-faint">{tSidebar('noSave')}</p>

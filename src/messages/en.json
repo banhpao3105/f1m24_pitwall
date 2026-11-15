@@ -56,7 +56,11 @@
     "confirmDelete": "Delete this save from the browser?",
     "active": "open",
     "restoredTitle": "Save restored",
-    "restoredDesc": "Reopened {name} from browser storage — no re-upload needed."
+    "restoredDesc": "Reopened {name} from browser storage — no re-upload needed.",
+    "reloadedTitle": "Save re-read from disk",
+    "reloadedDesc": "Re-read {name} from disk — Day {day}, latest data.",
+    "reloadMissingTitle": "Save file not found",
+    "reloadMissingDesc": "The save file is no longer at its old location — showing the last stored snapshot."
   },
   "privacy": {
     "localOnly": "Generated locally — no data leaves your device.",
@@ -279,7 +283,10 @@
       "changeSave": "Change save",
       "noSave": "No save open yet.",
       "more": "More",
-      "moreTitle": "Other modules"
+      "moreTitle": "Other modules",
+      "reloadAuto": "Auto re-reads on refresh",
+      "reloadPermission": "Allow re-reading the save file",
+      "reloadUnsupported": "This browser can't re-read automatically — use Change save as before"
     },
     "recent": {
       "title": "Last time out",
