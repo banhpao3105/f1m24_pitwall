@@ -2,6 +2,129 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.9.4] — Bộ lốp đúng xe + nhãn mới/đã dùng + giá theo độ mòn
+
+Lỗi do Nguyen bắt trên save Vegas thật (`save1.sav`, Day 46712, chặng 208,
+50 vòng, pre-race). Xe 2 (CarID 21) **không còn bộ S mới nào** — S dùng được
+là #0 (mòn 0.888, đời 18), #2 (0.778, đời 16), #3 (0.887, đời 18), #1 đang
+khóa (AvailabilityState 2) — nhưng web v0.9.1 hiển thị thẻ trail là
+`S17=#0 "mới đời 20" + S17=#1 "mới đời 20"`: đó là bộ của **xe 1** (CarID 20),
+trong đó #1 còn là bộ xe 2 không được dùng. Lead thì đúng.
+
+### Root cause — 2 lỗi chồng nhau (đã đọc code xác minh)
+
+1. **Gán nhầm xe.** Engine gán `assigns[0]` (bộ của cars[0] = xe 1) cho mọi
+   ranked plan ở cấp đội; `priceOn` chỉ gán lại khi `carOfDriver` tìm được xe
+   có `seatVerified` — mà trên mọi save thật cả 2 xe đều `seatVerified: false`
+   (mapping CarID→driver chưa giải được; team 32 có 12 driver do
+   Staff_Contracts type-0 lịch sử) → thẻ trail giữ bộ của xe 1.
+2. **Nhãn "mới" chết.** Cả 2 chỗ render chọn nhãn bằng `!s.setUsed.spare`,
+   mà `spare` bị hardcode `false` ở cả 2 chỗ gán — không chỗ nào set `true`;
+   `setUsed.fresh` (đúng theo từng bộ, FrontLeftWear ≥ 0.99) không bao giờ
+   được đọc → nhãn "đã dùng" không bao giờ render. Live v0.9.1: cả trang
+   6 nhãn "mới", 0 nhãn "đã dùng".
+
+**Lỗi mô hình (điểm thứ 2):** giá stint tính bằng pace lốp mới + deg trên
+cap hợp chất, bất kể bộ được gán mòn bao nhiêu. Game tự định giá từng bộ qua
+`Save_CarTyreAllocation.EstimatedLapTime` (đã xác minh trên save này: S mới
+97.86; xe 2 #0 mòn 0.888 → 97.87 (+0.01s/vòng), #2 mòn 0.778 → 98.05
+(+0.19); M #10 mòn 0.394 → 100.34 so với mới 98.24 = +2.10s/vòng; H #12
+mòn 0.504 → 100.18 so với mới 98.68 = +1.50). Ở save này sai số nhỏ (trail
++0.2s) vì assignment chọn bộ tốt nhất, nhưng nguyên tắc sai và không bị
+chặn trên: một bộ mòn nặng được gán sẽ lệch hàng giây mỗi stint mà không ai
+thấy.
+
+### Fixed — thẻ plan là briefing theo XE (`03f0d9b`)
+
+- **`garageFor(driverId, cardIndex)`**: ghế verified thì dùng `carOfDriver`
+  như cũ; ghế chưa xác minh thì lấy `inventory.cars[cardIndex]` — lead ← Xe 1
+  (cap riêng `{...lives, ...perCarMaxStint[carId]}` + sets riêng), trail ← Xe 2.
+  **Không đoán driver nào ngồi xe nào** — assumption ghi rõ: *"Ghế lái chưa
+  xác minh — plan Xe 1 / Xe 2 theo thứ tự xe trong kho, không theo tên tay
+  đua; nếu tay đua xếp trên của bạn ngồi xe 2, đổi 2 plan cho nhau (pit đã
+  tách ≥ 3 vòng nên đổi được)"*.
+- `CarPlan.carLabel` mới — nhãn kho của thẻ; view render `{car}` đầu dòng
+  card: "Xe 1 — O'Ward (P10)" / "Xe 2 — Ricciardo (P19): …".
+- **Nhãn bộ đọc `fresh`** (per-set truth); field `spare` bị xóa khỏi type
+  `PlannedStint.setUsed` và cả 2 chỗ gán — typecheck bắt hết sót.
+- **Trail fallback (pit-shift) gán bộ thật**: plan dịch pit nay mang
+  `setUsed` từng stint từ kho xe trail + wear tương ứng; không gán được bộ
+  nào → bỏ (giữ shape feasibility cũ).
+- **Tie = giá thực thi**: `|trail.timeS − lead.timeS| < 2.0`; nhánh
+  `planKey` (multiset) bị bỏ — cùng multiset vẫn có thể lệch giá trên 2 kho
+  khác nhau. `diff-compound` chỉ khi plan đi qua băng hòa ≤ 2.0s; candidate
+  fallback chỉ nhờ tách pit → `pit-gap` (dù compound xuất phát khác).
+- **Game plan định giá lại trên kho Xe 1** (cùng cơ sở với thẻ lead — nguyên
+  tắc same-basis từ v0.7.1); không gán được trên Xe 1 thì giữ total cap đội
+  + assumption.
+
+### Added — luật mòn→giá `wearCorrection`
+
+Mỗi plan được định giá lại trên **bộ vật lý nó chạy**:
+`pace = (EstimatedLapTime của bộ − median bộ mới theo hợp chất) × stintLaps`
+(số của game, không hằng số bịa) + `deg = deg(laps, đời bộ được gán) −
+deg(laps, đời đã định giá)`. Làm tròn từng stint 0.1s trước, tổng = tổng
+các số đã làm tròn — dòng stint cộng đúng thành dòng plan. Áp dụng ở 4 mức:
+ranked list (cơ sở Xe 1, thứ hạng KHÔNG đổi — chỉ giá/vsBest đổi), `priceOn`
+(giá gốc = giá CHƯA hiệu chỉnh; correction của xe này THAY số cũ; correction
+= 0 → không ghi `wearS`), trail shift-fallback, game plan. Candidate trail
+re-base `vsBestS` trên giá thực thi thẻ lead trước bộ lọc tie-band.
+`wearS` (plan + từng stint) là field mới; UI hiện dòng "mòn lốp: +0.2s"
+dưới tổng thời gian của thẻ (wear 0 → không hiện dòng).
+
+### Changed — UI
+
+- Hero = thẻ lead ở MỌI chỗ hiển thị đề xuất; `tyre.data.best` chỉ còn ở
+  (a) bảng xếp hạng — có dòng cơ sở mới "Bảng xếp hạng tính trên cap đội
+  với kho Xe 1 (đã hiệu chỉnh mòn bộ được gán)" — và (b) hàng WEB của so
+  sánh GAME/WEB. Trước fix lead ≡ best (priceOn là no-op trên save thật);
+  sau fix lead re-split trên cap xe riêng nên 2 số khác nhau.
+- Đường cong deg đánh dấu pit đầu của plan ĐỀ XUẤT (thẻ lead), không còn
+  của ranked best.
+- `split.tieNote` đổi thành "tổng thời gian thực thi" (khớp định nghĩa tie
+  mới); assumption tie của engine cũng vậy.
+
+### Số liệu khóa trên save Vegas (save1.sav, Day 46712 — fixture mirror)
+
+- **LEAD (Xe 1): S→S→M (S14/S14/M22) pit 14,28 · 72.2s · wear 0** — sets
+  `S14=#0 mới đời 20, S14=#1 mới đời 20, M22=#8 mới đời 31` (toàn bộ mới,
+  đúng kho xe 1).
+- **TRAIL (Xe 2): M→S→S (M24/S13/S13) pit 24,37 · 75.7s · wear +0.2 ·
+  reason pit-gap** — sets `M24=#8 mới đời 31, S13=#0 đã dùng đời 18,
+  S13=#3 đã dùng đời 18`. **Không còn #1 khóa, không còn nhãn "mới" trên bộ
+  S đã dùng.** Trail cũ SSH 120.5s biến mất vì lead re-split sang pit 14,28
+  (MSS pit 24,37 tách đủ ≥ 3 vòng: |24−28| = 4).
+- **BEST (ranked[0]): S→S→M (S13/S13/M24) pit 13,26 · 72.7s · wear −2.8.**
+- **Top 6 ranked:** SSM 72.7 / SMS 72.7 / MSS 72.7 / SSMS 82.6 / SMSS 82.6 /
+  SSH 113.9 (wear −2.8 / −2.8 / −2.8 / −2.4 / −2.4 / −6.6; vsBest
+  0 / 0 / 0 / 9.9 / 9.9 / 41.2).
+- **Game plan: S→S→M pit 13,26 · 73.4s · wear −2.5.** Lead nhanh hơn game
+  1.2s (73.4 − 72.2); hàng GAME/WEB: 73.4 vs 72.7 ("web nhanh hơn 0.7s").
+- **Không còn tie note** (gap lead–trail 3.5s > 2.0). Cả 2 assumption mới
+  (ghế chưa xác minh + lead re-price) đều có mặt.
+- **Live UI (Tyre Lab, 0 console error):** thẻ trail hiện đúng
+  "bộ #0 · đã dùng · đời 18" + "bộ #3 · đã dùng · đời 18"; cả 2 thẻ cộng lại
+  4 nhãn "mới" (lead 3 + trail M #8); thẻ lead "Xe 1 — O'Ward (P10)", thẻ
+  trail "Xe 2 — Ricciardo (P19)"; dòng "mòn lốp: +0.2s" trên thẻ trail.
+
+### Hồi quy — không đổi số nào ở cấp xe
+
+- **MarinaBay** (`autosave-4.sav`): lead/trail **97.1s / 97.1s**, game plan
+  **103.7s** — wear 0 khắp nơi (toàn bộ mới, đời = cap).
+- **Monza** (`save4.sav`): lead/trail **57.6s / 57.6s**, game plan **75.0s**.
+- **Interlagos** (`save2.sav`): lead **SSM S20/S20/M31 · 93.2s** của v0.9.3
+  giữ nguyên; trail 93.2 tie; game plan 121.5s. Riêng các plan 4-stint của
+  bảng xếp hạng được hiệu chỉnh HONEST +0.4s (stint S thứ 3 chạy bộ fresh
+  đời 26 < cap 27 → deg thật +0.4): SSMS/SMSS 96.2 → **96.6** — số xếp hạng,
+  không phải số đề xuất per-car.
+
+### Out of scope (không làm trong bản này)
+
+- Sửa `resolveCarDrivers` / mapping ghế thật (12 driver team 32).
+- SC/VSC what-if (v0.9.0), rain what-if (v0.9.2), mixed-tier (v0.9.3 đã
+  merge trước — v0.9.4 rebase lên đầu đó).
+- Per-track pit cost — pit vẫn flat 20.7s. Wet plan không đổi.
+
 ## [0.9.3] — Delta bị clamp = chưa đo: hết trộn tier khi xếp hạng
 
 Lỗi do Nguyen bắt trên đường đua thật: Interlagos 2027 (chặng 207, 71
