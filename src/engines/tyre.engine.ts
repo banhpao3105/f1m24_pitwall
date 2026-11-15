@@ -22,7 +22,7 @@
 import type { Confidence, Evidence, Assumption, Recommendation } from '../domain/provenance';
 import type { EngineResult } from '../domain/types';
 import type { SaveModel, Race, PlayerStrategySection } from '../domain/types';
-import { assessReadiness, type WeekendReadiness } from './grid.engine';
+import { assessReadiness, buildTyreInventory, resolveCarDrivers, type WeekendReadiness, type TyreInventory } from './grid.engine';
 
 /* ── oracle constants (do not change without a changelog entry) ─────────── */
 
@@ -478,6 +478,11 @@ export interface PlannedStint {
   deltaS: number;
   /** Total wear-induced seconds lost across the stint. */
   degS: number;
+  /**
+   * v0.7.0 — the tyre set this stint runs on (best available fit in the
+   * player's inventory). null when no inventory applies (pre-gate / no rows).
+   */
+  setUsed?: { fresh: boolean; life: number; spare: boolean } | null;
 }
 
 export interface StrategyResult {
@@ -489,6 +494,12 @@ export interface StrategyResult {
   pitLaps: number[];
   /** Seconds slower than the best plan in the candidate set. */
   vsBestS: number | null;
+  /**
+   * v0.7.0 — the RANK price (model/median lives) this plan was ordered by.
+   * When the inventory cap re-prices the execution, timeS carries the
+   * inventory price and modelTimeS preserves the rank price for display.
+   */
+  modelTimeS?: number;
 }
 
 /**
@@ -857,6 +868,12 @@ export interface TyreLab {
    * `gamePlan` are null/empty and the UI renders the missing-data checklist.
    */
   readiness: WeekendReadiness;
+  /**
+   * v0.7.0 per-car tyre inventory + the feasibility cap it imposes
+   * (maxStint = min(model life, best available set life)). null when the
+   * allocation is absent or the gate has not opened.
+   */
+  inventory: TyreInventory | null;
 }
 
 /** Prior from the local per-track correction store (v0.5.1 P2, IndexedDB). */
@@ -953,6 +970,18 @@ export function buildTyreLab(
   // Physical order S ≤ M ≤ H.
   lives.M = Math.max(lives.M, lives.S);
   lives.H = Math.max(lives.H, lives.M);
+
+  /* ── v0.7.0 step 3: the player's tyre inventory + the feasibility cap.
+     Computed early so the evidence can carry it; the re-price pass below
+     (after ranking) applies it to every plan. maxStint[C] = min(model
+     life, best AVAILABLE set life) — on the owner's Monza pre-race save
+     this turns the field-median lives S26/M39/H60 into the garage's real
+     S24/M36/H55. */
+  const inventory = readiness.ready ? buildTyreInventory(model, lives, race.raceId) : null;
+  const invCap: Record<Compound, number> = inventory
+    ? { ...lives, ...inventory.maxStint }
+    : { ...lives };
+  const capTightens = (['S', 'M', 'H'] as const).some((c) => invCap[c] < lives[c]);
 
   /* expected field stops */
   const observed = getObservedStops(model, race.trackId, exclude);
@@ -1101,6 +1130,18 @@ export function buildTyreLab(
     source: 'Races_Tracks + model constant',
     label: `Pit cost ≈ ${pitCostS.toFixed(1)}s (lane ${pitLaneLossS}s + stationary ${PIT_STATIONARY_ESTIMATE}s)`,
   });
+  if (inventory) {
+    const agg = (c: 'S' | 'M' | 'H'): string => {
+      const a = inventory.teamAggregate.find((x) => x.compound === c);
+      return a
+        ? `${c}: mới ×${a.fresh}${a.freshLife != null ? ` (đời ${a.freshLife})` : ''} · đã dùng ×${a.used}${a.usedLife ? ` (đời ${a.usedLife[0]}–${a.usedLife[1]})` : ''}`
+        : `${c}: —`;
+    };
+    evidence.push({
+      source: 'Save_CarTyreAllocation',
+      label: `Kho lốp đội (${inventory.cars.map((c) => c.label).join(' / ')}): ${agg('S')}, ${agg('M')}, ${agg('H')} — cap thực thi ${(['S', 'M', 'H'] as const).map((c) => `${c} ${invCap[c]}`).join('/')}`,
+    });
+  }
 
   /* v0.7.0 data gate (spec bước 2): trước khi đủ allocation + practice +
      quali, KHÔNG plan nào được tính hay hiện — kể cả plan thuần model.
@@ -1136,6 +1177,7 @@ export function buildTyreLab(
         practiceSessions: practicePace?.sessions ?? 0,
         gamePlan: null,
         readiness,
+        inventory: null,
       },
       confidence: 'LOW' as Confidence,
       evidence,
@@ -1219,6 +1261,105 @@ export function buildTyreLab(
     }
     s.pitLaps = s.stints.slice(0, -1).map((st) => st.toLap);
   }
+
+  /* ── v0.7.0 step 3: apply the inventory cap to every ranked plan.
+     The ranked order above is the SELECTION order (model-lives maths, the
+     optimizer output the spec freezes for the lead). The garage decides
+     what is physically runnable and what each plan costs when executed on
+     the sets actually owned:
+       · no split fits the cap → the plan is INFEASIBLE and never proposed
+         (the reason goes into the assumptions);
+       · otherwise the plan keeps its rank but is RE-SPLIT and RE-PRICED on
+         the cap lives (deg at the set life the player actually owns).
+     On the owner's Monza pre-race save: the S(19)→M(34) lead re-prices
+     from 51.7s (model lives) to 57.6s (cap 24/36/55). */
+  let infeasibleNote: string | null = null;
+  if (inventory && capTightens) {
+    const surviving: typeof ranked = [];
+    for (const plan of ranked) {
+      const capEval = evaluateStrategy(plan.order, laps, invCap, deltas, pitCostS, deg);
+      if (!capEval) {
+        if (!infeasibleNote) {
+          const shortest = plan.stints
+            .filter((st) => st.laps > invCap[st.compound])
+            .map((st) => `${st.compound} ${st.laps} vòng`)
+            .join(', ');
+          infeasibleNote = `${plan.stints.map((st) => st.compound).join('→')} — cần bộ ${shortest} nhưng kho chỉ còn bộ tối đa ${[...new Set(plan.stints.map((st) => st.compound))].map((c) => `${c} ${invCap[c]} vòng`).join(' / ')}`;
+        }
+        continue;
+      }
+      plan.modelTimeS = plan.timeS;
+      plan.timeS = Math.round(capEval.timeS * 10) / 10;
+      plan.stints = capEval.stints;
+      let lap = 0;
+      for (const st of plan.stints) {
+        st.fromLap = lap + 1;
+        lap += st.laps;
+        st.toLap = lap;
+      }
+      plan.pitLaps = plan.stints.slice(0, -1).map((st) => st.toLap);
+      surviving.push(plan);
+    }
+    if (surviving.length > 0) {
+      ranked.length = 0;
+      ranked.push(...surviving);
+    } else {
+      /* no plan fits the garage at all — keep the model ranking visible and
+         say so instead of rendering an empty lab */
+      assumptions.push({
+        text: 'Kho lốp không đủ cho phương án nào — hiển thị tạm xếp hạng theo đời lốp model để tham chiếu',
+        fallbackValue: `cap không xét: ${(['S', 'M', 'H'] as const).map((c) => `${c} ${invCap[c]}`).join(' / ')}`,
+      });
+    }
+    if (infeasibleNote) {
+      assumptions.push({
+        text: `Bỏ phương án nhanh hơn theo model vì kho không chạy được: ${infeasibleNote}`,
+      });
+    }
+  }
+  /* per-stint set info (best available fit) + the reuse assumption */
+  if (inventory && capTightens) {
+    for (const plan of ranked) {
+      for (const st of plan.stints) {
+        const carSets = inventory.cars
+          .flatMap((car) => car.sets)
+          .filter(
+            (s) =>
+              s.compound === st.compound &&
+              s.available &&
+              (s.lifeRemaining ?? 0) >= st.laps,
+          )
+          .sort((a, b) => (a.lifeRemaining ?? 0) - (b.lifeRemaining ?? 0));
+        const best = carSets[0];
+        st.setUsed = best
+          ? { fresh: best.fresh, life: best.lifeRemaining as number, spare: false }
+          : { fresh: false, life: invCap[st.compound], spare: true };
+      }
+    }
+    /* count stints per compound vs available sets — flag the reuse gap */
+    for (const plan of ranked) {
+      const perCompound: Partial<Record<Compound, number>> = {};
+      for (const st of plan.stints) {
+        perCompound[st.compound] = (perCompound[st.compound] ?? 0) + 1;
+      }
+      const reused = (['S', 'M', 'H'] as const).filter((c) => {
+        const need = perCompound[c] ?? 0;
+        if (need <= 1) return false;
+        const have = inventory.cars
+          .flatMap((car) => car.sets)
+          .filter((s) => s.compound === c && s.available && (s.lifeRemaining ?? 0) > 0)
+          .length;
+        return need > have;
+      });
+      if (reused.length > 0) {
+        assumptions.push({
+          text: `Kho chỉ có ít bộ ${reused.join('/')} khả dụng hơn số stint của plan — model tạm giả định dùng lại bộ tốt nhất cho stint sau (giới hạn đã biết, chưa có dữ liệu phân bộ theo xe)`,
+        });
+        break;
+      }
+    }
+  }
+
   const top = ranked.slice(0, 6);
   const best = top[0] ?? null;
 
@@ -1415,6 +1556,22 @@ export function buildTyreLab(
     const longestStint = (s: StrategyResult): number => Math.max(...s.stints.map((st) => st.laps));
     let recommended = best;
     let tieNote = '';
+    /* v0.7.0 — the inventory story rides in the why: the plan's total is the
+       EXECUTION price (deg at the capped set lives), the rank was computed
+       on the model lives, and a faster-ranked plan that the garage cannot
+       run is named with its reason. */
+    let inventoryNote = '';
+    if (inventory && capTightens) {
+      const capTxt = (['S', 'M', 'H'] as const)
+        .filter((c) => invCap[c] < lives[c])
+        .map((c) => `${c} ${invCap[c]}/${lives[c]}`)
+        .join(' · ');
+      inventoryNote =
+        ` Tổng thời gian tính theo kho lốp của đội (deg trên đời bộ còn dùng được${capTxt ? ` — cap ${capTxt} vòng` : ''})${recommended.modelTimeS != null && Math.abs(recommended.modelTimeS - recommended.timeS) >= 0.05 ? `, thay vì ${recommended.modelTimeS.toFixed(1)}s theo đời lốp model` : ''}.`;
+      if (infeasibleNote) {
+        inventoryNote += ` Bỏ phương án nhanh hơn theo model vì kho không chạy được: ${infeasibleNote}.`;
+      }
+    }
     if (isTie && secondDistinct) {
       const gamePlanViable =
         gamePlan != null &&
@@ -1454,7 +1611,7 @@ export function buildTyreLab(
       id: `tyre-plan-${race.raceId}`,
       title: `Chiến thuật đề xuất: ${recommended.stints.map((s) => `${s.compound}(${s.laps})`).join(' → ')} — ${recommended.stops} pit`,
       action,
-      why: `Tổng thời gian mô hình ${recommended === best ? 'thấp nhất' : 'thấp nhất (cùng lâu)'} (${recommended.timeS.toFixed(1)}s: pace delta + deg + ${recommended.stops}×pit ${pitCostS.toFixed(1)}s). Lốp ${first.compound} sống ${lives[first.compound]} vòng (nguồn: ${lifeSource[first.compound]})${alt && !isTie ? altTail : ''}.${tieNote}${gamePlan ? ` Plan của game (${gamePlan.compounds.join('→')}, pit ${gamePlan.pitLaps.join(', ') || '—'}) tốn ${gamePlan.totalTimeS.toFixed(1)}s theo mô hình web.` : ''}`,
+      why: `Tổng thời gian mô hình ${recommended === best ? 'thấp nhất' : 'thấp nhất (cùng lâu)'} (${recommended.timeS.toFixed(1)}s: pace delta + deg + ${recommended.stops}×pit ${pitCostS.toFixed(1)}s). Lốp ${first.compound} sống ${lives[first.compound]} vòng (nguồn: ${lifeSource[first.compound]})${alt && !isTie ? altTail : ''}.${tieNote}${inventoryNote}${gamePlan ? ` Plan của game (${gamePlan.compounds.join('→')}, pit ${gamePlan.pitLaps.join(', ') || '—'}) tốn ${gamePlan.totalTimeS.toFixed(1)}s theo mô hình web.` : ''}`,
       confidence,
       evidence,
       assumptions,
@@ -1494,6 +1651,7 @@ export function buildTyreLab(
       practiceSessions: practicePace?.sessions ?? 0,
       gamePlan,
       readiness,
+      inventory,
     },
     confidence,
     evidence,

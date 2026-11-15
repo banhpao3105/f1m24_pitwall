@@ -315,6 +315,18 @@
       "ok": "Đã có dữ liệu.",
       "draft": "Nháp — chưa đủ dữ liệu, chờ quali"
     },
+    "inventory": {
+      "title": "Kho lốp trước race",
+      "cap": "cap thực thi {cap} vòng",
+      "setCol": "Bộ dùng",
+      "setFresh": "Mới ({life})",
+      "setUsed": "Đã dùng ({life})",
+      "fresh": "mới ×{n} (đời {life})",
+      "used": "đã dùng ×{n} (mòn {wear}, đời {life})",
+      "unverified": "chưa xác minh xe nào",
+      "teamLevel": "Kho lốp đang ở cấp đội — chưa tách được theo từng xe.",
+      "checkInGame": "Chưa xác minh được CarID nào là xe nào (kiểm tra trong game) — nhãn Xe 1/Xe 2 theo thứ tự đội."
+    },
     "hero": "Kế hoạch đề xuất",
     "heroPlan": "{plan} — {stops} pit{pits}",
     "timeline": {

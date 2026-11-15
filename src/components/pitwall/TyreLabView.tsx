@@ -271,7 +271,10 @@ export function TyreLabView({
                   <th className="py-1 pr-2 font-medium">{t('table.compound')}</th>
                   <th className="py-1 pr-2 font-medium">{t('table.laps')}</th>
                   <th className="py-1 pr-2 font-medium">{t('table.range')}</th>
-                  <th className="py-1 font-medium">{t('table.pit')}</th>
+                  <th className="py-1 pr-2 font-medium">{t('table.pit')}</th>
+                  {tyre.data.inventory ? (
+                    <th className="py-1 font-medium">{t('inventory.setCol')}</th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
@@ -288,6 +291,16 @@ export function TyreLabView({
                     <td className="py-1.5 font-mono text-amber">
                       {tyre.data.best!.pitLaps[i] != null ? `V${tyre.data.best!.pitLaps[i]}` : '—'}
                     </td>
+                    {/* v0.7.0 — which garage set the stint runs on */}
+                    {tyre.data.inventory ? (
+                      <td className="py-1.5 font-mono text-[10px] text-ink-soft">
+                        {s.setUsed && !s.setUsed.spare
+                          ? t('inventory.setFresh', { life: s.setUsed.life })
+                          : s.setUsed
+                            ? t('inventory.setUsed', { life: s.setUsed.life })
+                            : '—'}
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
@@ -304,6 +317,70 @@ export function TyreLabView({
               </div>
             ) : null}
           </section>
+
+          {/* v0.7.0 — the per-car garage inventory + the feasibility cap it
+              imposes on every plan (spec bước 3) */}
+          {tyre.data.inventory ? (
+            <section
+              aria-label={t('inventory.title')}
+              className="rounded-lg border border-line bg-panel p-4"
+              data-testid="tyre-inventory"
+            >
+              <header className="mb-3 flex flex-wrap items-center gap-2">
+                <span className="font-mono text-[11px] uppercase tracking-wider text-teal">{tSec('plan')}</span>
+                <h3 className="text-[15px] font-semibold text-ink">{t('inventory.title')}</h3>
+                <span className="rounded bg-raised px-1.5 py-0.5 font-mono text-[10px] text-ink-soft">
+                  {t('inventory.cap', {
+                    cap: (['S', 'M', 'H'] as const)
+                      .map((c) => `${c} ${tyre.data.inventory!.maxStint[c]}`)
+                      .join(' / '),
+                  })}
+                </span>
+              </header>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {tyre.data.inventory.cars.map((car) => (
+                  <div key={car.carId} className="rounded bg-surface p-3">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-medium text-ink" data-testid={`inventory-car-${car.carId}`}>
+                        {car.label}
+                      </span>
+                      {!car.seatVerified ? (
+                        <span className="rounded bg-amber/10 px-1.5 py-0.5 font-mono text-[9px] text-amber">
+                          {t('inventory.unverified')}
+                        </span>
+                      ) : null}
+                      <span className="ml-auto font-mono text-[10px] text-ink-faint">CarID {car.carId}</span>
+                    </div>
+                    <ul className="space-y-1">
+                      {tyre.data.inventory!.teamAggregate
+                        .filter((a) => ['S', 'M', 'H'].includes(a.compound))
+                        .map((a) => (
+                          <li key={a.compound} className="flex items-center gap-2 text-[11px] text-ink-soft">
+                            <CompoundBadge compound={a.compound as CompoundKey} size="sm" />
+                            <span className="font-mono">
+                              {t('inventory.fresh', { n: a.fresh, life: a.freshLife ?? '—' })}
+                            </span>
+                            <span className="font-mono text-ink-faint">
+                              {t('inventory.used', {
+                                n: a.used,
+                                wear: a.usedWear ? `${Math.round(a.usedWear[0] * 100)}–${Math.round(a.usedWear[1] * 100)}%` : '—',
+                                life: a.usedLife ? `${a.usedLife[0]}–${a.usedLife[1]}` : '—',
+                              })}
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+              {!tyre.data.inventory.perCar ? (
+                <p className="mt-2 text-[11px] text-amber">{t('inventory.teamLevel')}</p>
+              ) : null}
+              {tyre.data.inventory.cars.some((c) => !c.seatVerified) ? (
+                <p className="mt-2 text-[11px] text-ink-faint">{t('inventory.checkInGame')}</p>
+              ) : null}
+            </section>
+          ) : null}
 
           {/* evidence clock (v0.5.1 P2) — the source of every number behind
               the plan; add-only strip, no layout redesign */}

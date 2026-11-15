@@ -315,6 +315,18 @@
       "ok": "Data available.",
       "draft": "Draft — not enough data, waiting for qualifying"
     },
+    "inventory": {
+      "title": "Pre-race tyre inventory",
+      "cap": "execution cap {cap} laps",
+      "setCol": "Set used",
+      "setFresh": "Fresh ({life})",
+      "setUsed": "Used ({life})",
+      "fresh": "fresh ×{n} (life {life})",
+      "used": "used ×{n} (wear {wear}, life {life})",
+      "unverified": "seat unverified",
+      "teamLevel": "Inventory is team-level — per-car split unavailable.",
+      "checkInGame": "CarID→driver mapping unverified (check in game) — labels Xe 1/Xe 2 follow team order."
+    },
     "hero": "Recommended plan",
     "heroPlan": "{plan} — {stops} stop(s){pits}",
     "timeline": {

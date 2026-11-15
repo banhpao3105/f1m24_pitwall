@@ -292,6 +292,184 @@ function pickPracticeRace(model: SaveModel, raceId?: number): Race | null {
   return withPractice[0] ?? null;
 }
 
+/* ── tyre inventory (v0.7.0 step 3) ──────────────────────────────────────── */
+
+export type InventoryCompound = 'S' | 'M' | 'H' | 'I' | 'W';
+
+export interface InventorySet {
+  tyreSetId: number;
+  compound: InventoryCompound;
+  /** MIN of the four wheel-wear columns (0 fresh … 1 worn). */
+  wear: number;
+  /** EstimatedLapLifeRemaining (the game's own life estimate). */
+  lifeRemaining: number | null;
+  lapsCompleted: number;
+  sessionLastUsedIn: number | null;
+  /** AvailabilityState === 0 — see the availability note in buildTyreInventory. */
+  available: boolean;
+  /** Repo convention: FrontLeftWear >= 0.99 (unchanged since v0.6.x). */
+  fresh: boolean;
+}
+
+export interface InventoryCar {
+  carId: number;
+  /** Driver name when the seat mapping is verified, else "Xe 1/2". */
+  label: string;
+  driverId: number | null;
+  seatVerified: boolean;
+  sets: InventorySet[];
+}
+
+export interface InventoryCompoundAgg {
+  compound: InventoryCompound;
+  /** Fresh (wear ≥ 0.99) set count + average life across them. */
+  fresh: number;
+  freshLife: number | null;
+  /** Scrubbed/used set count + wear and remaining-life ranges. */
+  used: number;
+  usedWear: [number, number] | null;
+  usedLife: [number, number] | null;
+}
+
+export interface TyreInventory {
+  cars: InventoryCar[];
+  /** False when the CarID→team map itself is unverified (aggregate only). */
+  perCar: boolean;
+  teamAggregate: InventoryCompoundAgg[];
+  /**
+   * The feasibility cap per dry compound: min(model life, the best
+   * remaining life among AVAILABLE sets of the player's team). This — not
+   * the field-median model life — is what plans must physically survive.
+   */
+  maxStint: Record<'S' | 'M' | 'H', number>;
+  availableNote: 'state0' | 'none';
+}
+
+/**
+ * Availability rule (documented, spec bước 3): the save ships NO enum table
+ * for AvailabilityState (probed every *_Enum table on real 1.11 saves).
+ * Verified observations across 440-row allocations on two real saves:
+ *   (a) every fresh set (wear ≥ 0.99) except redundant duplicates carries
+ *       AvailabilityState 0;
+ *   (b) only states {0, 2} occur; state 2 marks sets already used in
+ *       practice/quali sessions;
+ *   (c) treating ONLY state 0 as race-available reproduces the owner's
+ *       verified Monza cap {S 24, M 36, H 55} — the excluded state-2 sets
+ *       never raise any verified cap (their lives are strictly below the
+ *       fresh-set lives of the same compound).
+ * The rule is deliberately conservative: a state-2 set is never proposed.
+ */
+export function buildTyreInventory(
+  model: SaveModel,
+  lives: Record<'S' | 'M' | 'H', number>,
+  raceId?: number,
+): TyreInventory | null {
+  if (model.tyres.length === 0) return null;
+  const carTeams = model.gridPenalties?.carTeams ?? [];
+  const playerTeamId = model.player.teamId;
+  const teamCars = carTeams.filter((c) => c.teamId === playerTeamId).map((c) => c.carId);
+  const perCar = model.gridPenalties?.carTeamsVerified !== false && teamCars.length === 2;
+
+  const wearOf = (t: (typeof model.tyres)[number]): number => {
+    const wheels = [t.frontLeftWear, t.frontRightWear, t.backLeftWear, t.backRightWear]
+      .filter((w): w is number => w != null);
+    return wheels.length > 0 ? Math.min(...wheels) : t.frontLeftWear;
+  };
+
+  const setsOf = (carId: number): InventorySet[] =>
+    model.tyres
+      .filter((t) => t.carId === carId)
+      .map((t) => ({
+        tyreSetId: t.tyreSetId,
+        compound: (ALLOC_COMPOUND[t.weekendTyreType] ?? 'H') as InventoryCompound,
+        wear: wearOf(t),
+        lifeRemaining: t.estimatedLapLifeRemaining ?? null,
+        lapsCompleted: t.lapsCompleted ?? 0,
+        sessionLastUsedIn: t.sessionLastUsedIn ?? null,
+        available: t.availabilityState === 0,
+        fresh: t.frontLeftWear >= 0.99,
+      }))
+      .sort((a, b) => a.tyreSetId - b.tyreSetId);
+
+  const carDrivers = resolveCarDrivers(model, raceId);
+  let carIndex = 0;
+  const cars: InventoryCar[] = teamCars.map((carId) => {
+    const mapped = carDrivers.byCar.get(carId) ?? null;
+    const idx = carIndex++;
+    return {
+      carId,
+      label: mapped?.verified
+        ? model.drivers.find((d) => d.staffId === mapped.driverId)?.fullName ?? `Xe ${idx + 1}`
+        : `Xe ${idx + 1}`,
+      driverId: mapped?.driverId ?? null,
+      seatVerified: mapped?.verified ?? false,
+      sets: setsOf(carId),
+    };
+  });
+
+  /* aggregate across the player's cars (fallback display + cap basis) */
+  const allSets = perCar ? cars.flatMap((c) => c.sets) : model.tyres.map((t) => ({
+    tyreSetId: t.tyreSetId,
+    compound: (ALLOC_COMPOUND[t.weekendTyreType] ?? 'H') as InventoryCompound,
+    wear: wearOf(t),
+    lifeRemaining: t.estimatedLapLifeRemaining ?? null,
+    lapsCompleted: t.lapsCompleted ?? 0,
+    sessionLastUsedIn: t.sessionLastUsedIn ?? null,
+    available: t.availabilityState === 0,
+    fresh: t.frontLeftWear >= 0.99,
+  }));
+  const teamAggregate: InventoryCompoundAgg[] = (['S', 'M', 'H', 'I', 'W'] as const)
+    .map((compound) => {
+      const rows = allSets.filter((s) => s.compound === compound);
+      const freshRows = rows.filter((s) => s.fresh);
+      const usedRows = rows.filter((s) => !s.fresh);
+      const avg = (xs: number[]): number | null =>
+        xs.length === 0 ? null : Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10;
+      const range = (xs: number[]): [number, number] | null =>
+        xs.length === 0 ? null : [Math.min(...xs), Math.max(...xs)];
+      return {
+        compound,
+        fresh: freshRows.length,
+        freshLife: avg(freshRows.map((s) => s.lifeRemaining ?? 0).filter((v) => v > 0)),
+        used: usedRows.length,
+        usedWear: range(usedRows.map((s) => s.wear)),
+        usedLife: range(usedRows.map((s) => s.lifeRemaining ?? 0).filter((v) => v > 0)),
+      };
+    });
+
+  /* the feasibility cap — best AVAILABLE life per compound, then floored by
+     the conservative aggregation across both cars (min over cars) */
+  const capFor = (compound: InventoryCompound): number => {
+    const perCarCaps = (perCar ? cars : []).map((car) => {
+      const usable = car.sets.filter(
+        (s) => s.compound === compound && s.available && (s.lifeRemaining ?? 0) > 0,
+      );
+      return usable.length > 0 ? Math.max(...usable.map((s) => s.lifeRemaining as number)) : 0;
+    });
+    const teamCap = (() => {
+      const usable = allSets.filter(
+        (s) => s.compound === compound && s.available && (s.lifeRemaining ?? 0) > 0,
+      );
+      return usable.length > 0 ? Math.max(...usable.map((s) => s.lifeRemaining as number)) : 0;
+    })();
+    const candidates = perCarCaps.length === 2 ? [...perCarCaps, teamCap] : [teamCap];
+    const best = Math.min(...candidates);
+    return best > 0 ? best : 0;
+  };
+  const maxStint: Record<'S' | 'M' | 'H', number> = { S: 0, M: 0, H: 0 };
+  for (const c of ['S', 'M', 'H'] as const) {
+    const cap = capFor(c);
+    maxStint[c] = cap > 0 ? Math.min(lives[c], Math.round(cap)) : lives[c];
+  }
+
+  return { cars, perCar, teamAggregate, maxStint, availableNote: 'state0' };
+}
+
+/** WeekendTyreType → compound — the v0.6.2-verified encoding (0=H…4=W). */
+export const ALLOC_COMPOUND: Record<number, InventoryCompound> = {
+  0: 'H', 1: 'M', 2: 'S', 3: 'I', 4: 'W',
+};
+
 /* ── weekend readiness (the strategy data gate) ─────────────────────────── */
 
 export type MissingDataKey = 'allocation' | 'practice' | 'quali';
