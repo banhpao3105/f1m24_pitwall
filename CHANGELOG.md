@@ -38,15 +38,32 @@ pre-race save4.sav, Day 46635, race 202, 53 vòng — và 2 save 1.11 khác dùn
   đã áp; `ServeInRace`/`ServeInSprint`) và enum gốc của game
   `Races_Enum_PenaltyType` (0 ExceededEngineLimit 5, 1 ERS 5, 2 Gearbox 5,
   3 CausingCollision 3, 4 MajorCollision 5, 5 ParcFermeBreach 0).
-  `Save_CarConfig` (22 dòng LoadoutID 0–21 → chỉ số đội F1 1..11 tuần tự)
-  là tín hiệu đối chiếu độc lập cho mapping CarID → đội.
+  `Save_CarConfig` (22 dòng) là tín hiệu đối chiếu độc lập cho mapping
+  CarID → đội. ~~22 dòng LoadoutID 0–21 → chỉ số đội F1 1..11 tuần tự~~
+  **[SỬA Ở 0.7.1]** mô tả trên SAI về shape thật: `LoadoutID` chỉ là
+  {0,1} THEO TỪNG ĐỘI (ghế 1/ghế 2), không phải CarID 0–21 toàn giải;
+  bảng chứa đúng 22 cặp {(t,0),(t,1) : t ∈ 1..11}. Công thức kiểm tra
+  cũ (floor(loadoutId/2)+1) tính ra 1 cho mọi dòng thật → fail ngay
+  dòng thứ 2 → `carTeamsVerified` luôn false → toàn bộ kho lốp từng xe
+  + cap của bước 3 rơi vào fallback. Đã sửa ở 0.7.1 bước 1 (kiểm tra
+  theo tập cặp).
 - **Suy grid (grid.engine):** mỗi tay đua lấy dòng `QualifyingStage` cao
   nhất → xếp (stage giảm dần, FinishingPos tăng dần) → áp phạt các dòng
   `Served = 0, ServeInRace = 1` (phạt vượt định mức/hội đồng/pit lane →
-  cuối đoàn; phạt tính place lấy số vòng từ enum của game). Đã đối chiếu
+  cuối đoàn; phạt tính place lấy số vòng từ enum của game). ~~Đã đối chiếu
   khớp `StartingPos` sau race 22/22 tay đua trên một chặng thật, gồm đúng
   2 ca bẫy của Monza: driver 102 quali P7 → grid P22 (phạt cuối đoàn,
-  dòng team 2) và driver 95 quali P8 → P7 (mọi xe dưới P7 tiến 1 bậc).
+  dòng team 2) và driver 95 quali P8 → P7 (mọi xe dưới P7 tiến 1 bậc).~~
+  **[RÚT LẠI ở 0.7.1]** Claim trên KHÔNG được kiểm chứng tại thời điểm
+  release 0.7.0: save Monza pre-race có 9 dòng Races_GridPenalties và TẤT
+  CẢ đều `Served = 1` (pending = 0) → grid suy được từ save này là thuần
+  thứ tự phân hạng (Piastri P7, O'Ward P21, Ricciardo P22). Cú phạt đẩy
+  Piastri về P22 chỉ tồn tại trong save SAU race (dòng 40: Team 2 Car 2,
+  Reason 5 ParcFerme, PitLaneStart 1). Người viết prompt v0.7.0 đã đọc
+  nhầm dòng phạt khi kiểm chứng, và test khóa claim dùng một fixture
+  PHẠT TỰ BỊA không có trong save thật. 0.7.1 sửa: fixture gắn nhãn
+  SYNTHETIC (chỉ phủ nhánh engine), thêm test khóa save thật (grid =
+  quali order), phạt trên ghế chưa xác minh không còn được áp (unresolved).
   `GridPenalty` trong Races_QualifyingResults = 0 trên mọi save thật —
   phạt thật nằm ở Races_GridPenalties.
 - **Mapping CarID → xe:** đội F1 (`Formula = 1`) xếp theo TeamID sở hữu
@@ -77,6 +94,13 @@ pre-race save4.sav, Day 46635, race 202, 53 vòng — và 2 save 1.11 khác dùn
   lives 26/39/60 là median TOÀN giải, còn kho của đội chỉ có bộ S/M/H
   mới đời 24/36/55 (một phần số cũ 51.7s nằm lại ở `modelTimeS` — giá
   xếp hạng theo đời model, hiển thị cạnh giá thực thi).
+  **[SỬA Ở 0.7.1]** con số 57.6s NÀY SAI trên save thật tại thời điểm
+  release 0.7.0: cap kho lốp không bao giờ được áp (bước 1 — công thức
+  CarConfig fail mọi save → fallback; bước 2 — fallback gộp TOÀN BỘ 440
+  bộ của giải thay vì 2 xe người chơi → cap = max đời toàn giải, không
+  bao giờ siết). Plan thực tế trên save Monza pre-race là 51.7s. 57.6s
+  chỉ đúng SAU khi 0.7.1 sửa cả 2 lỗi gốc (xác nhận lại bằng engine đã
+  sửa — test khóa Monza fixture + audit save thật; xem mục 0.7.1).
 - Plan 2 pit M→S→M: 54.5s theo cap kho lốp / 52.7s theo đời model (locked
   trong test — dùng ở bước 4).
 - Mỗi stint ghi rõ dùng bộ nào ("Mới (24)" / "Đã dùng (18.2)"); UI thêm
@@ -99,7 +123,12 @@ pre-race save4.sav, Day 46635, race 202, 53 vòng — và 2 save 1.11 khác dùn
   tuyệt đối (cùng multiset stint), khác compound xuất phát, pit cách nhau
   15 vòng. Plan 2 pit M→S→M (54.5s theo cap — nhanh hơn trên giấy)
   KHÔNG được chọn làm trail: pit đầu V21 chỉ cách V19 của lead 2 vòng
-  (< 3). Test khóa trường hợp này.
+  (< 3). Test khóa trường hợp này. **[SỬA Ở 0.7.1]** (i) grid P20/P21 ở
+  trên là grid SAU race suy từ một phạt TỰ BỊA trong fixture — save
+  pre-race thật cho P21/P22 (thứ tự phân hạng); (ii) tổng 57.6s sai trên
+  save thật tại 0.7.0 vì cap không bao giờ siết (xem sửa ở bước 3);
+  (iii) sau khi 0.7.1 sửa xong, lead/trail giữ S(19)→M(34) / M(34)→S(19)
+  57.6s trên grid đúng P21/P22.
 - Confidence tính riêng từng plan (giữ nguyên các pillar v0.6.1); khi 2
   plan hòa: ghi chú "Hòa về tổng thời gian mô hình — tách để tránh dẫm
   chân + hedge, không phải vì nhanh hơn".

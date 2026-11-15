@@ -670,7 +670,23 @@ describe('buildTyreLab — inventory re-pricing (Monza 53 laps, spec bước 3)'
  * ≥3-lap offset rule IS the handling. */
 
 describe('buildTyreLab carPlans — lead/trail split on the Monza grid', () => {
-  it("lead O'Ward P20 S(19)→M(34) V19; trail Ricciardo P21 M(34)→S(19) V34", () => {
+  it('REAL pre-race grid: lead O\'Ward P21, trail Ricciardo P22 (quali order — no pending penalty in this save)', () => {
+    const model = monzaModel(false);
+    model.gridPenalties!.rows = monzaRealPenaltyRows();
+    const lab = buildTyreLab(model, MONZA_RACE_ID);
+    const split = lab.data.carPlans!;
+    expect(split.lead.driverId).toBe(285);
+    expect(split.lead.gridPos).toBe(21); // quali order — NOT the post-race P20
+    expect(split.trail!.driverId).toBe(13);
+    expect(split.trail!.gridPos).toBe(22); // quali order — NOT the post-race P21
+    // same plans, same totals: the split logic is grid-position-agnostic
+    expect(split.lead.plan.stints.map((s) => `${s.compound}(${s.laps})`)).toEqual(['S(19)', 'M(34)']);
+    expect(split.lead.plan.timeS).toBeCloseTo(57.6, 1);
+    expect(split.trail!.plan.stints.map((s) => `${s.compound}(${s.laps})`)).toEqual(['M(34)', 'S(19)']);
+    expect(split.trail!.plan.timeS).toBeCloseTo(57.6, 1);
+  });
+
+  it("SYNTHETIC penalty grid: lead O'Ward P20 S(19)→M(34) V19; trail Ricciardo P21 M(34)→S(19) V34", () => {
     const lab = buildTyreLab(monzaModel(), MONZA_RACE_ID);
     const split = lab.data.carPlans;
     expect(split).not.toBeNull();
