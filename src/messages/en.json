@@ -345,7 +345,10 @@
       "pitLaps": "pit {laps}",
       "windows": "windows {windows}",
       "loadoutsDiffer": "The two cars selected different plans — showing LoadoutID 0.",
-      "teamLevel": "Team level — the LoadoutID (0/1) → car mapping is unverified. Source: Save_PlayerStrategyStints."
+      "teamLevel": "Team level — the LoadoutID (0/1) → car mapping is unverified. Source: Save_PlayerStrategyStints.",
+      "totalTime": "modelled total {time}s",
+      "webFaster": "web {delta}s faster",
+      "webSlower": "web {delta}s slower"
     },
     "compareTitle": "Compound comparison",
     "table": {

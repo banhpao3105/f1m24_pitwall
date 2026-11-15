@@ -81,6 +81,13 @@ công thức xếp hạng, không đổi số liệu practice thô.
   save (Miami 2027: tổng 20,435 thấp nhất 11 đội, bank 674.59 duy nhất > 0),
   không hardcode; key i18n mới `research.expertiseHintPlayer` (vi/en);
   bảng 2 cột không đổi.
+- **Panel "Plan của game" hiện key i18n thô + 3 console error** (phát hiện
+  khi verify trình duyệt ở 0.6.3, tồn từ v0.6.1 bước 3): component dùng
+  `tyres.gamePlan.totalTime` / `webFaster` / `webSlower` nhưng 3 key này
+  chưa từng có trong vi/en — chip "tổng {time}s mô hình" và dòng so sánh
+  WEB vs GAME render nguyên chữ key kèm `IntlError: MISSING_MESSAGE` mỗi
+  lần mở Tyre Lab. Đã bổ sung đủ 3 key (vi/en); không đổi layout, không
+  đổi số liệu (tổng thời gian mô hình của game plan từ v0.6.1 giữ nguyên).
 
 ### Đính chính số liệu 0.6.2 (hệ quả của lives thật — xếp hạng không đổi)
 - CHANGELOG 0.6.2 ghi "Silverstone: best S→M→S **75.7s**" — đó là số với
