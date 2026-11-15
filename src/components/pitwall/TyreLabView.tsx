@@ -158,7 +158,9 @@ export function TyreLabView({
 
   const wetPlan = useMemo(() => {
     if (!rainOn || !tyre) return null;
-    return buildWetPlan(model, tyre.data.laps);
+    /* v0.9.1 — the wet plan obeys the same set-assignment law: the I/W
+       stints must be runnable on each car's OWN stock. */
+    return buildWetPlan(model, tyre.data.laps, tyre.data.inventory);
   }, [model, rainOn, tyre]);
 
   if (!race) {
@@ -351,13 +353,16 @@ export function TyreLabView({
                     <td className="py-1.5 font-mono text-amber">
                       {heroPitLaps[i] != null ? `V${heroPitLaps[i]}` : '—'}
                     </td>
-                    {/* v0.7.0 — which garage set the stint runs on */}
+                    {/* v0.7.0 — which garage set the stint runs on.
+                        v0.9.1 — the set id comes from the REAL assignment
+                        (longest stint ↔ longest-life set), so the UI names
+                        the physical set (#8) instead of guessing. */}
                     {tyre.data.inventory ? (
                       <td className="py-1.5 font-mono text-[10px] text-ink-soft">
                         {s.setUsed && !s.setUsed.spare
-                          ? t('inventory.setFresh', { life: s.setUsed.life })
+                          ? t('inventory.setFresh', { id: s.setUsed.tyreSetId, life: s.setUsed.life })
                           : s.setUsed
-                            ? t('inventory.setUsed', { life: s.setUsed.life })
+                            ? t('inventory.setUsed', { id: s.setUsed.tyreSetId, life: s.setUsed.life })
                             : '—'}
                       </td>
                     ) : null}
@@ -511,7 +516,10 @@ export function TyreLabView({
                     <th className="py-1 pr-2 font-medium">{t('table.compound')}</th>
                     <th className="py-1 pr-2 font-medium">{t('table.laps')}</th>
                     <th className="py-1 pr-2 font-medium">{t('table.range')}</th>
-                    <th className="py-1 font-medium">{t('table.pit')}</th>
+                    <th className="py-1 pr-2 font-medium">{t('table.pit')}</th>
+                    {tyre.data.inventory ? (
+                      <th className="py-1 font-medium">{t('inventory.setCol')}</th>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -525,11 +533,22 @@ export function TyreLabView({
                       <td className="py-1.5 pr-2 font-mono text-ink-soft">
                         {s.fromLap}–{s.toLap}
                       </td>
-                      <td className="py-1.5 font-mono text-amber">
+                      <td className="py-1.5 pr-2 font-mono text-amber">
                         {tyre.data.carPlans!.trail!.plan.pitLaps[i] != null
                           ? `V${tyre.data.carPlans!.trail!.plan.pitLaps[i]}`
                           : '—'}
                       </td>
+                      {/* v0.9.1 — the trail stint's own set (from the trail
+                          car's garage when the seats are verified) */}
+                      {tyre.data.inventory ? (
+                        <td className="py-1.5 font-mono text-[10px] text-ink-soft">
+                          {s.setUsed && !s.setUsed.spare
+                            ? t('inventory.setFresh', { id: s.setUsed.tyreSetId, life: s.setUsed.life })
+                            : s.setUsed
+                              ? t('inventory.setUsed', { id: s.setUsed.tyreSetId, life: s.setUsed.life })
+                              : '—'}
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
