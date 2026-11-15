@@ -12,7 +12,8 @@
     "accept": "Accepts .sav files only (F1 Manager 23/24)",
     "sizeLimit": "500 MB limit",
     "cta": "Choose a .sav file",
-    "parsing": "Parsing your save locally…"
+    "parsing": "Parsing your save locally…",
+    "pickerErrorTitle": "Could not open the file picker"
   },
   "progress": {
     "title": "Parsing save",

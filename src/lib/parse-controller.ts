@@ -9,7 +9,7 @@
 
 import { createParseSession, type ParseSession } from '@/parser/worker/parse-client';
 import { useSaveStore } from '@/store/save.store';
-import { putSave, setLastActiveSaveId } from '@/lib/save-db';
+import { putSave, setLastActiveSaveId, setLastActiveHandle } from '@/lib/save-db';
 import { toast } from '@/hooks/use-toast';
 
 const MAX_FILE_BYTES = 500 * 1024 * 1024; // 500 MB (docs/05 §9.5)
@@ -26,7 +26,17 @@ export function cancelParseFlow(): void {
   useSaveStore.getState().reset();
 }
 
-export async function startParseFlow(file: File): Promise<void> {
+/**
+ * Parse a .sav file end-to-end. v0.8.1: when the caller holds a
+ * FileSystemFileHandle (Chromium picker path), it is persisted alongside the
+ * model so a plain F5 can re-read the file from disk. Key rule: the handle is
+ * ONLY written when this selection HAS one — a drag-dropped file must never
+ * clobber an already-granted re-read handle.
+ */
+export async function startParseFlow(
+  file: File,
+  handle?: FileSystemFileHandle,
+): Promise<void> {
   const store = useSaveStore.getState();
 
   if (!file.name.toLowerCase().endsWith('.sav')) {
@@ -53,8 +63,15 @@ export async function startParseFlow(file: File): Promise<void> {
     // Model transferred out of the worker — free the WASM heap.
     worker.terminate();
     try {
-      await putSave(model);
+      await putSave(model, file.lastModified);
       await setLastActiveSaveId(model.meta.id);
+      if (handle) {
+        await setLastActiveHandle({
+          handle,
+          saveId: model.meta.id,
+          fileName: file.name,
+        });
+      }
     } catch (err) {
       // Persistence is best-effort (quota / private mode); the parse result
       // stays valid for this session.

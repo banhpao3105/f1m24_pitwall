@@ -12,7 +12,8 @@
     "accept": "Chỉ nhận file .sav (F1 Manager 23/24)",
     "sizeLimit": "Giới hạn 500 MB",
     "cta": "Chọn file .sav",
-    "parsing": "Đang phân tích save trên máy bạn…"
+    "parsing": "Đang phân tích save trên máy bạn…",
+    "pickerErrorTitle": "Không mở được hộp chọn file"
   },
   "progress": {
     "title": "Đang parse save",

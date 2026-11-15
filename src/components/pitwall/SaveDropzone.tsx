@@ -6,12 +6,19 @@
  * Parse orchestration lives in src/lib/parse-controller.ts (module scope —
  * survives the dropzone unmounting when status flips to 'parsing').
  * The file NEVER leaves the device.
+ *
+ * v0.8.1: on Chromium the click path opens `showOpenFilePicker` instead of
+ * `<input type=file>` so the FileSystemFileHandle can be kept — that is what
+ * lets a plain F5 re-read the save from disk later. Drag-and-drop keeps the
+ * plain File path (no handle — an explicit <input> fallback stays for
+ * browsers without the picker API).
  */
 
 import { useCallback, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Upload } from 'lucide-react';
 import { startParseFlow } from '@/lib/parse-controller';
+import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
 export function SaveDropzone() {
@@ -21,6 +28,40 @@ export function SaveDropzone() {
   const onFile = useCallback((file: File | undefined | null) => {
     if (file) void startParseFlow(file);
   }, []);
+
+  /**
+   * Click path: prefer the File System Access picker (keeps a re-readable
+   * handle) when the browser has it; otherwise fall back to the hidden
+   * <input>. User cancel (AbortError) is silent — no toast, no state change.
+   */
+  const openPicker = useCallback(() => {
+    const picker = window.showOpenFilePicker;
+    if (typeof picker !== 'function') {
+      document.getElementById('sav-input')?.click();
+      return;
+    }
+    void (async () => {
+      try {
+        const [handle] = await picker({
+          types: [
+            {
+              description: 'F1 Manager save',
+              accept: { 'application/octet-stream': ['.sav'] },
+            },
+          ],
+          multiple: false,
+        });
+        const file = await handle.getFile();
+        void startParseFlow(file, handle);
+      } catch (err) {
+        if ((err as DOMException | undefined)?.name === 'AbortError') return;
+        toast({
+          title: t('pickerErrorTitle'),
+          description: (err as Error | undefined)?.message ?? String(err),
+        });
+      }
+    })();
+  }, [t]);
 
   return (
     <div
@@ -44,11 +85,11 @@ export function SaveDropzone() {
       role="button"
       tabIndex={0}
       aria-label={t('title')}
-      onClick={() => document.getElementById('sav-input')?.click()}
+      onClick={openPicker}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          document.getElementById('sav-input')?.click();
+          openPicker();
         }
       }}
       data-testid="save-dropzone"
