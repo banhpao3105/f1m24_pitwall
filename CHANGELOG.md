@@ -2,6 +2,110 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.8.0] — Đánh giá sức mạnh xe: aero theo từng bộ phận, % so với mạnh nhất / trung bình grid, head-to-head
+
+Tính năng mới (minor bump) theo prompt v0.8.0. 3 bước + release, mỗi bước 1
+commit + push + CI xanh. Nguyen muốn biết xe mình mạnh/yếu ở từng bộ phận
+khí động học so với cả grid — đã kiểm chứng dữ liệu CÓ đủ trên save thật,
+với 3 giới hạn trung thực khóa lại ngay từ đầu (xem "3 giới hạn").
+
+### Added — Bước 1: parser loadout + engine sức mạnh aero (`5a8dce8`)
+
+- **Sửa 2 lỗi parser phát hiện khi nghiên cứu (cả 2 đều vô hình vì chưa có
+  code nào dùng):**
+  - `Parts_CarLoadout` bị map theo cột `CarID` — bảng thật (F1M24 1.11.0,
+    đã introspect) là `(TeamID, LoadoutID, PartType, DesignID, ItemID)`,
+    KHÔNG có `CarID` ⇒ `model.parts.loadouts` luôn rỗng trên save thật.
+    `CarLoadoutRow` đổi thành `{teamId, loadoutId, partType, designId,
+    itemId}`; hàng `DesignID` NULL được GIỮ (fallback cần nó).
+  - Cột chỉ số thật là `PartStat` (số) — danh sách candidate cũ không có
+    tên này nên mọi stat đều dán nhãn rác "stat-1", mất hết định danh chỉ
+    số. Giờ resolve qua enum của chính save (`Parts_Enum_Stats`, Value →
+    Name) đúng mẫu `PartType`. Thêm `PartDesign.dayCompleted`
+    (`Parts_Designs.DayCompleted`) cho bộ lọc fallback.
+  - Kiểm chứng live (`scripts/audit-carstrength-v080.ts` trên
+    `upload/save1.sav`): loadouts **198 hàng** (trước: 0); L1 đội người
+    chơi = Body 724 / FrontWing 722 / RearWing 723 / SidePods 650 / Floor
+    692 (đúng DesignID đã xác minh).
+- **Engine mới `car-strength.engine.ts`** (`buildCarStrength`): với mỗi bộ
+  phận aero (Body, FrontWing, RearWing, SidePods, Floor — enum 3–7) × mỗi
+  chỉ số aero mà bộ phận đó có thật (8 chỉ số: AirFlowFront,
+  AirFlowTolerance, DRSDelta, DragReduction, Low/Med/HighSpeedDownforce,
+  AirFlowMiddle): `playerValue` + `playerSource` ('installed' | 'latest' |
+  'unknown'), `bestTeamId/Name/Value` (**mạnh nhất TỪNG chỉ số**), `mean`,
+  `pctBest`, `pctMean` (làm tròn 1 chữ số thập phân), `rivalValue` cho
+  head-to-head (mặc định Williams 6, đổi được qua tham số). Quy tắc xác
+  định linh kiện hiện tại (khóa): L1 đang gắn → fallback thiết kế mới nhất
+  **đã hoàn thành** (`DayCompleted > 0`, max day, có nhãn 'latest') → không
+  có thì 'unknown', không điền 0. Chỉ tính 11 đội F1 (`formula === 1`,
+  Prema/F2 loại). Giá trị từ cột `Value` của `Parts_Designs_StatValues`
+  (thang ~0–1000, cùng bộ phận + cùng chỉ số mới so sánh được).
+- **Test khóa bảng DoD 22 hàng** (save post-Monza Day 46636 không có trong
+  sandbox — khóa bằng fixture từ số đã xác minh, đúng mẫu v0.7.x): 22/22
+  hàng khớp giá trị bạn / mạnh nhất (tên + số) / TB grid / Williams; % lệch
+  ≤ 0.1 trên 2 hàng (làm tròn kép — tài liệu hóa trong test), các hàng
+  headline đúng tuyệt đối (32.4%, 36.9%, 69.2%, 75.4%, 96.4%, 102.6%); 3
+  trường hợp fallback thật (Red Bull FrontWing → 763 day 46492, Red Bull
+  RearWing → 840 day 46546, Williams SidePods → 843 day 46547) ra nguồn
+  'latest' đúng DesignID — và thiết kế fallback CÓ THỂ là "mạnh nhất"
+  (Red Bull RearWing DRSDelta 815.0, nhãn nguồn ở cả bảng lẫn UI); 1 trường
+  hợp `unknown` (bỏ cả loadout lẫn design hoàn thành) → hàng đó `unknown`,
+  KHÔNG có số. Trên save post-Monza, xe bạn **không bao giờ là mạnh nhất**
+  (AI mạnh hơn ở save đó) mà **vượt TB grid ở đúng 4 chỉ số** (FW
+  AirFlowFront 102.6%, FW Low DF 102.4%, RW DRSDelta 101.7%, RW
+  DragReduction 102.5%). Suite: 356/356, build 4/4.
+
+### Added — Bước 2: section "Sức mạnh khí động học" trong Car Lab (`180fba7`)
+
+- Đặt ngay sau section League. Bảng nhóm theo 5 bộ phận, mỗi hàng một chỉ
+  số: chỉ số | xe bạn (giá trị + nhãn nguồn đang gắn / thiết kế mới nhất /
+  không rõ) | mạnh nhất (tên đội + giá trị; nhãn nguồn khi dùng fallback) |
+  % mạnh nhất | % TB grid | đối thủ (giá trị + delta = rival − player, dấu
+  +/−). Hàng % mạnh nhất < 60% tô đỏ (chỉ trình bày, không chấm điểm).
+- Biểu đồ grouped-bar (`CarStrengthChart`): 2 cột mỗi hàng (% so với mạnh
+  nhất — teal người chơi, đỏ khi yếu; % so với TB grid — xám) + đường mốc
+  vàng 100% = mạnh nhất từng chỉ số. Lấy ĐÚNG số từ cùng engine output với
+  bảng (không tính lại — test khóa).
+- Head-to-head: dropdown 10 đội F1 còn lại (mặc định Williams), đổi đối thủ
+  tính lại engine trong bộ nhớ (không nạp lại save); dòng "Bảng đội" hiện
+  khoảng cách điểm thật (Williams 95 vs CustomTeam 92 trên save DoD; trên
+  save kiểm chứng live: Williams 26 vs CustomTeam 20). Cột bạn/mạnh nhất/TB
+  không đổi khi đổi đối thủ.
+- Ghi chú trung thực (bắt buộc, vi + en): "Mạnh nhất" là mạnh nhất TỪNG
+  chỉ số; hàng fallback có nhãn; save không có công thức đổi aero → thời
+  gian vòng nên % là % GIÁ TRỊ CHỈ SỐ, không phải % thời gian vòng — pace
+  đã quan sát nằm ở section League ngay trên (không đổi).
+- **Kiểm chứng live trên save thật** (`upload/save1.sav`, day 46495 — save
+  post-Monza không có trong sandbox): 22 hàng render đúng, giá trị xe bạn
+  khớp bảng DoD 22/22, đổi đối thủ sang Red Bull cập nhật đúng cột đối thủ
+  theo engine (774.7 trên save này), i18n VI/EN đều hoạt động, các section
+  League / Durability / Dev queue không đổi, 0 console error. Hình học bar
+  của biểu đồ xác minh qua DOM (44/44 bar visible) — ảnh chụp full-page co
+  chart về 0 trong quá trình capture (artifact của tool, không phải app;
+  0 cảnh báo trên load sạch). Screenshot trong `.shots/`.
+
+### Added — Bước 3: release
+
+- `package.json` 0.7.2 → **0.8.0**; SW cache `pitwall-v0.8.0`.
+
+### 3 giới hạn trung thực (khóa từ đầu, không phải thiếu sót)
+
+1. **% theo từng chỉ số, không quy đổi ra thời gian vòng** — save không
+   chứa công thức đổi chỉ số aero ra giây/vòng; mọi % trong tính năng này
+   là % giá trị chỉ số (so với mạnh nhất / TB grid), UI ghi rõ.
+2. **Fallback có nhãn** — hàng nào (của bạn, của đội mạnh nhất, của đối
+   thủ) dùng thiết kế mới nhất đã hoàn thành thay vì linh kiện đang gắn
+   đều hiện nhãn "thiết kế mới nhất".
+3. **Không có điểm tổng hợp** — CẤM gộp chỉ số bằng trọng số tự chọn
+   (quy tắc từ v0.5.6): mỗi chỉ số một hàng, "mạnh nhất" tính theo từng
+   chỉ số, không xếp hạng chung.
+
+### Out of scope (để v0.8.1+)
+
+Powertrain (Engine/ERS/Gearbox) + Suspension cùng cơ chế; gợi ý "nên phát
+triển bộ phận nào trước"; aero theo từng đường đua
+(`Parts_RecommendedTrackStats`).
+
 ## [0.7.2] — Card kho lốp từng xe hiện số của ĐÚNG xe đó (không phải số cả đội)
 
 Một bước + release theo prompt v0.7.2. Bối cảnh: kiểm chứng v0.7.1 trên cây
