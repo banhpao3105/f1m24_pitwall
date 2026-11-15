@@ -2,6 +2,78 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.7.2] — Card kho lốp từng xe hiện số của ĐÚNG xe đó (không phải số cả đội)
+
+Một bước + release theo prompt v0.7.2. Bối cảnh: kiểm chứng v0.7.1 trên cây
+đã push (`audit-monza-v071.log`, live UI) thấy engine pass 5/5 DoD trên save
+Monza thật (`carTeamsVerified=true`, cap {S 24, M 36, H 55}, grid theo phân
+hạng, 57.6s/57.6s/75.0s, practice 3=3, delta M +0.03s), test 326/326, CI
+xanh — nhưng còn **1 lỗi hiển thị cùng họ với lỗi fallback của 0.7.0** (hiện
+sai phạm vi, chỉ xuống một cấp: từ toàn giải thành cả đội).
+
+### Fixed — card từng xe aggregate từ `car.sets` của chính xe đó (`d00066a`)
+
+- **Bug (xác minh live + trong code):** section "Kho lốp trước race" render
+  2 card Xe 1 (CarID 20) / Xe 2 (CarID 21) — nhưng cả 2 card đều hiện **số
+  của cả đội**: S mới ×6 · đã dùng ×10. Số thật từng xe trong save Monza
+  pre-race: mỗi xe chỉ có **S mới ×3 · đã dùng ×5**. Nguyên nhân:
+  `TyreLabView.tsx:391` — trong `inventory.cars.map(...)` (card đã có đúng
+  header `car.label` + `CarID`), danh sách lốp lại render từ
+  `inventory.teamAggregate` thay vì `car.sets` của chính xe đó. Engine đã
+  có đủ dữ liệu từng xe (`InventoryCar.sets`, `perCarMaxStint` đúng cả 2
+  xe) — lỗi thuần view.
+- **Sửa (engine + view, không đổi số engine nào):** tách công thức
+  aggregate trong `buildTyreInventory` thành helper dùng chung
+  `aggregateSets(sets)` — cùng công thức cho cả `teamAggregate` (hợp 2 xe
+  người chơi, giữ nguyên là cơ sở của cap) lẫn field mới
+  `InventoryCar.aggregate` (tính từ `car.sets`). View: từng card render
+  `car.aggregate` (lọc S/M/H như cũ); `teamAggregate` chỉ hiện **MỘT lần**
+  ngoài vòng lặp card, dòng "Cả đội ({n} xe) — cơ sở của cap" (i18n mới
+  vi + en), CẤM render teamAggregate trong card xe. Định dạng hiển thị
+  thu gọn khoảng suy biến (min = max → một giá trị: "mòn 74%, đời 41",
+  "đời 20") đúng chuỗi DoD. Không đổi: `maxStint`, `perCarMaxStint`, cap,
+  plan, delta, confidence, pit cost 20.7s, định nghĩa `fresh`/`wear`/
+  `available`.
+- **Test khóa lỗi (red → green):** component test
+  (`tests/components/v072-tyre-inventory.test.tsx`) chạy TRƯỚC khi sửa và
+  FAIL đúng lỗi trên code cũ — card Xe 1 hiện số đội ("mới ×2 (đời 55) ·
+  đã dùng ×2 (mòn 74–74%, đời 41–41)") thay vì số xe ("mới ×3 (đời 24) ·
+  đã dùng ×5 (mòn 65–90%, đời 16–22)"); sau sửa pass, kèm invariant
+  "mới ×6 (đời 24)" xuất hiện đúng 1 lần toàn section và không nằm trong
+  card nào. Fixture engine đổi sang **số từng xe thật của Monza** (2 xe
+  KHÁC nhau, xem bảng dưới) — khóa per-car aggregate, team union, và cap
+  không đổi {S 24, M 36, H 55} per car lẫn toàn đội. Suite: **333/333**,
+  build 4/4.
+- **Số liệu từng xe (Monza pre-race, save4.sav, Day 46635, race 202 —
+  wear = min 4 bánh, mới = FrontLeftWear ≥ 0.99, lock trong test):**
+  - Xe 1 (CarID 20): S mới ×3 (đời 24) · đã dùng ×5 (mòn 65–90%, đời
+    16–22); M mới ×1 (đời 36) · đã dùng ×2 (mòn 60–82%, đời 22–29); H mới
+    ×1 (đời 55) · đã dùng ×1 (mòn 74%, đời 41).
+  - Xe 2 (CarID 21): S mới ×3 (đời 24) · đã dùng ×5 (mòn 54–90%, đời
+    13–22); M mới ×1 (đời 36) · đã dùng ×2 (mòn 55–57%, đời 20 — cả 2 bộ
+    đều đời 20); H mới ×1 (đời 55) · đã dùng ×1 (mòn 74%, đời 41).
+  - Cả đội (đúng như cũ, giờ ghi nhãn rõ, hiện 1 lần): S mới ×6 (đời 24) ·
+    đã dùng ×10 (mòn 54–90%, đời 13–22); M mới ×2 (đời 36) · đã dùng ×4
+    (mòn 55–82%, đời 20–29); H mới ×2 (đời 55) · đã dùng ×2 (mòn 74%,
+    đời 41).
+- **Kiểm chứng live UI trên save thật** (`upload/save1.sav` — Bahrain
+  pre-race, race 193, day 46495, qua trình duyệt thật): 2 card hiện số
+  KHÁC nhau đúng số engine (Xe 1: S mới ×2 · đã dùng ×6 (mòn 69–92%, đời
+  23–31); Xe 2: S mới ×3 · đã dùng ×5 (mòn 71–92%, đời 23–30) — nếu card
+  vẫn hiện số đội thì 2 card sẽ giống hệt nhau "mới ×5"); dòng cả đội
+  (S mới ×5 · đã dùng ×11) đúng 1 lần; cap header S 33 / M 46 / H 59;
+  0 console error. Script đối chiếu: `scripts/audit-inventory-v072.ts`
+  (in aggregate từng xe từ engine trên cùng save để so 1:1 với UI).
+
+### Tồn đọng (đã ghi nhận khi kiểm chứng, KHÔNG sửa trong 0.7.2)
+
+- Mapping ghế lái CarID → tay đua: `resolveCarDrivers` không map được ghế
+  nào trên save thật (model có 12 tay đua mang teamId 32 từ
+  `Staff_Contracts` lịch sử; guard `drivers.length !== 2` bỏ qua cả đội —
+  fail-safe, nhưng đường ghế-xác-minh chưa chạy được trên save thật). Cần
+  thiết kế riêng (vd chỉ xét tay đua có mặt ở quali/practice chặng đó) —
+  để bản sau.
+
 ## [0.7.1] — Sửa 2 lỗi DoD của 0.7.0 (grid + kho lốp) + thống nhất số liệu practice
 
 Năm bước theo prompt v0.7.1. Bối cảnh: kiểm chứng v0.7.0 trên cây đã push
