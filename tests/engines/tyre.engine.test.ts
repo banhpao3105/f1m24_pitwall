@@ -97,9 +97,11 @@ describe('stintDegPenalty', () => {
     expect(stintDegPenalty('M', 19, 22)).toBeCloseTo(
       2.0 * (19 / 3) * Math.pow(19 / 22, 2) + 0.02 * Math.pow(19 - 0.6 * 22, 2), 6,
     );
-    // H 35/53: overflow 35 − 31.8 = 3.2 → 5.0×3.2² = 51.2 (the Silverstone kill)
-    expect(stintDegPenalty('H', 35, 53)).toBeCloseTo(
-      3.0 * (35 / 3) * Math.pow(35 / 53, 2) + 5.0 * Math.pow(35 - 0.6 * 53, 2), 6,
+    // H 35/43: overflow 35 − 0.6×43 = 9.2 → 0.55×9.2² = 46.55 (v0.6.3
+    // retune: the real save life is 43 — the old life 53 was ratio-derived,
+    // which let 5.0×3.2² look sane while the real overflow priced H35 at 446s)
+    expect(stintDegPenalty('H', 35, 43)).toBeCloseTo(
+      3.0 * (35 / 3) * Math.pow(35 / 43, 2) + 0.55 * Math.pow(35 - 0.6 * 43, 2), 6,
     );
     // under the cliff threshold: base only
     expect(stintDegPenalty('S', 0, 14)).toBe(0);
@@ -640,7 +642,8 @@ describe('v0.6.2 WeekendTyreType mapping (verified on the Silverstone save)', ()
 
   it('reads M/H life caps from types 1/0 — never the Inter/Wet medians', () => {
     const caps = getCompoundCaps(buildSilverstoneModel());
-    expect(caps).toEqual({ S: 23, M: 35, H: 53 });
+    // v0.6.3: medians of the real save — M 34 / H 43 (53 was ratio-derived)
+    expect(caps).toEqual({ S: 23, M: 34, H: 43 });
   });
 
   it('wet lives come from types 3/4 (I 48 / W 62 medians of the real save)', () => {
@@ -692,8 +695,8 @@ describe('v0.6.1 buildTyreLab — Silverstone forced-delta honesty', () => {
     const lab = buildTyreLab(buildSilverstoneModel(), SILVERSTONE_RACE_ID);
     const data: TyreLab = lab.data;
 
-    // lives straight from the save's allocation
-    expect(data.lives).toEqual({ S: 23, M: 35, H: 53 });
+    // lives straight from the save's allocation (v0.6.3 real medians)
+    expect(data.lives).toEqual({ S: 23, M: 34, H: 43 });
     expect(data.lifeSource).toEqual({ S: 'allocation', M: 'allocation', H: 'allocation' });
     expect(data.practiceSessions).toBe(1);
 
@@ -765,19 +768,23 @@ describe('v0.6.1 buildTyreLab — Silverstone forced-delta honesty', () => {
 
 import { buildBahrainModel, BAHRAIN_RACE_ID } from '../helpers/bahrain-fixture';
 
-describe('v0.6.1 cliff — Silverstone (race 199, 52 laps, lives 23/35/53)', () => {
+describe('v0.6.1 cliff — Silverstone (race 199, 52 laps, lives 23/34/43)', () => {
   const lab = buildTyreLab(buildSilverstoneModel(), SILVERSTONE_RACE_ID);
   const data: TyreLab = lab.data;
 
-  it('prices the H 35-lap stint at ≥ 40s of wear (was 9.2s)', () => {
-    expect(stintDegPenalty('H', 35, 53)).toBeGreaterThanOrEqual(40);
+  it('prices the H 35-lap stint in the realistic 50–90s band (v0.6.3: ~70s)', () => {
+    // real life 43 → overflow 9.2 laps past the 0.6×43 cliff; the old
+    // life 53 (ratio-derived) let 5.0 price this stint at 446s
+    const deg = stintDegPenalty('H', 35, 43);
+    expect(deg).toBeGreaterThanOrEqual(50);
+    expect(deg).toBeLessThanOrEqual(90);
   });
 
   it('costs Ricciardo\u2019s S(17)→H(35) ≥ 100s in model time', () => {
     const total =
       SILVERSTONE_DELTAS.H * 35 +
       stintDegPenalty('S', 17, 23) +
-      stintDegPenalty('H', 35, 53) +
+      stintDegPenalty('H', 35, 43) +
       20.7;
     expect(total).toBeGreaterThanOrEqual(100);
   });
@@ -788,12 +795,14 @@ describe('v0.6.1 cliff — Silverstone (race 199, 52 laps, lives 23/35/53)', () 
     for (const s of data.strategies) {
       expect(s.timeS).toBeGreaterThanOrEqual(data.best!.timeS);
     }
-    // the ranked S→H (any split) sits clearly behind
+    // the optimizer's best S→H (any split) sits clearly behind: ≥ 83s total
+    // and ≥ 7s slower than the suggestion (v0.6.3 audit: S23+H29 = 90.9s)
     const sh = evaluateStrategy(
       ['S', 'H'], SILVERSTONE_LAPS,
-      { S: 23, M: 35, H: 53 }, SILVERSTONE_DELTAS, 20.7,
+      { S: 23, M: 34, H: 43 }, SILVERSTONE_DELTAS, 20.7,
     )!;
-    expect(sh.timeS).toBeGreaterThan(data.best!.timeS + 1);
+    expect(sh.timeS).toBeGreaterThanOrEqual(83);
+    expect(sh.timeS).toBeGreaterThan(data.best!.timeS + 7);
   });
 
   it('keeps the game plan readable and order-matched', () => {
@@ -804,27 +813,27 @@ describe('v0.6.1 cliff — Silverstone (race 199, 52 laps, lives 23/35/53)', () 
   });
 });
 
-describe('v0.6.1 cliff — Bahrain backtest (57 laps, lives 33/50/77)', () => {
+describe('v0.6.3 Bahrain backtest (57 laps, real lives 33/46/59, field 3 stops)', () => {
   const lab = buildTyreLab(buildBahrainModel(), BAHRAIN_RACE_ID);
   const data: TyreLab = lab.data;
 
-  it('keeps S→M best at pit lap 23 (61.1s pre-cliff, ~61.7s with cliff)', () => {
+  it('keeps S→M best at pit lap 24 (~64.0s with the real lives)', () => {
     expect(data.best!.order.join('→')).toBe('S→M');
-    expect(data.best!.pitLaps[0]).toBe(23);
-    expect(data.best!.timeS).toBeGreaterThanOrEqual(61);
-    expect(data.best!.timeS).toBeLessThan(63);
+    expect(data.best!.pitLaps[0]).toBe(24);
+    expect(data.best!.timeS).toBeGreaterThanOrEqual(63);
+    expect(data.best!.timeS).toBeLessThan(65);
   });
 
-  it('keeps S→H behind S→M (71.6s pre-cliff)', () => {
+  it('keeps S→H behind S→M (no cliff needed — H life 59 keeps stints short)', () => {
     const sh = evaluateStrategy(
-      ['S', 'H'], 57, { S: 33, M: 50, H: 77 }, { S: 0, M: 0.55, H: 1.05 }, 20.7,
+      ['S', 'H'], 57, { S: 33, M: 46, H: 59 }, { S: 0, M: 0.55, H: 1.05 }, 20.7,
     )!;
     expect(sh.timeS).toBeGreaterThan(data.best!.timeS + 10);
   });
 
   it('keeps the 2-stop S→S→M alternative behind S→M', () => {
     const ssm = evaluateStrategy(
-      ['S', 'S', 'M'], 57, { S: 33, M: 50, H: 77 }, { S: 0, M: 0.55, H: 1.05 }, 20.7,
+      ['S', 'S', 'M'], 57, { S: 33, M: 46, H: 59 }, { S: 0, M: 0.55, H: 1.05 }, 20.7,
     )!;
     expect(ssm.timeS).toBeGreaterThan(data.best!.timeS);
   });
@@ -836,10 +845,10 @@ describe('v0.6.1 cliff — Bahrain backtest (57 laps, lives 33/50/77)', () => {
  * existed (expectedStops = 2 was already known!), a 0.0s tie read as a
  * win, and a single practice session passed for depth. */
 
-describe('v0.6.1 confidence + tie rule (Silverstone)', () => {
+describe('v0.6.3 confidence + real-save shape (Silverstone)', () => {
   const lab = buildTyreLab(buildSilverstoneModel(), SILVERSTONE_RACE_ID);
 
-  it('drops to LOW and names the four real reasons', () => {
+  it('drops to LOW and names the real reasons', () => {
     expect(lab.confidence).toBe('LOW');
     const summary = lab.assumptions.find((a) => a.text.startsWith('Confidence LOW:'));
     expect(summary).toBeDefined();
@@ -849,12 +858,11 @@ describe('v0.6.1 confidence + tie rule (Silverstone)', () => {
     expect(summary!.text).toContain('chưa đủ cả M và H từ practice');
     // 3. a single practice session with an allocation mismatch > 0.2s
     expect(summary!.text).toContain('1 session');
-    // 4. the top two plans are a tie
-    expect(summary!.text).toContain('hòa');
-    // NOTE: the prompt's "plan 1 pit < field 2" reason described the v0.5.6
-    // state — after the cliff the suggested plan is the 2-stop S→M→S, which
-    // matches the field reference, so (h) no longer fires HERE. The (h)
-    // pillar itself is exercised by the Bahrain 2-stop-meta variant below.
+    // v0.6.3: with the REAL lives the first different-multiset plan is
+    // S→S→H at +3.3s — pillar (g) passes, so the summary carries no tie
+    // reason anymore (the 'hòa' wording lives in the why's alternative
+    // tail — asserted below and in the v0.6.2 exact-tie block).
+    expect(summary!.text).not.toContain('hòa');
     expect(lab.warnings).not.toContain('PLAN_BELOW_FIELD_STOPS');
   });
 
@@ -873,14 +881,19 @@ describe('v0.6.1 confidence + tie rule (Silverstone)', () => {
     expect(data.best!.order.join('→')).toBe('S→M→S');
   });
 
-  it('recommends the game plan when the tie is real and the game plan is viable', () => {
-    /* unit-level check of the tie preference: a tied field with a viable
-       game plan must recommend the game-plan order. Silverstone's game plan
-       is 6.9s slower than the model optimum (> 2s), so the web plan stays —
-       assert that decision explicitly. */
+  it('keeps the web optimum S(16)→M(21)→S(15) — no tie rule on the real lives', () => {
+    /* v0.6.3 real-save shape: the top 3 plans are exact 0.0s permutations
+       of the same stint multiset {S16,S15,M21} (not rivals by planKey), and
+       the first different multiset is 3.3s behind — isTie is false, so the
+       tie-preference note ("ưu tiên plan của game") must NOT appear; the
+       web's optimal split stays the recommendation. The game plan itself is
+       only 0.2s behind — quoted in the why via the gamePlan total. */
     const rec = lab.recommendations[0];
-    expect(rec.title).toContain('S(15)'); // the web's optimal split, not the game's 15/20/17
-    expect(rec.why).toContain('ưu tiên');
+    expect(rec.title).toContain('S(16) → M(21) → S(15)');
+    expect(rec.why).toContain('kế hoạch kế tiếp');
+    expect(rec.why).toContain('hòa (cùng tổng thời gian mô hình)');
+    expect(rec.why).not.toContain('ưu tiên');
+    expect(lab.data.best!.pitLaps).toEqual([16, 37]);
   });
 });
 
@@ -914,26 +927,33 @@ describe('v0.6.2 why wording — exact-tie alternative (real-save shape)', () =>
   });
 });
 
-describe('v0.6.1 Bahrain confidence stays MEDIUM (not an unfair LOW)', () => {
+describe('v0.6.3 Bahrain confidence — LOW on the real save (not the old MEDIUM)', () => {
   const lab = buildTyreLab(buildBahrainModel(), BAHRAIN_RACE_ID);
 
-  it('keeps MEDIUM: allocation lives, ≥3 samples, ≥2s margin, field-matching stops', () => {
-    expect(lab.confidence).toBe('MEDIUM');
-    const summary = lab.assumptions.find((a) => a.text.startsWith('Confidence MEDIUM:'));
+  it('drops to LOW: model deltas (no practice) + 1-pit plan under the 3-stop field', () => {
+    /* v0.6.3: the REAL save's meta field reference is 3 stops (the old
+       fixture's 1-stop history under-reported it, and the M/H lives were
+       ratio-derived 50/77 — both fixed). Ranking unchanged (S→M best),
+       but two pillars now fail: (b) no practice measured and (h) the 1-pit
+       plan sits below the field's 3. */
+    expect(lab.confidence).toBe('LOW');
+    const summary = lab.assumptions.find((a) => a.text.startsWith('Confidence LOW:'));
     expect(summary).toBeDefined();
     expect(summary!.text).toContain('chưa đủ cả M và H từ practice');
-    // exactly ONE missing pillar — no practice at all is priced by (b) alone
-    expect(lab.warnings).not.toContain('PLAN_BELOW_FIELD_STOPS');
-    expect(lab.data.expectedStops).toBe(1);
+    expect(summary!.text).toContain('1 pit < mặt bằng 3 pit');
+    expect(lab.warnings).toContain('PLAN_BELOW_FIELD_STOPS');
+    expect(lab.data.expectedStops).toBe(3);
+    expect(lab.data.expectedSource).toBe('meta');
     expect(lab.data.best!.stops).toBe(1);
+    expect(lab.data.best!.pitLaps[0]).toBe(24);
   });
 });
 
 describe('v0.6.1 pillar (h) — meta expectedStops joins the field-reference chain', () => {
-  /* Same Bahrain save but the 2027 field ran 2 stops/driver: the engine now
-     KNOWS the field reference (2) even with no observed/prior data, so the
-     1-pit best plan is flagged instead of silently passing (the Silverstone
-     v0.5.6 hole). */
+  /* Synthetic 2-stop variant (the real save runs 3 — covered by the default
+     fixture above): the engine KNOWS the field reference even with no
+     observed/prior data, so the 1-pit best plan is flagged instead of
+     silently passing (the Silverstone v0.5.6 hole). */
   const lab = buildTyreLab(buildBahrainModel(2), BAHRAIN_RACE_ID);
 
   it('warns + drops confidence when the 1-pit plan sits below the meta field reference', () => {

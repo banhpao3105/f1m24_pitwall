@@ -9,8 +9,9 @@
  *   vòng H nhanh nhất là của Russell chạy long-run, không so được với M).
  *
  * Allocation fresh sets (giống nhau mọi xe, 440 dòng thật rút gọn):
- *   EstimatedLapLifeRemaining S 23 / M 35 / H 53; I 48 / W 62 (median thật
- *   40–55 / 53–71);
+ *   EstimatedLapLifeRemaining S 23 / M 34 / H 43 (v0.6.3: median thật của
+ *   save — bộ cũ 23/35/53 suy M từ durability ratio và H từ tỉ lệ là SAI,
+ *   vách mòn H35 bị tính 446s thay vì ~70s); I 48 / W 62;
  *   EstimatedLapTime          S 88.91 / M 89.48 / H 89.80 (+0.57 / +0.89);
  *   I 95.32 / W 105.35 (wet trên đường khô — đúng mức chậm hơn S).
  * Mapping WeekendTyreType (v0.6.2, kiểm chứng từ bảng trên): 0=H, 1=M,
@@ -94,8 +95,8 @@ export function silverstoneAllocation(withLapTime = true): TyreAllocation[] {
     }
   };
   add(3, 2, 23, 88.91); // S — WeekendTyreType 2
-  add(3, 1, 35, 89.48); // M — WeekendTyreType 1
-  add(3, 0, 53, 89.8); // H — WeekendTyreType 0
+  add(3, 1, 34, 89.48); // M — WeekendTyreType 1 (v0.6.3: median thật 34, không phải 35)
+  add(3, 0, 43, 89.8); // H — WeekendTyreType 0 (v0.6.3: median thật 43, không phải 53 suy từ tỉ lệ)
   add(3, 3, 48, 95.32); // Inter — WeekendTyreType 3
   add(3, 4, 62, 105.35); // Wet — WeekendTyreType 4
   return sets;

@@ -1,15 +1,22 @@
 /**
- * Bahrain mid-weekend fixture (v0.6.1, mục 5 — backtest đã verify ở v0.5.1):
- *   lives S 33 / M 50 / H 77 (allocation) · 57 vòng · KHÔNG có practice
- *   đo được → deltas = hằng số model (M 0.55 / H 1.05).
+ * Bahrain mid-weekend fixture (v0.6.1, mục 5 — cập nhật v0.6.3 theo save
+ * thật): lives S 33 / M 46 / H 59 (allocation median thật) · 57 vòng ·
+ * KHÔNG có practice đo được → deltas = hằng số model (M 0.55 / H 1.05).
  *
- * Khôi phục từ số liệu đã verify: S→M 61.1s (pit 23) = 34×0.55 +
- * degS(23,33) + degM(34,50) + 20.7; S→H 71.6s = 34×1.05 + degS(23,33) +
- * degH(34,77) + 20.7 — khớp đúng 2 con số của chủ dự án với pit lap 23.
+ * v0.6.3: bộ cũ gán M/H vào WeekendTyreType 3/4 — sau khi sửa mapping
+ * (0=H, 1=M, 2=S, 3=I, 4=W) 2 type đó là I/W nên getCompoundCaps bỏ qua,
+ * lives M/H lọt qua đường dẫn xuất durability (50/77). Giờ set mang ĐÚNG
+ * type 1/0 và median thật 46/59; đồng thời H ClerkLife cũ 77 cũng là số
+ * suy từ tỉ lệ — sai giống H 53 của Silverstone.
  *
- * 3 chặng hoàn thành (track khác) với 1 pit/driver → stintFactor meta
- * samples 3 → expectedStops = 1 — mặt bằng 2027 của save (plan 1 pit của
- * game khớp mặt bằng này).
+ * Kết quả engine trên lives thật (v0.6.3): S→M tốt nhất 64.0s (pit 24) —
+ * không phải 61.1s/pit 23 như bộ cũ (đó là số với lives sai; thứ hạng giữ
+ * nguyên). Mặt bằng meta là 3 pit/driver (3 chặng hoàn thành track khác,
+ * mỗi driver 3 pit) → expectedStops = 3 (meta) — plan 1 pit của S→M nằm
+ * dưới mặt bằng → confidence LOW (pillar h), đúng như save thật.
+ *
+ * 3 chặng hoàn thành (track khác) với 3 pit/driver → stintFactor meta
+ * samples 3 → expectedStops = 3 — mặt bằng 2027 của save.
  */
 
 import type { SaveModel, Race } from '@/domain/types';
@@ -48,8 +55,9 @@ function historyRaces(stopsPerDriver: number): Race[] {
   }));
 }
 
-/** Fresh allocation: lives S 33 / M 50 / H 77 (no EstimatedLapTime needed —
- * deltas stay on the model constants because Bahrain has no practice rows). */
+/** Fresh allocation: lives S 33 / M 46 / H 59 on the VERIFIED types
+ * (S=2, M=1, H=0 — v0.6.2 mapping). No EstimatedLapTime needed — deltas
+ * stay on the model constants because Bahrain has no practice rows. */
 export function bahrainAllocation(): SaveModel['tyres'] {
   const sets: SaveModel['tyres'] = [];
   let id = 0;
@@ -65,13 +73,15 @@ export function bahrainAllocation(): SaveModel['tyres'] {
       });
     }
   };
-  add(3, 2, 33); // S
-  add(3, 3, 50); // M
-  add(3, 4, 77); // H
+  add(3, 2, 33); // S — WeekendTyreType 2
+  add(3, 1, 46); // M — WeekendTyreType 1 (v0.6.3: median thật, type đúng)
+  add(3, 0, 59); // H — WeekendTyreType 0 (v0.6.3: median thật, type đúng)
   return sets;
 }
 
-export function buildBahrainModel(stopsPerDriver = 1): SaveModel {
+/** Default mirrors the real save: the 2027 field ran 3 stops/driver
+ * (meta expectedStops = 3). Pass another value for synthetic variants. */
+export function buildBahrainModel(stopsPerDriver = 3): SaveModel {
   const target: Race = {
     raceId: BAHRAIN_RACE_ID,
     seasonId: 3,

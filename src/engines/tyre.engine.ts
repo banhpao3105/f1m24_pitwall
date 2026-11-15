@@ -41,8 +41,11 @@ export const TYRE_DURABILITY = { S: 0.43, M: 0.65, H: 1.0 } as const;
  * S + 31–32 laps H — zero cliff by construction), so the end-of-life deg
  * rate for H must carry the "long H stints are slow on high-energy tracks"
  * reality (Ricciardo's H35 ran ~+3s/lap vs Soft). S/M unchanged; verified
- * on the Bahrain (S→M 61.1s best, pit 23) and Suzuka (S→S→M best)
- * backtests — scripts/tune-deg-cliff.ts.
+ * on the Bahrain (S→M best, pit 24 — retuned in v0.6.3 for the real lives)
+ * and Suzuka (S→S→M best) backtests — scripts/tune-deg-cliff.ts.
+ * (v0.6.3: the lives this was tuned on were corrected — H is 43 laps, not
+ * the ratio-derived 53 — so the H cliff below was re-tuned, DEG_FINAL.H 3.0
+ * itself keeps its backtest value.)
  */
 export const DEG_FINAL = { S: 3.0, M: 2.0, H: 3.0 } as const;
 export const DEG_EXP = 2.0;
@@ -53,13 +56,25 @@ export const DEG_EXP = 2.0;
  * 2027: H 35-lap stint ≈ +3s/lap vs Soft at the end, race average 94.5s).
  * Per-compound constants, tuned by backtest (scripts/tune-deg-cliff.ts):
  * a single constant is mathematically incompatible with the two verified
- * saves — Bahrain's S23/M34 stints (overflow 3.2/4 laps) must stay
- * ~free (S→M 61.1s must remain best) while Silverstone's H35 (overflow
- * 3.2 laps) must cost ≥ 31s. Same mechanism for all three compounds, like
- * DEG_FINAL; the data only punishes the hard compound's cliff.
+ * saves — Bahrain's short stints must stay ~free (S→M must remain best)
+ * while Silverstone's long H stint must cost real seconds. Same mechanism
+ * for all three compounds, like DEG_FINAL; the data only punishes the hard
+ * compound's cliff.
+ *
+ * v0.6.3 retune of H (5.0 → 0.55): the old 5.0 was grid-searched against
+ * the WRONG H life 53 (derived from a durability ratio — the v0.6.2 mapping
+ * audit's lives were never re-checked). The REAL save life is H 43, so the
+ * H 35-lap stint overflows the 0.6×43 cliff by 9.2 laps, not 3.2 — the
+ * quadratic blow-up priced that stint at 446s of wear. Retuned on the same
+ * real-world anchor (Ricciardo's Silverstone H35: ~94.5s/lap average vs
+ * fresh H ~91.4s ⇒ ~3.1s/lap × 35 ≈ 108s total, minus the pace delta
+ * 0.9 × 35 = 31.5s ⇒ ≈ 77s of wear); 0.55 prices it at 69.7s (target band
+ * 50–90s) while every backtest ranking constraint still holds — verified in
+ * scripts/tune-deg-cliff.ts (Silverstone degH35 ∈ [50,90], S17→H35 ≥ 100s,
+ * S→H best ≥ 83s; Bahrain S→M best @ pit 24 ≈ 64.0s; Suzuka unchanged).
  */
 export const DEG_CLIFF_THRESHOLD = 0.6;
-export const DEG_CLIFF: Record<Compound, number> = { S: 0.03, M: 0.02, H: 5.0 };
+export const DEG_CLIFF: Record<Compound, number> = { S: 0.03, M: 0.02, H: 0.55 };
 
 export type Compound = 'S' | 'M' | 'H';
 export const DRY: Compound[] = ['S', 'M', 'H'];
