@@ -550,9 +550,17 @@ export interface WeekendReadiness {
 export function assessReadiness(model: SaveModel, raceId: number): WeekendReadiness {
   const race = model.races.find((r) => r.raceId === raceId) ?? null;
   const allocation = model.tyres.length > 0;
-  const practiceSessions = race
-    ? new Set((race.practice ?? []).map((p) => p.session)).size
-    : 0;
+  /* v0.7.1 — ONE definition, computed here and passed through: the number
+     of F1 practice sessions present in the save for this race. Session 1
+     of a real weekend also carries the F2/F3 fields (Monza: +22 F2 +30 F3
+     rows in session 1) — they are not F1 sessions. Rows without the
+     RaceFormula column (legacy models) keep every session. buildTyreLab
+     must use THIS number, not recompute a second count from its own
+     measurable-session logic. */
+  const practiceRows = race?.practice ?? [];
+  const hasFormula = practiceRows.some((p) => p.raceFormula != null);
+  const f1Practice = hasFormula ? practiceRows.filter((p) => p.raceFormula === 1) : practiceRows;
+  const practiceSessions = new Set(f1Practice.map((p) => p.session)).size;
   const derivedGrid = race ? deriveGridForRace(model, race) : null;
   const quali = derivedGrid != null && derivedGrid.grid.length >= 2;
   const missing: MissingDataKey[] = [];

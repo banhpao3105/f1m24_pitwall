@@ -205,6 +205,7 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
       bestLapMs: p.bestLapMs,
       bestLapTyre: p.bestLapTyre,
       ...(p.lapCount != null ? { lapCount: p.lapCount } : {}),
+      ...(p.raceFormula ? { raceFormula: p.raceFormula } : {}),
     });
   }
 

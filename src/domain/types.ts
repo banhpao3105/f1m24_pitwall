@@ -131,6 +131,13 @@ export interface PracticeResult {
   bestLapTyre: number;
   /** v0.7.0 — laps run in the session (CarID↔driver mapping signal). */
   lapCount?: number;
+  /**
+   * v0.7.1 — RaceFormula: 1 = F1, 2 = F2, 3 = F3. Session 1 of a real
+   * weekend also carries the F2/F3 fields — the practice-session count and
+   * the pace pool must stay F1-only. Legacy models without the field keep
+   * every row (same guard as the quali grid filter).
+   */
+  raceFormula?: number;
 }
 
 export interface Race {

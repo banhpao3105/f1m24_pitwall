@@ -212,7 +212,7 @@ describe('getPracticePace', () => {
     expect(pace).not.toBeNull();
     expect(pace!.deltas.M).toBeCloseTo(0.5, 3);
     expect(pace!.deltas.H).toBeCloseTo(1.2, 3);
-    expect(pace!.sessions).toBe(1);
+    expect(pace!.sessionsMeasured).toBe(1);
   });
 
   it('returns null under MIN_PACE_SAMPLE', () => {
@@ -391,9 +391,12 @@ describe('v0.5.1 cross-session pace (P0 Suzuka bug)', () => {
   it('measures H cross-session when every session is under-sampled (Rule 1)', () => {
     const pace = getPracticePace(makeModel([target]), 17);
     expect(pace).not.toBeNull();
-    expect(pace!.deltas.M).toBeCloseTo(1.095, 3); // median of session gaps
+    // v0.7.1: the ranking delta is the measured value at 2dp
+    expect(pace!.deltas.M).toBeCloseTo(1.09, 3); // median of session gaps
+    expect(pace!.rawDeltas.M).toBeCloseTo(1.095, 3);
     expect(pace!.measured.M).toBe('session');
-    expect(pace!.deltas.H).toBeCloseTo(1.764, 3); // 92.214 − 90.450 (owner's number)
+    expect(pace!.deltas.H).toBeCloseTo(1.76, 3); // 92.214 − 90.450 (owner's number)
+    expect(pace!.rawDeltas.H).toBeCloseTo(1.764, 3);
     expect(pace!.measured.H).toBe('cross-session');
   });
 
@@ -452,7 +455,9 @@ describe('v0.5.1 same-tier fallback (Rule 2)', () => {
     expect(data.deltas.H).toBe(1.05);
     expect(data.paceSource.M).toBe('model');
     expect(data.paceSource.H).toBe('model');
-    expect(data.paceMeasured.M).toEqual({ delta: expect.closeTo(0.723, 3), source: 'session' });
+    // v0.7.1: paceMeasured carries the RANKING delta (the measured value at
+    // 2dp), the same number the plans are priced with
+    expect(data.paceMeasured.M).toEqual({ delta: expect.closeTo(0.72, 3), source: 'session' });
     expect(data.paceMeasured.H).toBeNull();
     expect(lab.warnings).toContain('SAME_TIER_PACE_FALLBACK');
     // measured value stays visible in the evidence
@@ -726,12 +731,12 @@ describe('v0.6.1 getPracticePace raw + clamped flags (Silverstone)', () => {
     const model = buildSilverstoneModel();
     const pace = getPracticePace(model, 210);
     expect(pace).not.toBeNull();
-    expect(pace!.sessions).toBe(1);
+    expect(pace!.sessionsMeasured).toBe(1);
     expect(pace!.rawDeltas.M).toBeCloseTo(0.711, 3);
     expect(pace!.rawDeltas.H).toBeCloseTo(0.606, 3);
     expect(pace!.clamped.H).toBe(true);
-    // the ranking value is the forced M+0.15 — but no longer labelled raw
-    expect(pace!.deltas.H).toBeCloseTo(0.861, 3);
+    // the ranking value is the forced M+0.15 (rounded 2dp) — not the raw
+    expect(pace!.deltas.H).toBeCloseTo(0.86, 3);
   });
 
   it('does not flag the clamp when H is honestly slower than M (Suzuka)', () => {
@@ -739,7 +744,10 @@ describe('v0.6.1 getPracticePace raw + clamped flags (Silverstone)', () => {
     const pace = getPracticePace(model, 17);
     expect(pace!.clamped.H).toBe(false);
     expect(pace!.clamped.M).toBe(false);
-    expect(pace!.rawDeltas.H).toBeCloseTo(pace!.deltas.H as number, 6);
+    // v0.7.1: the ranking delta is the measured value at 2dp — no clamp
+    // fired, so it is exactly the rounded raw (1.764 → 1.76)
+    expect(pace!.deltas.H).toBeCloseTo(1.76, 3);
+    expect(pace!.rawDeltas.H).toBeCloseTo(1.764, 3);
   });
 });
 
@@ -753,17 +761,18 @@ describe('v0.6.1 buildTyreLab — Silverstone forced-delta honesty', () => {
     expect(data.lifeSource).toEqual({ S: 'allocation', M: 'allocation', H: 'allocation' });
     expect(data.practiceSessions).toBe(1);
 
-    // M keeps its honest practice measurement
+    // M keeps its honest practice measurement (ranking value at 2dp)
     expect(data.deltas.M).toBeCloseTo(0.71, 2);
     expect(data.paceSource.M).toBe('practice');
-    expect(data.paceMeasured.M).toEqual({ delta: expect.closeTo(0.711, 3), source: 'session' });
+    expect(data.paceMeasured.M).toEqual({ delta: expect.closeTo(0.71, 3), source: 'session' });
 
-    // H: the forced value is replaced by the game's own estimate
+    // H: the forced value is replaced by the game's own estimate;
+    // paceMeasured.H carries the RANKING delta (forced) with the raw on record
     expect(data.paceSource.H).toBe('allocation');
     expect(data.deltas.H).toBeGreaterThanOrEqual(0.85);
     expect(data.deltas.H).toBeLessThanOrEqual(0.9);
     expect(data.paceMeasured.H).toEqual({
-      delta: expect.closeTo(0.606, 3),
+      delta: expect.closeTo(0.86, 3),
       source: 'session',
       rawDelta: expect.closeTo(0.606, 3),
     });
@@ -791,9 +800,9 @@ describe('v0.6.1 buildTyreLab — Silverstone forced-delta honesty', () => {
     expect(data.paceSource.H).toBe('clamped');
     expect(data.deltas.H).toBeCloseTo(0.86, 2); // the forced M + 0.15
     expect(data.paceMeasured.H).toEqual({
-      delta: expect.closeTo(0.606, 3),
+      delta: expect.closeTo(0.86, 3), // the ranking (forced) value
       source: 'session',
-      rawDelta: expect.closeTo(0.606, 3),
+      rawDelta: expect.closeTo(0.606, 3), // the raw measurement stays on record
     });
     const paceEvidence = lab.evidence.find((e) => e.source === 'Races_PracticeResults');
     expect(paceEvidence!.label).toContain('+0.606');

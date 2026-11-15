@@ -20,7 +20,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { assessReadiness, buildTyreInventory, deriveGrid, resolveCarDrivers } from '@/engines/grid.engine';
-import { buildTyreLab } from '@/engines/tyre.engine';
+import { buildTyreLab, getPracticePace } from '@/engines/tyre.engine';
 import { emptyPhase2Sections } from '../helpers/model';
 import type { SaveModel, Race, QualifyingResult, PracticeResult, Team, Driver, TyreAllocation, PlayerStrategySection } from '@/domain/types';
 
@@ -78,33 +78,51 @@ function monzaQualifying(): QualifyingResult[] {
   });
 }
 
-/** Practice laps: 2 sessions measuring the spec's verified Monza deltas
- * (M +0.03s, H +1.32s vs Soft) with MIN_PACE_SAMPLE drivers per compound —
- * plus team 2's per-session lap totals (car 2 → driver 12, car 3 → driver
- * 102), the seat-verification signal the owner used. */
+/** Practice laps: 3 F1 sessions present (the REAL Monza save shape) but
+ * only 2 produce a measurable compound gap — the readiness count (3) and
+ * the measured count (2) are DIFFERENT numbers by design (v0.7.1 bước 5).
+ * Raw M gaps 0.028s/0.029s → median 0.0285 → ranking +0.03s (the prompt's
+ * number; the old 0.05 floor would have overwritten it). H gaps 1.32s.
+ * Session 1 ALSO carries the F2 + F3 fields (a sample of the real 22+30
+ * rows) with M laps FASTER than every F1 — without the F1 filter they
+ * would corrupt every measured delta.
+ * Team 2's per-session lap totals (car 2 → driver 12, car 3 → driver
+ * 102) carry the seat-verification signal. */
 function monzaPractice(): PracticeResult[] {
   const rows: PracticeResult[] = [
-    { driverId: 12, teamId: 2, session: 1, bestLapMs: 90_000, bestLapTyre: 2, lapCount: 20 },
-    { driverId: 12, teamId: 2, session: 2, bestLapMs: 90_500, bestLapTyre: 2, lapCount: 18 },
-    { driverId: 102, teamId: 2, session: 1, bestLapMs: 90_100, bestLapTyre: 2, lapCount: 15 },
-    { driverId: 102, teamId: 2, session: 2, bestLapMs: 90_600, bestLapTyre: 2, lapCount: 22 },
+    { driverId: 12, teamId: 2, session: 1, bestLapMs: 90_000, bestLapTyre: 2, lapCount: 20, raceFormula: 1 },
+    { driverId: 12, teamId: 2, session: 2, bestLapMs: 90_500, bestLapTyre: 2, lapCount: 18, raceFormula: 1 },
+    { driverId: 102, teamId: 2, session: 1, bestLapMs: 90_100, bestLapTyre: 2, lapCount: 15, raceFormula: 1 },
+    { driverId: 102, teamId: 2, session: 2, bestLapMs: 90_600, bestLapTyre: 2, lapCount: 22, raceFormula: 1 },
   ];
-  // measured deltas: session gaps SM = 0.03s, SH = 1.32s in both sessions
-  const session = (s: number, sBase: number): void => {
+  const session = (s: number, sBase: number, mGap: number): void => {
     rows.push(
-      { driverId: 201 + s, teamId: 4, session: s, bestLapMs: sBase, bestLapTyre: 2 },
-      { driverId: 204 + s, teamId: 5, session: s, bestLapMs: sBase + 100, bestLapTyre: 2 },
-      { driverId: 207 + s, teamId: 6, session: s, bestLapMs: sBase + 200, bestLapTyre: 2 },
-      { driverId: 211 + s, teamId: 7, session: s, bestLapMs: sBase + 30, bestLapTyre: 1 },
-      { driverId: 214 + s, teamId: 8, session: s, bestLapMs: sBase + 130, bestLapTyre: 1 },
-      { driverId: 217 + s, teamId: 9, session: s, bestLapMs: sBase + 230, bestLapTyre: 1 },
-      { driverId: 221 + s, teamId: 10, session: s, bestLapMs: sBase + 1320, bestLapTyre: 0 },
-      { driverId: 224 + s, teamId: 1, session: s, bestLapMs: sBase + 1420, bestLapTyre: 0 },
-      { driverId: 227 + s, teamId: 3, session: s, bestLapMs: sBase + 1520, bestLapTyre: 0 },
+      { driverId: 201 + s, teamId: 4, session: s, bestLapMs: sBase, bestLapTyre: 2, raceFormula: 1 },
+      { driverId: 204 + s, teamId: 5, session: s, bestLapMs: sBase + 100, bestLapTyre: 2, raceFormula: 1 },
+      { driverId: 207 + s, teamId: 6, session: s, bestLapMs: sBase + 200, bestLapTyre: 2, raceFormula: 1 },
+      { driverId: 211 + s, teamId: 7, session: s, bestLapMs: sBase + mGap, bestLapTyre: 1, raceFormula: 1 },
+      { driverId: 214 + s, teamId: 8, session: s, bestLapMs: sBase + mGap + 100, bestLapTyre: 1, raceFormula: 1 },
+      { driverId: 217 + s, teamId: 9, session: s, bestLapMs: sBase + mGap + 200, bestLapTyre: 1, raceFormula: 1 },
+      { driverId: 221 + s, teamId: 10, session: s, bestLapMs: sBase + 1320, bestLapTyre: 0, raceFormula: 1 },
+      { driverId: 224 + s, teamId: 1, session: s, bestLapMs: sBase + 1420, bestLapTyre: 0, raceFormula: 1 },
+      { driverId: 227 + s, teamId: 3, session: s, bestLapMs: sBase + 1520, bestLapTyre: 0, raceFormula: 1 },
     );
   };
-  session(1, 90_000);
-  session(2, 90_500);
+  session(1, 90_000, 28);
+  session(2, 90_500, 29);
+  // session 3 — present in the save, no measurable gap: only 2 drivers per
+  // compound (< MIN_PACE_SAMPLE = 3)
+  rows.push(
+    { driverId: 230, teamId: 4, session: 3, bestLapMs: 90_300, bestLapTyre: 2, raceFormula: 1 },
+    { driverId: 231, teamId: 5, session: 3, bestLapMs: 90_400, bestLapTyre: 2, raceFormula: 1 },
+    { driverId: 232, teamId: 7, session: 3, bestLapMs: 90_330, bestLapTyre: 1, raceFormula: 1 },
+    { driverId: 233, teamId: 8, session: 3, bestLapMs: 90_430, bestLapTyre: 1, raceFormula: 1 },
+  );
+  // the real save's F2 (22) + F3 (30) rows in session 1 — a fast sample
+  for (let i = 0; i < 5; i++) {
+    rows.push({ driverId: 500 + i, teamId: 100, session: 1, bestLapMs: 89_000 + i * 10, bestLapTyre: 1, raceFormula: 2 });
+    rows.push({ driverId: 600 + i, teamId: 200, session: 1, bestLapMs: 89_500 + i * 10, bestLapTyre: 1, raceFormula: 3 });
+  }
   return rows;
 }
 
@@ -422,7 +440,7 @@ describe('assessReadiness — the strategy data gate (spec bước 2)', () => {
     const readiness = assessReadiness(model, MONZA_RACE_ID);
     expect(readiness.ready).toBe(false);
     expect(readiness.allocation).toBe(true);
-    expect(readiness.practiceSessions).toBe(2);
+    expect(readiness.practiceSessions).toBe(3); // 3 F1 sessions present
     expect(readiness.quali).toBe(false);
     expect(readiness.missing).toEqual(['quali']);
   });
@@ -591,6 +609,68 @@ describe('buildTyreInventory v0.7.1 — player scope + per-car caps', () => {
     expect(game!.stintLaps).toEqual([24, 29]);
     expect(game!.pitLaps).toEqual([25]);
     expect(game!.totalTimeS).toBeCloseTo(75.0, 1);
+  });
+});
+
+/* ── v0.7.1 bước 5 — ONE practice reporting pipeline ─────────────────────
+ * practiceSessions (sessions PRESENT in the save, F1 only) and
+ * sessionsMeasured (sessions that produced a gap) are different numbers:
+ * Monza 3 vs 2. The M ranking delta is the measured median (0.0285 →
+ * +0.03s) — the old 0.05 floor would have overwritten it everywhere. */
+describe('practice pipeline — one source for sessions + deltas (spec bước 5)', () => {
+  it('readiness says 3 F1 sessions, TyreLab says the same 3, measured says 2', () => {
+    const model = monzaModel();
+    const readiness = assessReadiness(model, MONZA_RACE_ID);
+    const lab = buildTyreLab(model, MONZA_RACE_ID);
+    expect(readiness.practiceSessions).toBe(3);
+    expect(lab.data.practiceSessions).toBe(readiness.practiceSessions); // same source
+    expect(lab.data.practiceSessions).not.toBe(2);
+  });
+
+  it('the ranking delta M is the measured +0.03s everywhere — getPracticePace, lab, evidence', () => {
+    const model = monzaModel();
+    const pace = getPracticePace(model, model.races[0]!.trackId);
+    expect(pace).not.toBeNull();
+    expect(pace!.sessionsMeasured).toBe(2);
+    expect(pace!.rawDeltas.M).toBeCloseTo(0.0285, 6); // the real save's raw value
+    expect(pace!.deltas.M).toBe(0.03); // ranking = measured, rounded 2dp
+    expect(pace!.clamped.M).toBe(false); // rounding is NOT a clamp
+    expect(pace!.deltas.H).toBe(1.32);
+
+    const lab = buildTyreLab(model, MONZA_RACE_ID);
+    // buildTyreLab consumes practicePace.deltas directly — same numbers
+    expect(lab.data.deltas.M).toBe(pace!.deltas.M);
+    expect(lab.data.deltas.H).toBe(pace!.deltas.H);
+    expect(lab.data.paceMeasured.M!.delta).toBe(pace!.deltas.M);
+    // the evidence carries "+0.03s" and the 2/3 measured/present split —
+    // and NEVER the old floor's "+0.05s" for M
+    const practiceEvidence = lab.evidence.find((e) => e.source === 'Races_PracticeResults')!;
+    expect(practiceEvidence.label).toContain('M +0.03s');
+    expect(practiceEvidence.label).toContain('(2/3 session đo được delta');
+    expect(practiceEvidence.label).not.toContain('+0.05s');
+  });
+
+  it('the F2/F3 fields in session 1 never enter the pace pool (real-save shape)', () => {
+    const model = monzaModel();
+    // the fixture's F2/F3 rows run 89.0s on M — faster than every F1 lap.
+    // If they leaked into the pool, bestM would drop below bestS and the
+    // SM gap would go degenerate → the +0.03 median could not survive.
+    const pace = getPracticePace(model, model.races[0]!.trackId)!;
+    expect(pace.deltas.M).toBe(0.03);
+    expect(pace.measured.M).toBe('session');
+  });
+
+  it('a degenerate (≤ 0) M measurement still floors to 0.05 — the only remaining M floor', () => {
+    // corrupt one session's M to be faster than its S: gaps [−0.05, +0.03]
+    const model = monzaModel();
+    const rows = model.races[0]!.practice!;
+    const mRow = rows.find((r) => r.driverId === 212)!; // session 1 M, 90.028s
+    mRow.bestLapMs = 89_900; // faster than session 1's S best (90.000)
+    const pace = getPracticePace(model, model.races[0]!.trackId)!;
+    // median(−0.100, 0.029) = −0.0355 ≤ 0 → the degenerate floor applies
+    expect(pace.rawDeltas.M!).toBeLessThanOrEqual(0);
+    expect(pace.deltas.M).toBe(0.05);
+    expect(pace.clamped.M).toBe(true);
   });
 });
 
