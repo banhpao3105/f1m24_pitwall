@@ -822,16 +822,19 @@ describe('buildTyreLab — inventory re-pricing (Monza 53 laps, spec bước 3)'
     expect(lab.recommendations[0]!.why).toContain('kho lốp');
   });
 
-  it('locks the 2-pit M→S→M candidate: 54.5s on the cap / 52.7s on model lives', () => {
+  it('v0.9.1 filters the 2-pit M plans: 2 M stints but each car owns exactly 1 usable M set', () => {
     const lab = buildTyreLab(monzaModel(), MONZA_RACE_ID);
-    const two = lab.data.strategies.find(
-      (s) => s.order.join('→') === 'M→S→M' && s.stops === 2,
-    );
-    expect(two).toBeDefined();
-    expect(two!.timeS).toBeCloseTo(54.5, 1);
-    expect(two!.modelTimeS).toBeCloseTo(52.7, 1);
-    // first pit V21 (cap re-split) — 2 laps from the lead's V19 (locked in step 4)
-    expect(two!.pitLaps[0]).toBe(21);
+    // M→S→M was 54.5s on the cap / 52.7s on model lives — cheaper on
+    // paper, but no car owns a second M set to run the second M stint
+    for (const order of ['S→M→M', 'M→S→M', 'M→M→S']) {
+      expect(lab.data.strategies.find((s) => s.order.join('→') === order && s.stops === 2)).toBeUndefined();
+    }
+    // the why names the first-ranked 2-M plan, its stint laps and the per-car stock
+    const note = lab.assumptions.find((a) => a.text.includes('kho không chạy được: S→M→M'));
+    expect(note).toBeDefined();
+    expect(note!.text).toContain('2 stint M');
+    expect(note!.text).toContain('1 bộ M khả dụng');
+    expect(note!.text).toContain('đời 36');
   });
 
   it('an S stint of 25 laps exceeds the garage cap (best fresh S life 24) — infeasible', () => {
@@ -872,10 +875,11 @@ describe('buildTyreLab — inventory re-pricing (Monza 53 laps, spec bước 3)'
  * Owner-verified Monza shape: O'Ward (285) grid P20 leads with the
  * optimizer's S(19)→M(34) pit V19; Ricciardo (13) grid P21 trails with the
  * tied M(34)→S(19) pit V34 — different starting compound, pits 15 laps
- * apart. The 2-pit M→S→M (54.5s on the cap — FASTER on paper) must NOT
- * become the trail plan: its first pit V21 sits only 2 laps from the
- * lead's V19 (< 3 → double-stack risk). No invented queue constant — the
- * ≥3-lap offset rule IS the handling. */
+ * apart. The 2-pit M→S→M (54.5s on the cap — FASTER on paper) is GONE
+ * entirely since v0.9.1: two M stints need two usable M sets per car and
+ * each car owns exactly one (before that, the pit-gap rule alone kept it
+ * off the trail slot). No invented queue constant — the ≥3-lap offset rule
+ * IS the handling. */
 
 describe('buildTyreLab carPlans — lead/trail split on the Monza grid', () => {
   it('REAL pre-race grid: lead O\'Ward P21, trail Ricciardo P22 (quali order — no pending penalty in this save)', () => {
@@ -913,16 +917,15 @@ describe('buildTyreLab carPlans — lead/trail split on the Monza grid', () => {
     expect(split!.trail!.reason).toBe('diff-compound');
   });
 
-  it('rejects the faster 2-pit M→S→M as trail: first pit V21 is 2 laps from V19', () => {
+  it('v0.9.1: the faster 2-pit M→S→M cannot be the trail — it is not even ranked (1 M set/car)', () => {
     const lab = buildTyreLab(monzaModel(), MONZA_RACE_ID);
     const split = lab.data.carPlans!;
-    // the 2-pit plan exists among the ranked strategies and is cheaper…
+    // the 2-pit plan never survives the set-assignment law…
     const two = lab.data.strategies.find((s) => s.order.join('→') === 'M→S→M' && s.stops === 2);
-    expect(two).toBeDefined();
-    expect(two!.pitLaps[0]).toBe(21);
-    expect(two!.timeS).toBeCloseTo(54.5, 1);
-    // …but it must NOT be the trail plan (V21 − V19 = 2 < 3)
-    expect(split.trail!.plan.order.join('→')).not.toBe('M→S→M');
+    expect(two).toBeUndefined();
+    // …and the trail is still the tied 1-stop on the trail car's own garage
+    expect(split.trail!.plan.order.join('→')).toBe('M→S');
+    expect(split.trail!.plan.stints.map((s) => `${s.compound}(${s.laps})`)).toEqual(['M(34)', 'S(19)']);
     expect(split.trail!.plan.pitLaps.every((p) => Math.abs(p - 19) >= 3)).toBe(true);
   });
 

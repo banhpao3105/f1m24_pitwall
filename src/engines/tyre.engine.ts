@@ -22,7 +22,7 @@
 import type { Confidence, Evidence, Assumption, Recommendation } from '../domain/provenance';
 import type { EngineResult } from '../domain/types';
 import type { SaveModel, Race, PlayerStrategySection } from '../domain/types';
-import { assessReadiness, buildTyreInventory, resolveCarDrivers, type WeekendReadiness, type TyreInventory } from './grid.engine';
+import { assessReadiness, buildTyreInventory, resolveCarDrivers, assignSetsForCar, type WeekendReadiness, type TyreInventory, type InventoryCar, type InventorySet, type SetAssignment } from './grid.engine';
 
 /* ── oracle constants (do not change without a changelog entry) ─────────── */
 
@@ -505,10 +505,13 @@ export interface PlannedStint {
   /** Total wear-induced seconds lost across the stint. */
   degS: number;
   /**
-   * v0.7.0 — the tyre set this stint runs on (best available fit in the
-   * player's inventory). null when no inventory applies (pre-gate / no rows).
+   * v0.7.0 — the tyre set this stint runs on. v0.9.1: the set comes from
+   * the REAL per-car greedy assignment (`assignSetsForCar`) — longest stint
+   * ↔ longest-life set — never an independent best-fit pick that could
+   * point two stints of one plan at the same physical set. null when no
+   * inventory applies (pre-gate / no rows).
    */
-  setUsed?: { fresh: boolean; life: number; spare: boolean } | null;
+  setUsed?: { tyreSetId: number; fresh: boolean; life: number; spare: boolean } | null;
 }
 
 export interface StrategyResult {
@@ -597,6 +600,11 @@ export interface WhatIfPitShiftResult {
  * lets the final stint absorb the remainder, and recomputes deg + time
  * with the same deltas/pit cost. Returns null when no feasible split
  * exists for the requested shift.
+ *
+ * v0.9.1 — `sets` (the examined car's OWN InventorySet[]) turns the set
+ * assignment law into a gate here too: a shift that stretches a stint past
+ * the life of the set it must run on returns `shifted: null, clamped: true`,
+ * exactly like the life-clamp shape (prompt v0.9.1 bước 1.7).
  */
 export function whatIfPitShift(
   best: StrategyResult,
@@ -606,6 +614,7 @@ export function whatIfPitShift(
   pitCostS: number,
   shift: number,
   deg: DegConstants = ORACLE_DEG,
+  sets?: InventorySet[],
 ): WhatIfPitShiftResult {
   const n = best.stints.length;
   if (n === 0 || shift === 0) {
@@ -676,6 +685,13 @@ export function whatIfPitShift(
     }
   }
 
+  /* v0.9.1 — the shifted plan must still be runnable on the examined car's
+     OWN sets (longest stint ↔ longest-life set per compound). A shift that
+     pushes a stint past its set's life is no plan at all. */
+  if (sets && assignSetsForCar(sets, stints) == null) {
+    return { baseline: best, shifted: null, deltaS: null, clamped: true };
+  }
+
   const stops = n - 1;
   const timeS =
     stints.reduce((s, st) => s + st.deltaS * st.laps + st.degS, 0) + stops * pitCostS;
@@ -713,8 +729,17 @@ export interface WetPlanResult {
  * constants): start Intermediate, switch to Wet when the track floods if
  * both lives are known. Returns null when the save has no wet allocation —
  * the UI then shows the explicit "thiếu dữ liệu" state.
+ *
+ * v0.9.1 — `inventory` (when provided) applies the SAME set-assignment law
+ * as the dry plans: the wet stints must be runnable on each car's OWN I/W
+ * stock (Inter 5 fresh sets/car, Wet 2/car — rarely binding, but the law is
+ * one law). Not assignable → null, same shape as a missing wet life.
  */
-export function buildWetPlan(model: SaveModel, laps: number): WetPlanResult | null {
+export function buildWetPlan(
+  model: SaveModel,
+  laps: number,
+  inventory?: TyreInventory | null,
+): WetPlanResult | null {
   const freshLife = (type: number): number | null => {
     const values = model.tyres
       .filter((t) => t.weekendTyreType === type && t.frontLeftWear >= 0.99 && t.estimatedLapLifeRemaining != null)
@@ -741,6 +766,13 @@ export function buildWetPlan(model: SaveModel, laps: number): WetPlanResult | nu
       stints.push({ compound: 'W', laps: remaining });
     } else {
       stints.push({ compound: 'I', laps: remaining });
+    }
+  }
+  /* v0.9.1 — one law for wet too: each car must own the sets the plan runs. */
+  if (inventory) {
+    const wetStints = stints.map((s) => ({ compound: s.compound, laps: s.laps }));
+    if (inventory.cars.some((car) => assignSetsForCar(car.sets, wetStints) == null)) {
+      return null;
     }
   }
   return {
@@ -1348,35 +1380,95 @@ export function buildTyreLab(
      On the owner's Monza pre-race save: the S(19)→M(34) lead re-prices
      from 51.7s (model lives) to 57.6s (cap 24/36/55). */
   let infeasibleNote: string | null = null;
-  if (inventory && capTightens) {
+  /* v0.9.1 — the set-assignment note: names the plan, the compound, the
+     stint laps it needs and the failing car's OWN stock, exactly the spec
+     format: "S→M→M — cần 2 stint M (23 + 23 vòng) nhưng mỗi xe chỉ có 1 bộ M khả dụng (đời 31)" */
+  const setInfeasibleNote = (plan: StrategyResult, car: InventoryCar): string => {
+    const perCompound = new Map<Compound, number[]>();
+    for (const st of plan.stints) {
+      const laps = perCompound.get(st.compound);
+      if (laps) laps.push(st.laps);
+      else perCompound.set(st.compound, [st.laps]);
+    }
+    const parts: string[] = [];
+    for (const [compound, laps] of perCompound) {
+      const usable = car.sets
+        .filter((s) => s.compound === compound && s.available && (s.lifeRemaining ?? 0) > 0)
+        .map((s) => s.lifeRemaining as number)
+        .sort((a, b) => b - a);
+      const ordered = [...laps].sort((a, b) => b - a);
+      if (ordered.some((l, i) => l > (usable[i] ?? 0))) {
+        parts.push(
+          `${ordered.length} stint ${compound} (${ordered.join(' + ')} vòng) nhưng mỗi xe chỉ có ${usable.length} bộ ${compound} khả dụng${usable.length > 0 ? ` (đời ${usable[0]})` : ''}`,
+        );
+      }
+    }
+    return `${plan.order.join('→')} — cần ${parts.join('; ')}`;
+  };
+  if (inventory) {
     const surviving: typeof ranked = [];
     for (const plan of ranked) {
-      const capEval = evaluateStrategy(plan.order, laps, invCap, deltas, pitCostS, deg);
-      if (!capEval) {
+      let split = plan.stints;
+      if (capTightens) {
+        const capEval = evaluateStrategy(plan.order, laps, invCap, deltas, pitCostS, deg);
+        if (!capEval) {
+          if (!infeasibleNote) {
+            const shortest = plan.stints
+              .filter((st) => st.laps > invCap[st.compound])
+              .map((st) => `${st.compound} ${st.laps} vòng`)
+              .join(', ');
+            infeasibleNote = `${plan.stints.map((st) => st.compound).join('→')} — cần bộ ${shortest} nhưng kho chỉ còn bộ tối đa ${[...new Set(plan.stints.map((st) => st.compound))].map((c) => `${c} ${invCap[c]} vòng`).join(' / ')}`;
+          }
+          continue;
+        }
+        plan.modelTimeS = plan.timeS;
+        plan.timeS = Math.round(capEval.timeS * 10) / 10;
+        plan.stints = capEval.stints;
+        split = plan.stints;
+        let lap = 0;
+        for (const st of plan.stints) {
+          st.fromLap = lap + 1;
+          lap += st.laps;
+          st.toLap = lap;
+        }
+        plan.pitLaps = plan.stints.slice(0, -1).map((st) => st.toLap);
+      }
+      /* v0.9.1 — the set-assignment law (prompt §2): the split must be
+         runnable on EACH car's OWN garage. The ranked list is team-level;
+         a plan any single car cannot run is never proposed (the v0.8.1
+         MarinaBay bug priced S→M→M off the TEAM's 2 M sets where each car
+         owns exactly 1). */
+      const assigns = inventory.cars.map((car) => assignSetsForCar(car.sets, split));
+      const failingIndex = assigns.findIndex((a) => a == null);
+      if (failingIndex >= 0) {
         if (!infeasibleNote) {
-          const shortest = plan.stints
-            .filter((st) => st.laps > invCap[st.compound])
-            .map((st) => `${st.compound} ${st.laps} vòng`)
-            .join(', ');
-          infeasibleNote = `${plan.stints.map((st) => st.compound).join('→')} — cần bộ ${shortest} nhưng kho chỉ còn bộ tối đa ${[...new Set(plan.stints.map((st) => st.compound))].map((c) => `${c} ${invCap[c]} vòng`).join(' / ')}`;
+          infeasibleNote = setInfeasibleNote(plan, inventory.cars[failingIndex]!);
         }
         continue;
       }
-      plan.modelTimeS = plan.timeS;
-      plan.timeS = Math.round(capEval.timeS * 10) / 10;
-      plan.stints = capEval.stints;
-      let lap = 0;
-      for (const st of plan.stints) {
-        st.fromLap = lap + 1;
-        lap += st.laps;
-        st.toLap = lap;
+      /* per-stint set info from the REAL assignment (lead garage shown at
+         team level; a diverging car re-attaches its own sets in priceOn) */
+      for (const a of assigns[0] as SetAssignment[]) {
+        split[a.stintIndex].setUsed = {
+          tyreSetId: a.tyreSetId,
+          fresh: a.fresh,
+          life: a.life,
+          spare: false,
+        };
       }
-      plan.pitLaps = plan.stints.slice(0, -1).map((st) => st.toLap);
       surviving.push(plan);
     }
     if (surviving.length > 0) {
       ranked.length = 0;
       ranked.push(...surviving);
+      /* v0.9.1 — re-base vsBestS on the best FEASIBLE plan (the lead): a
+         model-best plan the garage cannot run must never drag its old
+         model-price gap (+6.4s on MarinaBay) onto the plan we propose.
+         modelTimeS keeps the pre-cap price for reference. */
+      const baseS = surviving[0].timeS;
+      for (const s of surviving) {
+        s.vsBestS = Math.round((s.timeS - baseS) * 10) / 10;
+      }
     } else {
       /* no plan fits the garage at all — keep the model ranking visible and
          say so instead of rendering an empty lab */
@@ -1389,48 +1481,6 @@ export function buildTyreLab(
       assumptions.push({
         text: `Bỏ phương án nhanh hơn theo model vì kho không chạy được: ${infeasibleNote}`,
       });
-    }
-  }
-  /* per-stint set info (best available fit) + the reuse assumption */
-  if (inventory) {
-    for (const plan of ranked) {
-      for (const st of plan.stints) {
-        const carSets = inventory.cars
-          .flatMap((car) => car.sets)
-          .filter(
-            (s) =>
-              s.compound === st.compound &&
-              s.available &&
-              (s.lifeRemaining ?? 0) >= st.laps,
-          )
-          .sort((a, b) => (a.lifeRemaining ?? 0) - (b.lifeRemaining ?? 0));
-        const best = carSets[0];
-        st.setUsed = best
-          ? { fresh: best.fresh, life: best.lifeRemaining as number, spare: false }
-          : { fresh: false, life: invCap[st.compound], spare: true };
-      }
-    }
-    /* count stints per compound vs available sets — flag the reuse gap */
-    for (const plan of ranked) {
-      const perCompound: Partial<Record<Compound, number>> = {};
-      for (const st of plan.stints) {
-        perCompound[st.compound] = (perCompound[st.compound] ?? 0) + 1;
-      }
-      const reused = (['S', 'M', 'H'] as const).filter((c) => {
-        const need = perCompound[c] ?? 0;
-        if (need <= 1) return false;
-        const have = inventory.cars
-          .flatMap((car) => car.sets)
-          .filter((s) => s.compound === c && s.available && (s.lifeRemaining ?? 0) > 0)
-          .length;
-        return need > have;
-      });
-      if (reused.length > 0) {
-        assumptions.push({
-          text: `Kho chỉ có ít bộ ${reused.join('/')} khả dụng hơn số stint của plan — model tạm giả định dùng lại bộ tốt nhất cho stint sau (giới hạn đã biết, chưa có dữ liệu phân bộ theo xe)`,
-        });
-        break;
-      }
     }
   }
 
@@ -1644,32 +1694,60 @@ export function buildTyreLab(
        unverified seat guess is exactly the v0.6/v0.7 failure shape. On the
        Monza pre-race save both cars cap identically → both paths give the
        same numbers (locked in tests so a future divergence is not lost). */
-    const capOfDriver = (driverId: number): Record<Compound, number> => {
+    /* v0.9.1 — carOfDriver also exposes the car's OWN sets: pricing a plan
+       on one car's garage re-runs the set-assignment law on THAT stock and
+       attaches THAT car's set info to every stint. Seats unverified → the
+       conservative team cap + null sets (the team-level law already ran). */
+    const carOfDriver = (
+      driverId: number,
+    ): { cap: Record<Compound, number>; sets: InventorySet[] | null } => {
       const car = inventory?.cars.find((c) => c.driverId === driverId && c.seatVerified);
-      return car && inventory ? { ...lives, ...inventory.perCarMaxStint[car.carId]! } : invCap;
+      return car && inventory
+        ? { cap: { ...lives, ...inventory.perCarMaxStint[car.carId]! }, sets: car.sets }
+        : { cap: invCap, sets: null };
     };
     const priceOn = (
       plan: StrategyResult,
       cap: Record<Compound, number>,
+      sets: InventorySet[] | null,
     ): StrategyResult | null => {
-      if ((['S', 'M', 'H'] as const).every((c) => cap[c] === invCap[c])) return plan;
-      const r = evaluateStrategy(plan.order, laps, cap, deltas, pitCostS, deg);
-      if (!r) return null;
-      let lap = 0;
-      for (const st of r.stints) {
-        st.fromLap = lap + 1;
-        lap += st.laps;
-        st.toLap = lap;
+      const sameCap = (['S', 'M', 'H'] as const).every((c) => cap[c] === invCap[c]);
+      if (sameCap && !sets) return plan;
+      let stints = plan.stints;
+      let timeS = plan.timeS;
+      if (!sameCap) {
+        const r = evaluateStrategy(plan.order, laps, cap, deltas, pitCostS, deg);
+        if (!r) return null;
+        stints = r.stints;
+        timeS = Math.round(r.timeS * 10) / 10;
+        let lap = 0;
+        for (const st of stints) {
+          st.fromLap = lap + 1;
+          lap += st.laps;
+          st.toLap = lap;
+        }
+      }
+      if (sets) {
+        const assigns = assignSetsForCar(sets, stints);
+        if (!assigns) return null;
+        stints = stints.map((st, i) => {
+          const a = assigns.find((x) => x.stintIndex === i)!;
+          return {
+            ...st,
+            setUsed: { tyreSetId: a.tyreSetId, fresh: a.fresh, life: a.life, spare: false },
+          };
+        });
       }
       return {
         ...plan,
         modelTimeS: plan.modelTimeS ?? plan.timeS,
-        timeS: Math.round(r.timeS * 10) / 10,
-        stints: r.stints,
-        pitLaps: r.stints.slice(0, -1).map((st) => st.toLap),
+        timeS,
+        stints,
+        pitLaps: stints.slice(0, -1).map((st) => st.toLap),
       };
     };
-    const leadPlan = priceOn(best, capOfDriver(leadGrid.driverId)) ?? best;
+    const leadGarage = carOfDriver(leadGrid.driverId);
+    const leadPlan = priceOn(best, leadGarage.cap, leadGarage.sets) ?? best;
     if (leadPlan !== best) {
       assumptions.push({
         text: 'Plan của xe lead tính lại giá trên kho lốp đúng xe đó (cap xe khác cap đội) — bảng xếp hạng phía trên vẫn xếp theo cap đội',
@@ -1683,9 +1761,12 @@ export function buildTyreLab(
        offset rules run — a re-split can move pit laps, so the gap check
        applies AFTER pricing */
     const candidates: StrategyResult[] = [];
+    const trailGarage = carOfDriver(trailGrid.driverId);
     for (const p of ranked) {
       if (p === best) continue; // the lead's ranked entry (clone or not)
-      const priced = priceOn(p, capOfDriver(trailGrid.driverId));
+      /* v0.9.1 — a trail candidate the TRAIL car cannot run on its own sets
+         is skipped, never proposed */
+      const priced = priceOn(p, trailGarage.cap, trailGarage.sets);
       if (priced && gapOk(priced)) candidates.push(priced);
     }
     /* (a) different starting compound, within the 2.0s tie band of the
@@ -1701,11 +1782,12 @@ export function buildTyreLab(
     } else {
       /* fallback: keep the optimal plan but push its pits as far from the
          lead's as the tyres allow — never reach ≥3 is stated, not hidden.
-         v0.7.1: the shift runs on the TRAIL car's own cap. */
-      const trailCap = capOfDriver(trailGrid.driverId);
+         v0.7.1: the shift runs on the TRAIL car's own cap. v0.9.1: and on
+         the TRAIL car's own sets. */
+      const trailCap = trailGarage.cap;
       let bestShifted: { plan: StrategyResult; gap: number; shift: number } | null = null;
       for (const shift of [3, -3, 4, -4, 5, -5, 2, -2, 1, -1]) {
-        const r = whatIfPitShift(leadPlan, laps, trailCap, deltas, pitCostS, shift);
+        const r = whatIfPitShift(leadPlan, laps, trailCap, deltas, pitCostS, shift, deg, trailGarage.sets ?? undefined);
         if (!r.shifted) continue;
         const minGap = Math.min(
           ...r.shifted.pitLaps.map((pl) =>

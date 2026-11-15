@@ -539,6 +539,81 @@ export function buildTyreInventory(
   return { cars, perCar, teamAggregate, maxStint, perCarMaxStint, availableNote: 'state0' };
 }
 
+/* ── v0.9.1 — the set-assignment feasibility law (prompt v0.9.1 §2) ──────── */
+
+/** One stint ↔ one tyre set, as assigned by `assignSetsForCar`. */
+export interface SetAssignment {
+  /** Index into the stints array the caller passed in. */
+  stintIndex: number;
+  tyreSetId: number;
+  /** The assigned set's remaining life (≥ the stint's laps). */
+  life: number;
+  fresh: boolean;
+}
+
+/**
+ * Greedy set assignment for ONE car — the ONLY definition of "this plan can
+ * run on this car" (prompt v0.9.1 §2). Per compound: the stints using it,
+ * longest first, are matched against the car's AVAILABLE sets
+ * (`available === true` i.e. AvailabilityState 0, `lifeRemaining > 0`),
+ * longest life first. The assignment exists iff stint k fits the k-th best
+ * set for every k — so a compound used more times than the car owns sets of
+ * it, or a stint longer than the k-th best set's life, makes the whole plan
+ * infeasible for this car.
+ *
+ * The input is ONE car's `InventorySet[]` — NEVER a team aggregate. The
+ * v0.8.1 bug (Nguyen, MarinaBay 2026-11-15): the team owned 2 usable M sets
+ * (1 per car) and the engine priced S→M→M as if one new M set could run two
+ * 23-lap stints. Team stock is not runnable stock.
+ */
+export function assignSetsForCar(
+  sets: InventorySet[],
+  stints: ReadonlyArray<{ compound: InventoryCompound; laps: number }>,
+): SetAssignment[] | null {
+  const pools = new Map<InventoryCompound, InventorySet[]>();
+  for (const s of sets) {
+    if (!s.available || (s.lifeRemaining ?? 0) <= 0) continue;
+    const pool = pools.get(s.compound);
+    if (pool) pool.push(s);
+    else pools.set(s.compound, [s]);
+  }
+  for (const pool of pools.values()) {
+    pool.sort((a, b) => (b.lifeRemaining as number) - (a.lifeRemaining as number));
+  }
+  /* longest stint first, per compound (a global desc sort preserves the
+     per-compound desc order — ties are interchangeable by feasibility) */
+  const ordered = stints
+    .map((st, stintIndex) => ({ ...st, stintIndex }))
+    .sort((a, b) => b.laps - a.laps);
+  const out: SetAssignment[] = [];
+  const cursor: Partial<Record<InventoryCompound, number>> = {};
+  for (const st of ordered) {
+    const pool = pools.get(st.compound);
+    const k = cursor[st.compound] ?? 0;
+    const set = pool?.[k];
+    /* no pool = no set of this compound at all; pool[k] undefined = more
+       stints than sets; both are the "bộ không tồn tại" case */
+    if (!set) return null;
+    if ((set.lifeRemaining as number) < st.laps) return null;
+    cursor[st.compound] = k + 1;
+    out.push({
+      stintIndex: st.stintIndex,
+      tyreSetId: set.tyreSetId,
+      life: set.lifeRemaining as number,
+      fresh: set.fresh,
+    });
+  }
+  return out;
+}
+
+/** Boolean wrapper — the plan is runnable on THIS car's own garage. */
+export function isPlanFeasibleForCar(
+  car: InventoryCar,
+  stints: ReadonlyArray<{ compound: InventoryCompound; laps: number }>,
+): boolean {
+  return assignSetsForCar(car.sets, stints) != null;
+}
+
 /** WeekendTyreType → compound — the v0.6.2-verified encoding (0=H…4=W). */
 export const ALLOC_COMPOUND: Record<number, InventoryCompound> = {
   0: 'H', 1: 'M', 2: 'S', 3: 'I', 4: 'W',
