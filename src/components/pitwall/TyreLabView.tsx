@@ -154,6 +154,13 @@ export function TyreLabView({
                 {t('heroPlan', {
                   plan: tyre.data.best.stints.map((s) => `${s.compound}(${s.laps})`).join(' → '),
                   stops: tyre.data.best.stops,
+                  /* v0.6.3: the pit laps ride along in the hero — "2 pit
+                     (V21, V43)" — straight from the engine's pitLaps, so the
+                     headline matches the timeline's per-stint pit labels. */
+                  pits:
+                    tyre.data.best.pitLaps.length > 0
+                      ? ` (${tyre.data.best.pitLaps.map((l) => `V${l}`).join(', ')})`
+                      : '',
                 })}
               </h3>
               {tyre.data.expectedStops != null ? (

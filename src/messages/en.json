@@ -304,7 +304,12 @@
     "noRace": "No race to analyse.",
     "noPlan": "Could not build a valid tyre plan for this race.",
     "hero": "Recommended plan",
-    "heroPlan": "{plan} — {stops} stop(s)",
+    "heroPlan": "{plan} — {stops} stop(s){pits}",
+    "timeline": {
+      "pit": "pit V{lap}",
+      "finish": "to finish",
+      "lapsUnit": "L"
+    },
     "expectedStops": "Field average stops: ~{stops} (source: {source})",
     "stopsReconcile": "Why they differ: ~{expected} stops is the field average (reference from {source}); your {plan}-stop plan is the total-time optimum (pace + degradation + pit cost) for your tyres.",
     "alternatives": "Alternatives",

@@ -304,7 +304,12 @@
     "noRace": "Không có chặng nào để phân tích.",
     "noPlan": "Không xây được kế hoạch lốp hợp lệ cho chặng này.",
     "hero": "Kế hoạch đề xuất",
-    "heroPlan": "{plan} — {stops} pit",
+    "heroPlan": "{plan} — {stops} pit{pits}",
+    "timeline": {
+      "pit": "pit V{lap}",
+      "finish": "về đích",
+      "lapsUnit": "v"
+    },
     "expectedStops": "Trung bình pit của cánh quân: ~{stops} (nguồn: {source})",
     "stopsReconcile": "Vì sao khác: ~{expected} pit là trung bình cả cánh quân (tham khảo từ {source}), còn plan {plan} pit là kết quả tối ưu tổng thời gian (pace + degradation + chi phí pit) trên lốp của đội bạn.",
     "alternatives": "Phương án thay thế",

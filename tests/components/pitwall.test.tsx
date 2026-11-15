@@ -91,10 +91,54 @@ describe('CompoundBadge + StintTimeline', () => {
       { compound: 'S' as const, laps: 12, fromLap: 1, toLap: 12 },
       { compound: 'M' as const, laps: 18, fromLap: 13, toLap: 30 },
     ];
-    render(<StintTimeline stints={stints} totalLaps={30} pitLaps={[12]} />);
+    render(withI18n(<StintTimeline stints={stints} totalLaps={30} pitLaps={[12]} />));
     expect(screen.getByTestId('stint-timeline')).toBeInTheDocument();
     expect(screen.getByText('Pit: 12')).toBeInTheDocument();
-    expect(screen.getByText('S·12')).toBeInTheDocument();
-    expect(screen.getByText('M·18')).toBeInTheDocument();
+    // v0.6.3: two-line labels — stint length on top, pit lap below; the
+    // final stint reads "về đích" instead of a pit lap
+    expect(screen.getByTestId('stint-label-0')).toHaveTextContent('S 12v');
+    expect(screen.getByTestId('stint-pit-0')).toHaveTextContent('pit V12');
+    expect(screen.getByTestId('stint-label-1')).toHaveTextContent('M 18v');
+    expect(screen.getByTestId('stint-pit-1')).toHaveTextContent('về đích');
+  });
+
+  /* v0.6.3 regression — the v0.6.0 pit flags dropped `flex` from the bar
+   * container, stacking the stints into one row per stint (last one clipped).
+   * The container must be flex again and every stint must carry its own pit
+   * lap label (stint i pits at its toLap). Montreal plan S(21)→S(22)→M(27). */
+  it('keeps the stints on ONE flex row and labels every pit lap (v0.6.3)', () => {
+    const stints = [
+      { compound: 'S' as const, laps: 21, fromLap: 1, toLap: 21 },
+      { compound: 'S' as const, laps: 22, fromLap: 22, toLap: 43 },
+      { compound: 'M' as const, laps: 27, fromLap: 44, toLap: 70 },
+    ];
+    render(withI18n(<StintTimeline stints={stints} totalLaps={70} pitLaps={[21, 43]} />));
+    const bar = screen.getByTestId('stint-timeline').firstElementChild as HTMLElement;
+    // the bar's scroll wrapper is first, the flex bar is its child
+    const flexBar = bar.firstElementChild as HTMLElement;
+    expect(flexBar.className).toContain('flex');
+    expect(flexBar.className).toContain('relative');
+    // Montreal labels: S 21v / pit V21, S 22v / pit V43, M 27v / về đích
+    expect(screen.getByTestId('stint-label-0')).toHaveTextContent('S 21v');
+    expect(screen.getByTestId('stint-pit-0')).toHaveTextContent('pit V21');
+    expect(screen.getByTestId('stint-label-1')).toHaveTextContent('S 22v');
+    expect(screen.getByTestId('stint-pit-1')).toHaveTextContent('pit V43');
+    expect(screen.getByTestId('stint-label-2')).toHaveTextContent('M 27v');
+    expect(screen.getByTestId('stint-pit-2')).toHaveTextContent('về đích');
+    expect(screen.getByText('Pit: 21, 43')).toBeInTheDocument();
+  });
+
+  it('falls back to compact labels on narrow segments but keeps the pit lap', () => {
+    // 6 laps of 70 ≈ 8.6% < 12% → compact "S·6" / "V6"; 58 laps ≈ 83% → full
+    const stints = [
+      { compound: 'S' as const, laps: 6, fromLap: 1, toLap: 6 },
+      { compound: 'M' as const, laps: 58, fromLap: 7, toLap: 64 },
+      { compound: 'S' as const, laps: 6, fromLap: 65, toLap: 70 },
+    ];
+    render(withI18n(<StintTimeline stints={stints} totalLaps={70} pitLaps={[6, 64]} />));
+    expect(screen.getByTestId('stint-label-0')).toHaveTextContent('S·6');
+    expect(screen.getByTestId('stint-pit-0')).toHaveTextContent('V6');
+    expect(screen.getByTestId('stint-label-1')).toHaveTextContent('M 58v');
+    expect(screen.getByTestId('stint-pit-1')).toHaveTextContent('pit V64');
   });
 });
