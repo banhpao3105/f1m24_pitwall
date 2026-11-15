@@ -335,7 +335,8 @@
       "reasonShifted": "Could not fully separate — pit laps moved only {laps} laps away from the lead.",
       "tieNote": "Tied on modelled time — split to avoid traffic + hedge, not because it is faster.",
       "total": "Modelled total: {time}s",
-      "noTrail": "No separate plan for the trail car — the grid lacks data for both drivers."
+      "noTrail": "No separate plan for the trail car — the grid lacks data for both drivers.",
+      "gridNote": "Grid positions = qualifying order + penalties already in this save (no unapplied penalty right now)."
     },
     "hero": "Recommended plan",
     "heroPlan": "{plan} — {stops} stop(s){pits}",
@@ -460,6 +461,23 @@
       "colGained": "Pos. gained",
       "colH2h": "H2H vs you",
       "assumptions": "Assumptions & data sources"
+    },
+    "grid": {
+      "title": "Starting grid",
+      "note": "Grid = qualifying order + penalties ALREADY in this save. Post-quali penalties (ParcFerme / part changes) only appear when a newer save is loaded — re-check before the race.",
+      "penalized": "{places}-place penalty",
+      "backOfGrid": "back of the grid",
+      "unresolved": "Unapplied penalty — team #{teamId}, car {car}, reason {reason}: seat not resolvable (seat mapping needs verification).",
+      "reasons": {
+        "0": "engine allocation exceeded",
+        "1": "ERS allocation exceeded",
+        "2": "gearbox allocation exceeded",
+        "3": "causing a collision",
+        "4": "major collision",
+        "5": "Parc Fermé breach",
+        "x": "reason #{n}"
+      },
+      "applied": "{n} penalties applied to the grid"
     }
   },
   "sim": {

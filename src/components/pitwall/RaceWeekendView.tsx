@@ -9,7 +9,7 @@
 
 import { useTranslations, useLocale } from 'next-intl';
 import { useState } from 'react';
-import { Flag, CloudRain, Thermometer, CircleAlert, Gauge, Timer } from 'lucide-react';
+import { Flag, CloudRain, Thermometer, CircleAlert, Gauge, Timer, ListOrdered } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
 import { useTyreLab, usePaceBoard, useRacePaceBoard, useResultsBoard, useSim, useSeasonSeries } from '@/lib/engine-hooks';
@@ -68,6 +68,14 @@ export function RaceWeekendView({
     : null;
   const fastest = tyre?.data.best ?? null;
   const firstStintCompound = fastest?.stints[0]?.compound as CompoundKey | undefined;
+  /* v0.7.1 — the grid exactly as the save carries it: qualifying order +
+     penalties ALREADY present. The post-race grid never leaks backwards. */
+  const derivedGrid = tyre?.data.readiness.derivedGrid ?? null;
+  const playerDriverIds = new Set(
+    model.drivers.filter((d) => d.teamId === model.player.teamId).map((d) => d.staffId),
+  );
+  const penaltyReasonLabel = (reason: number): string =>
+    [0, 1, 2, 3, 4, 5].includes(reason) ? t(`grid.reasons.${reason}`) : t('grid.reasons.x', { n: reason });
 
   // v0.6.0 — one-line verdict for the pace card, following the active metric
   const activePaceBoard = paceMetric === 'peak' ? pace : racePace;
@@ -160,6 +168,79 @@ export function RaceWeekendView({
         <>
           {/* broadcast-style tower from the latest completed race (v0.5.0) */}
           <TimingTower model={model} raceId={race.raceId} />
+
+          {/* v0.7.1 — the grid card: quali order + penalties already in this
+              save, both positions shown when they differ, unresolved
+              penalties listed instead of silently dropped */}
+          {derivedGrid ? (
+            <section
+              aria-label={t('grid.title')}
+              className="rounded-lg border border-line bg-panel p-4"
+              data-testid="race-grid"
+            >
+              <header className="mb-3 flex flex-wrap items-center gap-2">
+                <ListOrdered className="h-4 w-4 text-teal" aria-hidden="true" />
+                <h3 className="text-[15px] font-semibold text-ink">{t('grid.title')}</h3>
+                {derivedGrid.appliedPenalties > 0 ? (
+                  <span className="rounded bg-raised px-2 py-0.5 font-mono text-[10px] text-ink-soft">
+                    {t('grid.applied', { n: derivedGrid.appliedPenalties })}
+                  </span>
+                ) : null}
+              </header>
+              <ul
+                className="grid max-h-96 grid-cols-1 gap-x-4 gap-y-0.5 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3"
+                data-testid="race-grid-list"
+              >
+                {derivedGrid.grid.map((g) => (
+                  <li
+                    key={g.driverId}
+                    className={cn(
+                      'flex items-center gap-2 rounded px-2 py-1 text-xs',
+                      playerDriverIds.has(g.driverId) ? 'bg-amber/10' : '',
+                    )}
+                  >
+                    <span className="w-7 shrink-0 font-mono text-ink-faint">P{g.gridPos}</span>
+                    <span
+                      className={cn(
+                        'truncate',
+                        playerDriverIds.has(g.driverId) ? 'font-medium text-amber' : 'text-ink',
+                      )}
+                    >
+                      {g.driverName}
+                    </span>
+                    {g.gridPos !== g.qualiPos ? (
+                      <span className="ml-auto shrink-0 font-mono text-[10px] text-amber">
+                        P{g.qualiPos} → {g.backOfGrid ? t('grid.backOfGrid') : t('grid.penalized', { places: g.penaltyPlaces })}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+              {derivedGrid.appliedPenalties === 0 ? (
+                <p
+                  className="mt-2 flex items-start gap-2 text-[11px] text-ink-faint"
+                  data-testid="grid-no-penalty-note"
+                >
+                  <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber" aria-hidden="true" />
+                  {t('grid.note')}
+                </p>
+              ) : null}
+              {derivedGrid.unresolvedList.map((p, i) => (
+                <p
+                  key={i}
+                  className="mt-1 flex items-start gap-2 text-[11px] text-amber"
+                  data-testid={`grid-unresolved-${i}`}
+                >
+                  <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  {t('grid.unresolved', {
+                    teamId: p.teamId,
+                    car: p.carInTeam,
+                    reason: penaltyReasonLabel(p.reason),
+                  })}
+                </p>
+              ))}
+            </section>
+          ) : null}
 
           {fastest ? (
             <section aria-label={t('plan')} className="rounded-lg border border-line bg-panel p-4">

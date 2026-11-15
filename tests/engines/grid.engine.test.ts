@@ -1,18 +1,21 @@
 /**
- * Grid engine tests (v0.7.0 step 2) — locked to the owner-verified Monza
- * 2027 pre-race save numbers (spec mục "Dữ liệu đã xác minh"):
+ * Grid engine tests (v0.7.0 step 2, corrected v0.7.1 step 3) — locked to
+ * the owner-verified Monza 2027 pre-race save numbers.
  *
- * Grid suy từ quali khớp StartingPos sau race cho cả 22 xe, including the
- * trap cases: driver 102 quali P7 → grid P22 (back-of-grid penalty, team 2
- * row in Races_GridPenalties) and driver 95 quali P8 → grid P7 (everyone
- * behind the penalized car moves up one). The quali order below reconstructs
- * exactly that classification: P1–P6 unchanged, 102 at P7, then 95, 12, 11,
- * 3, 280, 14, 120, 17, 83, 142, 76, 8, 255, 285, 13.
+ * v0.7.1 RETRACTION of the v0.7.0 claim: the pre-race save's 9
+ * Races_GridPenalties rows are ALL Served=1 — nothing is pending — so the
+ * grid derivable from THIS save is the pure qualifying order (Piastri P7,
+ * O'Ward P21, Ricciardo P22). The post-race StartingPos (Piastri P22 /
+ * O'Ward P20 / Ricciardo P21) comes from a penalty row that only exists in
+ * the POST-race save; v0.7.0's "grid matches StartingPos 22/22" claim was
+ * verified against a misread and is retracted (prompt v0.7.1 bước 3d).
+ * The back-of-grid / place-count engine branches are covered by clearly
+ * labelled SYNTHETIC fixtures below — engine behaviour, never a Monza DoD.
  *
  * The seat resolution uses the practice-lap signal (allocation LapsCompleted
- * per SessionLastUsedIn vs Races_PracticeResults.LapCount) — the signal the
- * owner verified on the real save. Penalty places come from the game's own
- * Races_Enum_PenaltyType (reason 3 = CausingCollision = 3 places, verified).
+ * per SessionLastUsedIn vs Races_PracticeResults.LapCount). Penalty places
+ * come from the game's own Races_Enum_PenaltyType (reason 3 = CausingCollision
+ * = 3 places, verified).
  */
 
 import { describe, it, expect } from 'vitest';
@@ -174,8 +177,11 @@ function monzaAllocation(): TyreAllocation[] {
   return sets;
 }
 
-/** The verified pending penalty: team 2, seat 2, engine allocation exceeded
- * → back of the grid (the owner-verified Monza shape: quali P7 → P22). */
+/** SYNTHETIC — test-only pending penalty. This row does NOT exist in the
+ * real Monza pre-race save (whose 9 Races_GridPenalties rows are ALL
+ * Served=1). It exists purely to exercise the back-of-grid branch of the
+ * engine and must NEVER be cited as a Monza DoD (v0.7.1 bước 3a — the
+ * v0.7.0 release wrongly used it to claim the grid matched StartingPos). */
 function monzaPenaltyRow(): SaveModel['gridPenalties'] extends undefined ? never : NonNullable<SaveModel['gridPenalties']>['rows'][number] {
   return {
     penaltyId: 1,
@@ -188,6 +194,36 @@ function monzaPenaltyRow(): SaveModel['gridPenalties'] extends undefined ? never
     serveInRace: 1,
     serveInSprint: 0,
   };
+}
+
+/** The REAL Races_GridPenalties of the Monza pre-race save (save4.db,
+ * verified during the v0.7.1 diagnosis): 9 rows, EVERY one Served=1 —
+ * nothing is pending, so the derivable grid is the pure quali order.
+ * Only PenaltyID 36 is owner-verified in detail (Team 2, Car 1, reason 3,
+ * session 6, Served 1); the other 8 carry real-shaped values (the two
+ * first rows match the verified rows of a real 1.11 save). The cú phạt
+ * that drops Piastri to P22 (row 40: Team 2 Car 2, reason 5 ParcFerme,
+ * PitLaneStart 1) only exists in the POST-race save — row 39 here guards
+ * that shape: even a served ParcFerme row must never touch the grid. */
+function monzaRealPenaltyRows(): NonNullable<SaveModel['gridPenalties']>['rows'] {
+  const row = (
+    penaltyId: number, teamId: number, carInTeam: number, reasonForPenalty: number,
+    sessionReceived: number, served: number, pitLaneStart = 0,
+  ) => ({
+    penaltyId, teamId, carInTeam, reasonForPenalty, sessionReceived,
+    served, pitLaneStart, serveInRace: 1, serveInSprint: 0,
+  });
+  return [
+    row(31, 4, 1, 3, 6, 1),
+    row(32, 5, 2, 3, 6, 1),
+    row(33, 6, 1, 0, 6, 1),
+    row(34, 7, 2, 1, 6, 1),
+    row(35, 3, 1, 2, 6, 1),
+    row(36, 2, 1, 3, 6, 1), // the owner-verified row — already served
+    row(37, 8, 2, 4, 6, 1),
+    row(38, 9, 1, 3, 6, 1),
+    row(39, 10, 2, 5, 6, 1, 1), // served ParcFerme + pit-lane shape
+  ];
 }
 
 /** The in-game strategist plan the owner read off the Monza pre-race save:
@@ -263,8 +299,40 @@ function monzaModel(withPenalty = true): SaveModel {
   };
 }
 
-describe('deriveGrid — Monza 2027 (owner-verified grid)', () => {
-  it('reproduces the verified StartingPos for all 22 drivers', () => {
+describe('deriveGrid — the REAL pre-race Monza save (9 rows, all Served=1)', () => {
+  it('applies nothing: grid = quali order — Piastri P7, O\'Ward P21, Ricciardo P22', () => {
+    const model = monzaModel(false);
+    model.gridPenalties!.rows = monzaRealPenaltyRows();
+    const derived = deriveGrid(model, MONZA_RACE_ID)!;
+    expect(derived.grid.map((g) => g.driverId)).toEqual(MONZA_QUALI_ORDER);
+    expect(derived.appliedPenalties).toBe(0);
+    expect(derived.unresolvedPenalties).toBe(0);
+    expect(derived.unresolvedList).toEqual([]);
+    const p102 = derived.grid.find((g) => g.driverId === 102)!; // Piastri
+    const p285 = derived.grid.find((g) => g.driverId === 285)!; // O'Ward
+    const p13 = derived.grid.find((g) => g.driverId === 13)!; // Ricciardo
+    expect(p102.gridPos).toBe(7);
+    expect(p285.gridPos).toBe(21);
+    expect(p13.gridPos).toBe(22);
+    // no entry may differ from its quali slot — every qualiPos === gridPos
+    expect(derived.grid.every((g) => g.gridPos === g.qualiPos)).toBe(true);
+  });
+
+  it('never forces the post-race grid (P22/P20/P21) out of a save that lacks the penalty', () => {
+    // if anyone "fixes" the engine to reproduce the post-race StartingPos
+    // from THIS save (applying served rows or inventing the ParcFerme row),
+    // Piastri lands P22 / the others move up — this lock fails first
+    const model = monzaModel(false);
+    model.gridPenalties!.rows = monzaRealPenaltyRows();
+    const derived = deriveGrid(model, MONZA_RACE_ID)!;
+    expect(derived.grid.find((g) => g.driverId === 102)!.gridPos).not.toBe(22);
+    expect(derived.grid.find((g) => g.driverId === 285)!.gridPos).toBe(21);
+    expect(derived.grid.find((g) => g.driverId === 13)!.gridPos).toBe(22);
+  });
+});
+
+describe('deriveGrid — SYNTHETIC penalty shapes (test-only engine branches; NOT a Monza DoD)', () => {
+  it('SYNTHETIC back-of-grid penalty: the penalized car drops to the back and everyone behind moves up one', () => {
     const derived = deriveGrid(monzaModel(), MONZA_RACE_ID);
     expect(derived).not.toBeNull();
     const grid = derived!.grid;
@@ -272,22 +340,7 @@ describe('deriveGrid — Monza 2027 (owner-verified grid)', () => {
     expect(grid.map((g) => g.driverId)).toEqual(MONZA_GRID);
   });
 
-  it('drops the penalized car to the back and moves everyone behind up one', () => {
-    const derived = deriveGrid(monzaModel(), MONZA_RACE_ID)!;
-    const p102 = derived.grid.find((g) => g.driverId === 102)!;
-    expect(p102.gridPos).toBe(22);
-    expect(p102.qualiPos).toBe(7);
-    expect(p102.backOfGrid).toBe(true);
-    const p95 = derived.grid.find((g) => g.driverId === 95)!;
-    expect(p95.qualiPos).toBe(8);
-    expect(p95.gridPos).toBe(7); // moved up one
-    const p285 = derived.grid.find((g) => g.driverId === 285)!;
-    expect(p285.gridPos).toBe(20); // O'Ward
-    const p13 = derived.grid.find((g) => g.driverId === 13)!;
-    expect(p13.gridPos).toBe(21); // Ricciardo
-  });
-
-  it('resolves the penalized seat via the practice-lap signal (verified)', () => {
+  it('SYNTHETIC: seat resolution via the practice-lap signal (verified) applies the penalty', () => {
     const model = monzaModel();
     const carDrivers = resolveCarDrivers(model, MONZA_RACE_ID);
     expect(carDrivers.byCar.get(2)).toEqual({ driverId: 12, verified: true });
@@ -297,7 +350,28 @@ describe('deriveGrid — Monza 2027 (owner-verified grid)', () => {
     expect(derived.seatMappingVerified).toBe(true);
   });
 
-  it('applies place-count penalties from the game enum (reason 3 = 3 places)', () => {
+  it('a pending penalty with a DEAD seat signal is unresolved, never applied (v0.7.1 bước 3b)', () => {
+    const model = monzaModel();
+    // kill the practice-lap signal: LapsCompleted = 0 everywhere (the real
+    // Monza save's state) → seats fall back to StaffID order (unverified)
+    for (const t of model.tyres) {
+      t.lapsCompleted = 0;
+      t.sessionLastUsedIn = undefined;
+    }
+    const derived = deriveGrid(model, MONZA_RACE_ID)!;
+    // the SYNTHETIC pending penalty (team 2, car 2, reason 0) must NOT move
+    // anyone — applying a 19-place drop on a seat guess is worse than not
+    // applying it
+    expect(derived.grid.map((g) => g.driverId)).toEqual(MONZA_QUALI_ORDER);
+    expect(derived.appliedPenalties).toBe(0);
+    expect(derived.unresolvedPenalties).toBe(1);
+    expect(derived.unresolvedList).toEqual([
+      { teamId: 2, carInTeam: 2, reason: 0, pitLaneStart: 0 },
+    ]);
+    expect(derived.seatMappingVerified).toBe(false);
+  });
+
+  it('SYNTHETIC place-count penalty from the game enum (reason 3 = 3 places)', () => {
     const model = monzaModel(false);
     model.gridPenalties!.rows = [{
       penaltyId: 2, teamId: 2, carInTeam: 2, reasonForPenalty: 3,

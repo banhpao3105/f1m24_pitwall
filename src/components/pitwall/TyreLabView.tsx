@@ -340,6 +340,20 @@ export function TyreLabView({
           );
           })()}
 
+          {/* v0.7.1 bước 3c — the grid positions on the split cards are the
+              quali order + penalties already in this save; say so when no
+              pending penalty exists (the P20/P21 post-race grid must never
+              leak backwards from a save that lacks it) */}
+          {tyre.data.readiness.derivedGrid &&
+          tyre.data.readiness.derivedGrid.appliedPenalties === 0 ? (
+            <p
+              className="rounded border border-line bg-surface px-3 py-2 text-[11px] text-ink-faint"
+              data-testid="split-grid-note"
+            >
+              {t('split.gridNote')}
+            </p>
+          ) : null}
+
           {/* v0.7.0 — the per-car garage inventory + the feasibility cap it
               imposes on every plan (spec bước 3) */}
           {tyre.data.inventory ? (

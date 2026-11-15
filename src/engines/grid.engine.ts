@@ -54,13 +54,30 @@ export interface GridEntry {
   backOfGrid: boolean;
 }
 
+export interface UnresolvedPenalty {
+  /** Races_GridPenalties TeamID as stored (the sequential F1 index). */
+  teamId: number;
+  /** Car index within the team (1–2) as stored. */
+  carInTeam: number;
+  /** ReasonForPenalty (the game's Races_Enum_PenaltyType value). */
+  reason: number;
+  pitLaneStart: number;
+}
+
 export interface DerivedGrid {
   grid: GridEntry[];
   appliedPenalties: number;
   /** False when a penalized car's seat had to fall back to StaffID order. */
   seatMappingVerified: boolean;
-  /** True when at least one pending penalty could not be tied to a driver. */
+  /** Pending penalties that could not be applied to the grid. */
   unresolvedPenalties: number;
+  /**
+   * v0.7.1 — WHY each pending penalty was not applied: the save carries it
+   * but no VERIFIED seat could eat it (dead practice-lap signal → the
+   * StaffID-order guess may never move a driver on the grid). The UI lists
+   * these instead of silently hiding them.
+   */
+  unresolvedList: UnresolvedPenalty[];
 }
 
 const EXCEED_LIMIT_REASONS = new Set([0, 1, 2]); // engine / ERS / gearbox
@@ -124,7 +141,7 @@ function deriveGridForRace(model: SaveModel, race: Race): DerivedGrid | null {
   const carDrivers = resolveCarDrivers(model, race.raceId);
   const pending = pendingRacePenalties(model);
   let applied = 0;
-  let unresolved = 0;
+  const unresolved: UnresolvedPenalty[] = [];
   let seatMappingVerified = true;
   const backOfGrid = new Set<number>();
   const placePenalty = new Map<number, number>();
@@ -133,12 +150,19 @@ function deriveGridForRace(model: SaveModel, race: Race): DerivedGrid | null {
     const mapped = carId != null ? carDrivers.byCar.get(carId) ?? null : null;
     const driverId = mapped?.driverId ?? null;
     if (driverId == null || !qualiPosByDriver.has(driverId)) {
-      unresolved++;
+      unresolved.push(p);
       continue;
     }
-    /* the seat that eats the penalty must be a VERIFIED mapping — a
-       StaffID-order guess moving a driver 19 places is not traceable */
-    if (!mapped!.verified) seatMappingVerified = false;
+    /* v0.7.1: the seat that eats the penalty must be a VERIFIED mapping —
+       applying a penalty to a StaffID-order guess (a dead practice-lap
+       signal) can move the WRONG driver 19 places, which is worse than
+       not applying it. Unverified seat → the penalty stays unresolved and
+       the grid keeps the qualifying order; the UI lists it. */
+    if (!mapped!.verified) {
+      seatMappingVerified = false;
+      unresolved.push(p);
+      continue;
+    }
     const places = model.gridPenalties?.reasonPlaces?.[p.reason] ?? 0;
     if (isBackOfGrid(p.reason, p.pitLaneStart, places)) {
       backOfGrid.add(driverId);
@@ -186,7 +210,8 @@ function deriveGridForRace(model: SaveModel, race: Race): DerivedGrid | null {
     grid,
     appliedPenalties: applied,
     seatMappingVerified,
-    unresolvedPenalties: unresolved,
+    unresolvedPenalties: unresolved.length,
+    unresolvedList: unresolved,
   };
 }
 

@@ -335,7 +335,8 @@
       "reasonShifted": "Không tách được hẳn — chỉ dịch được vòng pit {laps} vòng so với lead.",
       "tieNote": "Hòa về tổng thời gian mô hình — tách để tránh dẫm chân + hedge, không phải vì nhanh hơn.",
       "total": "Tổng thời gian mô hình: {time}s",
-      "noTrail": "Không có plan riêng cho xe dưới — grid chưa đủ dữ liệu cho cả 2 tay đua."
+      "noTrail": "Không có plan riêng cho xe dưới — grid chưa đủ dữ liệu cho cả 2 tay đua.",
+      "gridNote": "Vị trí trên grid là thứ tự phân hạng + các phạt đã có trong save này (hiện chưa có phạt nào chưa chấp hành)."
     },
     "hero": "Kế hoạch đề xuất",
     "heroPlan": "{plan} — {stops} pit{pits}",
@@ -460,6 +461,23 @@
       "colGained": "Leo vị trí",
       "colH2h": "Đối đầu vs bạn",
       "assumptions": "Giả định & nguồn dữ liệu"
+    },
+    "grid": {
+      "title": "Grid xuất phát",
+      "note": "Grid theo phân hạng + các phạt ĐÃ CÓ trong save này. Phạt sau quali (ParcFerme / thay linh kiện) chỉ xuất hiện khi load save mới hơn — kiểm tra lại trước race.",
+      "penalized": "phạt {places} bậc",
+      "backOfGrid": "cuối đoàn",
+      "unresolved": "Phạt chưa áp được — đội #{teamId}, xe {car}, lý do {reason}: chưa gán được xe (cần xác minh ghế lái).",
+      "reasons": {
+        "0": "vượt định mức động cơ",
+        "1": "vượt định mức ERS",
+        "2": "vượt định mức hộp số",
+        "3": "gây va chạm",
+        "4": "va chạm lớn",
+        "5": "vi phạm Parc Ferme",
+        "x": "lý do #{n}"
+      },
+      "applied": "{n} phạt đã áp vào grid"
     }
   },
   "sim": {
