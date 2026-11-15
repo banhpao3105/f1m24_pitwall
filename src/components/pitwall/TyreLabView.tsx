@@ -22,9 +22,49 @@ import { DegCurveChart } from './charts/DegCurveChart';
 import { CompoundCompareChart } from './charts/CompoundCompareChart';
 import { CompoundBadge, type CompoundKey } from './CompoundBadge';
 import type { StrategyResult } from '@/engines/tyre.engine';
+import type { InventoryCompoundAgg } from '@/engines/grid.engine';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+
+/**
+ * v0.7.2 — the one aggregation renderer for the tyre-inventory section.
+ * Used by the team-total line (teamAggregate) AND each car card
+ * (car.aggregate) — identical rows, so the two scopes can never drift into
+ * two formats. Degenerate ranges (min === max after display rounding)
+ * collapse to a single value, per the owner-verified DoD strings:
+ * "đã dùng ×1 (mòn 74%, đời 41)" and "đã dùng ×2 (mòn 55–57%, đời 20)".
+ */
+function InventoryAggList({ rows }: { rows: InventoryCompoundAgg[] }) {
+  const t = useTranslations('tyres');
+  const span = (r: [number, number] | null, suffix = ''): string => {
+    if (!r) return '—';
+    const lo = Math.round(r[0]);
+    const hi = Math.round(r[1]);
+    return lo === hi ? `${lo}${suffix}` : `${lo}–${hi}${suffix}`;
+  };
+  return (
+    <ul className="space-y-1">
+      {rows
+        .filter((a) => ['S', 'M', 'H'].includes(a.compound))
+        .map((a) => (
+          <li key={a.compound} className="flex items-center gap-2 text-[11px] text-ink-soft">
+            <CompoundBadge compound={a.compound as CompoundKey} size="sm" />
+            <span className="font-mono">
+              {t('inventory.fresh', { n: a.fresh, life: a.freshLife ?? '—' })}
+            </span>
+            <span className="font-mono text-ink-faint">
+              {t('inventory.used', {
+                n: a.used,
+                wear: a.usedWear ? span([a.usedWear[0] * 100, a.usedWear[1] * 100], '%') : '—',
+                life: a.usedLife ? span(a.usedLife) : '—',
+              })}
+            </span>
+          </li>
+        ))}
+    </ul>
+  );
+}
 
 export function TyreLabView({
   model,
@@ -355,7 +395,11 @@ export function TyreLabView({
           ) : null}
 
           {/* v0.7.0 — the per-car garage inventory + the feasibility cap it
-              imposes on every plan (spec bước 3) */}
+              imposes on every plan (spec bước 3). v0.7.2: each car card
+              renders THAT car's aggregate (car.aggregate) — the v0.7.1 view
+              leaked teamAggregate into both cards (S ×6/×10 where the save
+              carries ×3/×5). The team union stays visible exactly once,
+              above the cards, labelled as the cap basis. */}
           {tyre.data.inventory ? (
             <section
               aria-label={t('inventory.title')}
@@ -373,6 +417,14 @@ export function TyreLabView({
                   })}
                 </span>
               </header>
+              {/* the team union — the numbers the cap is built from. ONCE,
+                  outside the per-car cards (never inside them). */}
+              <div className="mb-3 rounded bg-surface p-3" data-testid="tyre-inventory-team">
+                <p className="mb-1.5 text-[11px] font-medium text-ink">
+                  {t('inventory.teamTotal', { n: tyre.data.inventory.cars.length })}
+                </p>
+                <InventoryAggList rows={tyre.data.inventory!.teamAggregate} />
+              </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {tyre.data.inventory.cars.map((car) => (
                   <div key={car.carId} className="rounded bg-surface p-3">
@@ -387,25 +439,7 @@ export function TyreLabView({
                       ) : null}
                       <span className="ml-auto font-mono text-[10px] text-ink-faint">CarID {car.carId}</span>
                     </div>
-                    <ul className="space-y-1">
-                      {tyre.data.inventory!.teamAggregate
-                        .filter((a) => ['S', 'M', 'H'].includes(a.compound))
-                        .map((a) => (
-                          <li key={a.compound} className="flex items-center gap-2 text-[11px] text-ink-soft">
-                            <CompoundBadge compound={a.compound as CompoundKey} size="sm" />
-                            <span className="font-mono">
-                              {t('inventory.fresh', { n: a.fresh, life: a.freshLife ?? '—' })}
-                            </span>
-                            <span className="font-mono text-ink-faint">
-                              {t('inventory.used', {
-                                n: a.used,
-                                wear: a.usedWear ? `${Math.round(a.usedWear[0] * 100)}–${Math.round(a.usedWear[1] * 100)}%` : '—',
-                                life: a.usedLife ? `${a.usedLife[0]}–${a.usedLife[1]}` : '—',
-                              })}
-                            </span>
-                          </li>
-                        ))}
-                    </ul>
+                    <InventoryAggList rows={car.aggregate} />
                   </div>
                 ))}
               </div>

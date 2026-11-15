@@ -318,6 +318,7 @@
     "inventory": {
       "title": "Kho lốp trước race",
       "cap": "cap thực thi {cap} vòng",
+      "teamTotal": "Cả đội ({n} xe) — cơ sở của cap:",
       "setCol": "Bộ dùng",
       "setFresh": "Mới ({life})",
       "setUsed": "Đã dùng ({life})",

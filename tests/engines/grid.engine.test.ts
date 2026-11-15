@@ -19,7 +19,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { assessReadiness, buildTyreInventory, deriveGrid, resolveCarDrivers } from '@/engines/grid.engine';
+import { aggregateSets, assessReadiness, buildTyreInventory, deriveGrid, resolveCarDrivers } from '@/engines/grid.engine';
+import type { InventorySet } from '@/engines/grid.engine';
 import { buildTyreLab, getPracticePace } from '@/engines/tyre.engine';
 import { emptyPhase2Sections } from '../helpers/model';
 import type { SaveModel, Race, QualifyingResult, PracticeResult, Team, Driver, TyreAllocation, PlayerStrategySection } from '@/domain/types';
@@ -180,18 +181,35 @@ function monzaAllocation(): TyreAllocation[] {
     push(carId, 0, 60);
     if (isLongCar) push(carId, 0, 60);
   }
-  // the player's two cars (CarID 20/21 = TeamID 32) — the REAL allocation
-  // counts: fresh S×3 / M×1 / H×1 per car (lives 24/36/55) + used
-  // (AvailabilityState 2) S×5 / M×2 / H×1 per car that must never lift a cap
-  for (const carId of [20, 21]) {
-    for (let i = 0; i < 3; i++) push(carId, 2, 24);
-    for (let i = 0; i < 5; i++) push(carId, 2, 18.2 - i * 0.4, { state: 2, wear: 0.6 + i * 0.05 });
-    push(carId, 1, 36);
-    push(carId, 1, 25.5, { state: 2, wear: 0.57 });
-    push(carId, 1, 24.8, { state: 2, wear: 0.62 });
-    push(carId, 0, 55);
-    push(carId, 0, 41, { state: 2, wear: 0.75 });
-  }
+  // the player's two cars (CarID 20/21 = TeamID 32) — the REAL per-car
+  // allocation of the Monza pre-race save (save4.sav, Day 46635, verified
+  // against Save_CarTyreAllocation during the v0.7.2 diagnosis: wear =
+  // min 4 wheels, fresh = FrontLeftWear >= 0.99). The used sets DIFFER per
+  // car — the v0.7.2 per-car cards must show these exact ranges, and the
+  // team aggregate must stay their union (S used wear 54–90%, life 13–22 …).
+  // Used (AvailabilityState 2) sets must never lift a cap.
+  push(20, 2, 24); push(20, 2, 24); push(20, 2, 24); // S fresh ×3, life 24
+  push(20, 2, 22, { state: 2, wear: 0.65 }); // S used: wear 65–90%, life 16–22
+  push(20, 2, 20, { state: 2, wear: 0.7 });
+  push(20, 2, 19, { state: 2, wear: 0.75 });
+  push(20, 2, 17, { state: 2, wear: 0.8 });
+  push(20, 2, 16, { state: 2, wear: 0.9 });
+  push(20, 1, 36); // M fresh ×1, life 36
+  push(20, 1, 29, { state: 2, wear: 0.6 }); // M used: wear 60–82%, life 22–29
+  push(20, 1, 22, { state: 2, wear: 0.82 });
+  push(20, 0, 55); // H fresh ×1, life 55
+  push(20, 0, 41, { state: 2, wear: 0.74 }); // H used: wear 74%, life 41
+  push(21, 2, 24); push(21, 2, 24); push(21, 2, 24); // S fresh ×3, life 24
+  push(21, 2, 22, { state: 2, wear: 0.54 }); // S used: wear 54–90%, life 13–22
+  push(21, 2, 20, { state: 2, wear: 0.6 });
+  push(21, 2, 18, { state: 2, wear: 0.7 });
+  push(21, 2, 15, { state: 2, wear: 0.8 });
+  push(21, 2, 13, { state: 2, wear: 0.9 });
+  push(21, 1, 36); // M fresh ×1, life 36
+  push(21, 1, 20, { state: 2, wear: 0.55 }); // M used ×2: wear 55–57%, both life 20
+  push(21, 1, 20, { state: 2, wear: 0.57 });
+  push(21, 0, 55); // H fresh ×1, life 55
+  push(21, 0, 41, { state: 2, wear: 0.74 }); // H used: wear 74%, life 41
   return sets;
 }
 
@@ -492,14 +510,14 @@ describe('buildTyreInventory — Monza garage (owner-verified numbers)', () => {
     expect(inventory!.maxStint).toEqual({ S: 24, M: 36, H: 55 });
   });
 
-  it('never lets a used (state 2) set raise a cap — 18.2-life S stays out', () => {
+  it('never lets a used (state 2) set raise a cap — the best used S (22-life) stays out', () => {
     const model = monzaModel();
     const inventory = buildTyreInventory(model, { S: 26, M: 39, H: 60 }, MONZA_RACE_ID)!;
     const playerCar = inventory.cars.find((c) => c.carId === 20)!;
     const usedS = playerCar.sets.filter((s) => s.compound === 'S' && !s.available);
     expect(usedS.length).toBeGreaterThanOrEqual(2);
     expect(usedS.every((s) => (s.lifeRemaining ?? 0) < 24)).toBe(true);
-    // the cap is untouched by the 18.2-life used sets
+    // the cap is untouched by the used sets (real save: best used S = 22 < 24)
     expect(inventory.maxStint.S).toBe(24);
   });
 
@@ -612,6 +630,116 @@ describe('buildTyreInventory v0.7.1 — player scope + per-car caps', () => {
   });
 });
 
+/* ── v0.7.2 — per-car aggregates: the card must show the CAR's numbers ──
+ * The v0.7.1 view rendered `teamAggregate` inside every car card, so both
+ * cards displayed the TEAM totals (S fresh ×6 / used ×10) where the save
+ * carries ×3 / ×5 per car. The engine always had the per-car data
+ * (`InventoryCar.sets`); v0.7.2 exposes it as `InventoryCar.aggregate`,
+ * built by the SAME helper as the team union (aggregateSets). Every number
+ * below is the owner-verified per-car allocation of the Monza pre-race
+ * save (save4.sav, Save_CarTyreAllocation) — the two cars MUST differ. */
+describe('aggregateSets — the one aggregation formula (v0.7.2)', () => {
+  const set = (o: Partial<InventorySet> & { compound: InventorySet['compound'] }): InventorySet => ({
+    tyreSetId: 1, wear: 1, lifeRemaining: 24, lapsCompleted: 0, sessionLastUsedIn: null,
+    available: true, fresh: true, ...o,
+  });
+
+  it('fresh count + avg life, used ranges; life-0 used sets stay out of the ranges (unchanged rule)', () => {
+    const rows = aggregateSets([
+      set({ compound: 'S' }),
+      set({ tyreSetId: 2, compound: 'S', wear: 0.65, lifeRemaining: 22, lapsCompleted: 20, sessionLastUsedIn: 1, available: false, fresh: false }),
+      set({ tyreSetId: 3, compound: 'S', wear: 0.9, lifeRemaining: 16, lapsCompleted: 30, sessionLastUsedIn: 1, available: false, fresh: false }),
+      set({ tyreSetId: 4, compound: 'M', wear: 0.5, lifeRemaining: 0, lapsCompleted: 40, sessionLastUsedIn: 1, available: false, fresh: false }),
+    ]);
+    const s = rows.find((r) => r.compound === 'S')!;
+    expect(s.fresh).toBe(1);
+    expect(s.freshLife).toBe(24);
+    expect(s.used).toBe(2);
+    expect(s.usedWear).toEqual([0.65, 0.9]);
+    expect(s.usedLife).toEqual([16, 22]);
+    // the only used M has life 0 — excluded, exactly like the old inline formula
+    const m = rows.find((r) => r.compound === 'M')!;
+    expect(m.used).toBe(1);
+    expect(m.usedLife).toBeNull();
+  });
+
+  it('fresh life averages to 1 decimal', () => {
+    const rows = aggregateSets([
+      set({ compound: 'H', lifeRemaining: 55.24 }),
+      set({ tyreSetId: 2, compound: 'H', lifeRemaining: 55.35 }),
+    ]);
+    expect(rows.find((r) => r.compound === 'H')!.freshLife).toBe(55.3);
+  });
+});
+
+describe('buildTyreInventory v0.7.2 — per-car aggregate on the REAL Monza allocation', () => {
+  const aggOf = (carId: number, c: 'S' | 'M' | 'H') =>
+    buildTyreInventory(monzaModel(), { S: 26, M: 39, H: 60 }, MONZA_RACE_ID)!
+      .cars.find((x) => x.carId === carId)!
+      .aggregate.find((a) => a.compound === c)!;
+
+  it('car 20: S fresh ×3 (24) / used ×5 (wear 65–90%, life 16–22); M used ×2 (60–82%, 22–29); H used ×1 (74%, 41)', () => {
+    expect(aggOf(20, 'S').fresh).toBe(3);
+    expect(aggOf(20, 'S').freshLife).toBe(24);
+    expect(aggOf(20, 'S').used).toBe(5);
+    expect(aggOf(20, 'S').usedWear).toEqual([0.65, 0.9]);
+    expect(aggOf(20, 'S').usedLife).toEqual([16, 22]);
+    expect(aggOf(20, 'M').fresh).toBe(1);
+    expect(aggOf(20, 'M').freshLife).toBe(36);
+    expect(aggOf(20, 'M').used).toBe(2);
+    expect(aggOf(20, 'M').usedWear).toEqual([0.6, 0.82]);
+    expect(aggOf(20, 'M').usedLife).toEqual([22, 29]);
+    expect(aggOf(20, 'H').fresh).toBe(1);
+    expect(aggOf(20, 'H').freshLife).toBe(55);
+    expect(aggOf(20, 'H').used).toBe(1);
+    expect(aggOf(20, 'H').usedWear).toEqual([0.74, 0.74]);
+    expect(aggOf(20, 'H').usedLife).toEqual([41, 41]);
+  });
+
+  it('car 21: S used (wear 54–90%, life 13–22); M used ×2 (55–57%, BOTH life 20) — the cars differ', () => {
+    expect(aggOf(21, 'S').fresh).toBe(3);
+    expect(aggOf(21, 'S').used).toBe(5);
+    expect(aggOf(21, 'S').usedWear).toEqual([0.54, 0.9]);
+    expect(aggOf(21, 'S').usedLife).toEqual([13, 22]);
+    expect(aggOf(21, 'M').fresh).toBe(1);
+    expect(aggOf(21, 'M').used).toBe(2);
+    expect(aggOf(21, 'M').usedWear).toEqual([0.55, 0.57]);
+    expect(aggOf(21, 'M').usedLife).toEqual([20, 20]);
+    expect(aggOf(21, 'H').usedWear).toEqual([0.74, 0.74]);
+    expect(aggOf(21, 'H').usedLife).toEqual([41, 41]);
+    // the discriminators between the two cards really differ
+    expect(aggOf(20, 'S').usedWear).not.toEqual(aggOf(21, 'S').usedWear);
+    expect(aggOf(20, 'M').usedLife).not.toEqual(aggOf(21, 'M').usedLife);
+  });
+
+  it('teamAggregate stays the union: S ×6/×10 (54–90%, 13–22); M ×2/×4 (55–82%, 20–29); H ×2/×2', () => {
+    const inv = buildTyreInventory(monzaModel(), { S: 26, M: 39, H: 60 }, MONZA_RACE_ID)!;
+    const agg = (c: 'S' | 'M' | 'H') => inv.teamAggregate.find((a) => a.compound === c)!;
+    expect(agg('S').fresh).toBe(6);
+    expect(agg('S').freshLife).toBe(24);
+    expect(agg('S').used).toBe(10);
+    expect(agg('S').usedWear).toEqual([0.54, 0.9]);
+    expect(agg('S').usedLife).toEqual([13, 22]);
+    expect(agg('M').fresh).toBe(2);
+    expect(agg('M').freshLife).toBe(36);
+    expect(agg('M').used).toBe(4);
+    expect(agg('M').usedWear).toEqual([0.55, 0.82]);
+    expect(agg('M').usedLife).toEqual([20, 29]);
+    expect(agg('H').fresh).toBe(2);
+    expect(agg('H').freshLife).toBe(55);
+    expect(agg('H').used).toBe(2);
+    expect(agg('H').usedWear).toEqual([0.74, 0.74]);
+    expect(agg('H').usedLife).toEqual([41, 41]);
+  });
+
+  it('the fixture rework moves NO engine number: caps stay {S 24, M 36, H 55} per car and team-wide', () => {
+    const inv = buildTyreInventory(monzaModel(), { S: 26, M: 39, H: 60 }, MONZA_RACE_ID)!;
+    expect(inv.maxStint).toEqual({ S: 24, M: 36, H: 55 });
+    expect(inv.perCarMaxStint[20]).toEqual({ S: 24, M: 36, H: 55 });
+    expect(inv.perCarMaxStint[21]).toEqual({ S: 24, M: 36, H: 55 });
+  });
+});
+
 /* ── v0.7.1 bước 5 — ONE practice reporting pipeline ─────────────────────
  * practiceSessions (sessions PRESENT in the save, F1 only) and
  * sessionsMeasured (sessions that produced a gap) are different numbers:
@@ -706,7 +834,7 @@ describe('buildTyreLab — inventory re-pricing (Monza 53 laps, spec bước 3)'
     expect(two!.pitLaps[0]).toBe(21);
   });
 
-  it('an S stint of 25 laps on a used 18.2-life set is infeasible', () => {
+  it('an S stint of 25 laps exceeds the garage cap (best fresh S life 24) — infeasible', () => {
     const lab = buildTyreLab(monzaModel(), MONZA_RACE_ID);
     // S25 exceeds the garage's best available S life (24) — no proposed
     // plan may carry a stint past the garage cap of its compound

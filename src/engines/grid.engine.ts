@@ -343,6 +343,14 @@ export interface InventoryCar {
   driverId: number | null;
   seatVerified: boolean;
   sets: InventorySet[];
+  /**
+   * v0.7.2 — THIS car's sets aggregated per compound (same helper as the
+   * team aggregate). The card for this car must show these numbers, never
+   * the team union: the v0.7.1 view rendered `teamAggregate` inside every
+   * car card, so both cards displayed the team totals (S fresh ×6 / used
+   * ×10) where the save carries ×3 / ×5 per car.
+   */
+  aggregate: InventoryCompoundAgg[];
 }
 
 export interface InventoryCompoundAgg {
@@ -383,6 +391,35 @@ export interface TyreInventory {
    */
   perCarMaxStint: Record<number, Record<'S' | 'M' | 'H', number>>;
   availableNote: 'state0' | 'none';
+}
+
+/**
+ * The ONE aggregation formula (v0.7.2): per compound — fresh count +
+ * average remaining life across fresh sets (1 decimal), used count +
+ * wear / remaining-life ranges. Shared by `teamAggregate` (the union of
+ * the player's cars — the cap basis) and each car's own `aggregate`, so
+ * the cards and the team line can never drift into two formulas. A pure
+ * function, locked directly by tests against the real Monza numbers.
+ */
+export function aggregateSets(sets: InventorySet[]): InventoryCompoundAgg[] {
+  const avg = (xs: number[]): number | null =>
+    xs.length === 0 ? null : Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10;
+  const range = (xs: number[]): [number, number] | null =>
+    xs.length === 0 ? null : [Math.min(...xs), Math.max(...xs)];
+  return (['S', 'M', 'H', 'I', 'W'] as const)
+    .map((compound) => {
+      const rows = sets.filter((s) => s.compound === compound);
+      const freshRows = rows.filter((s) => s.fresh);
+      const usedRows = rows.filter((s) => !s.fresh);
+      return {
+        compound,
+        fresh: freshRows.length,
+        freshLife: avg(freshRows.map((s) => s.lifeRemaining ?? 0).filter((v) => v > 0)),
+        used: usedRows.length,
+        usedWear: range(usedRows.map((s) => s.wear)),
+        usedLife: range(usedRows.map((s) => s.lifeRemaining ?? 0).filter((v) => v > 0)),
+      };
+    });
 }
 
 /**
@@ -439,6 +476,7 @@ export function buildTyreInventory(
   const cars: InventoryCar[] = teamCars.map((carId) => {
     const mapped = carDrivers.byCar.get(carId) ?? null;
     const idx = carIndex++;
+    const sets = setsOf(carId);
     return {
       carId,
       label: mapped?.verified
@@ -446,7 +484,8 @@ export function buildTyreInventory(
         : `Xe ${idx + 1}`,
       driverId: mapped?.driverId ?? null,
       seatVerified: mapped?.verified ?? false,
-      sets: setsOf(carId),
+      sets,
+      aggregate: aggregateSets(sets),
     };
   });
 
@@ -455,26 +494,10 @@ export function buildTyreInventory(
      the WHOLE CHAMPIONSHIP (440 sets) whenever the map was unverified,
      displaying ×44/×24/×23 as the garage and building a cap from max field
      life that could never bind. The `perCar` flag now decides LABELS only
-     (verified driver names vs "Xe 1 / Xe 2"), never the data scope. */
+     (verified driver names vs "Xe 1 / Xe 2"), never the data scope.
+     v0.7.2: same helper as the per-car aggregates — one formula, two scopes. */
   const allSets = cars.flatMap((c) => c.sets);
-  const teamAggregate: InventoryCompoundAgg[] = (['S', 'M', 'H', 'I', 'W'] as const)
-    .map((compound) => {
-      const rows = allSets.filter((s) => s.compound === compound);
-      const freshRows = rows.filter((s) => s.fresh);
-      const usedRows = rows.filter((s) => !s.fresh);
-      const avg = (xs: number[]): number | null =>
-        xs.length === 0 ? null : Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10;
-      const range = (xs: number[]): [number, number] | null =>
-        xs.length === 0 ? null : [Math.min(...xs), Math.max(...xs)];
-      return {
-        compound,
-        fresh: freshRows.length,
-        freshLife: avg(freshRows.map((s) => s.lifeRemaining ?? 0).filter((v) => v > 0)),
-        used: usedRows.length,
-        usedWear: range(usedRows.map((s) => s.wear)),
-        usedLife: range(usedRows.map((s) => s.lifeRemaining ?? 0).filter((v) => v > 0)),
-      };
-    });
+  const teamAggregate: InventoryCompoundAgg[] = aggregateSets(allSets);
 
   /* the feasibility cap — best AVAILABLE life per compound. v0.7.1 keeps
      the conservative min(per-car caps, team cap) for the team-level

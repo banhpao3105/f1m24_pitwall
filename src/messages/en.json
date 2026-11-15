@@ -318,6 +318,7 @@
     "inventory": {
       "title": "Pre-race tyre inventory",
       "cap": "execution cap {cap} laps",
+      "teamTotal": "Whole team ({n} cars) — the cap basis:",
       "setCol": "Set used",
       "setFresh": "Fresh ({life})",
       "setUsed": "Used ({life})",
