@@ -1036,7 +1036,10 @@ export interface TyreLab {
   lives: Record<Compound, number>;
   lifeSource: Record<Compound, 'allocation' | 'model'>;
   deltas: Record<Compound, number>;
-  /** Source used for RANKING (after the same-tier rule). */
+  /** Source used for RANKING (after the same-tier rule). v0.9.3: the
+   * 'allocation'/'clamped' variants are never produced any more — a clamped
+   * measurement is unusable, so the compound ranks on the model constants
+   * ('model'); the variants stay in the type for older serialized labs. */
   paceSource: Record<
     Compound,
     'practice' | 'cross-session' | 'model' | 'baseline' | 'clamped' | 'allocation'
@@ -1264,53 +1267,60 @@ export function buildTyreLab(
       }
     }
   }
-  /* Same-tier ranking rule (v0.5.1 P0, Suzuka 2027 bug): never rank a
-     practice-measured compound against a model-constant one. Mixed tiers →
-     the model constants rank for BOTH (fair comparison), the measured values
-     stay visible in the evidence, and the assumption says why. */
-  const sameTierFallback = (paceMeasured.M != null) !== (paceMeasured.H != null);
-  /* v0.7.1: the H-confound evidence quotes the RAW measured H (full
+  /* Same-tier ranking rule (v0.5.1 P0, Suzuka 2027 bug) — v0.9.3 sharpening
+     (Interlagos 2027 bug): a CLAMPED value is the model's opinion, never a
+     measurement, so USABLE = measured && !clamped. The ranking M and H may
+     never mix tiers and never rank on allocation: exactly one usable side →
+     both fall back to the model constants; allocation stays evidence only
+     (the consistency pillar + the fallback assumption). */
+  const mUsable = paceMeasured.M != null && practicePace?.clamped.M !== true;
+  const hUsable = paceMeasured.H != null && practicePace?.clamped.H !== true;
+  const sameTierFallback = mUsable !== hUsable;
+  /* v0.7.1: the confound evidence quotes the RAW measured values (full
      precision) — the proof that the measurement was noise, independent of
      the ranking transform. */
   const rawMeasuredH = practicePace?.rawDeltas.H ?? null;
-  /* v0.6.1: a monotonic clamp (practice noise — H measured faster than M,
-     Silverstone 2027) must never masquerade as a measurement. The ranking
-     delta switches to the game's own allocation estimate when available
-     ('allocation'), otherwise the forced value stays but is labelled
-     'clamped'. The raw measurement stays visible either way. */
+  const rawMeasuredM = practicePace?.rawDeltas.M ?? null;
+  /* v0.6.1 → v0.9.3: the game's own allocation estimate is EVIDENCE (the
+     consistency pillar, the fallback assumption) — never a ranking delta. */
   const allocPace = getAllocationPace(model);
-  const hForced = practicePace?.clamped.H === true && !sameTierFallback;
   if (sameTierFallback) {
-    const unmeasured = paceMeasured.M == null ? 'M' : 'H';
-    assumptions.push({
-      text: `Delta ${unmeasured} chưa được đo ở track này — dùng hằng số model cho cả M và H để so sánh công bằng (không trộn nguồn đo được và không đo được)`,
-      fallbackValue: `M +${FALLBACK_PACE_DELTA.M}s, H +${FALLBACK_PACE_DELTA.H}s vs Soft`,
-    });
+    const side: 'M' | 'H' = mUsable ? 'H' : 'M';
+    const clampFired = practicePace?.clamped[side] === true;
+    if (clampFired) {
+      const raw = (side === 'H' ? rawMeasuredH : rawMeasuredM) ?? 0;
+      const why =
+        side === 'H'
+          ? 'nhanh hơn M nên không dùng được (nhiễu — mỗi tay đua chỉ chạy 1 hợp chất)'
+          : 'bị kẹp biên/sanity nên không dùng được';
+      const allocNote = allocPace
+        ? ` · allocation ${side} +${allocPace.deltas[side].toFixed(2)}s`
+        : '';
+      assumptions.push({
+        text: `Practice đo được ${side} (+${raw.toFixed(3)}s) ${why} — dùng hằng số model cho cả M và H để so sánh công bằng (không trộn nguồn, không xếp hạng bằng giá trị đã clamp)`,
+        fallbackValue: `M +${FALLBACK_PACE_DELTA.M}s, H +${FALLBACK_PACE_DELTA.H}s vs Soft (giá trị thô ${side} +${raw.toFixed(3)}s${allocNote})`,
+      });
+    } else {
+      assumptions.push({
+        text: `Delta ${side} chưa được đo ở track này — dùng hằng số model cho cả M và H để so sánh công bằng (không trộn nguồn đo được và không đo được)`,
+        fallbackValue: `M +${FALLBACK_PACE_DELTA.M}s, H +${FALLBACK_PACE_DELTA.H}s vs Soft`,
+      });
+    }
   } else {
-    if (paceMeasured.M) {
+    if (mUsable && paceMeasured.M) {
       deltas.M = paceMeasured.M.delta;
       paceSource.M = paceMeasured.M.source === 'cross-session' ? 'cross-session' : 'practice';
     }
-    if (paceMeasured.H && !hForced) {
+    if (hUsable && paceMeasured.H) {
       deltas.H = paceMeasured.H.delta;
       paceSource.H = paceMeasured.H.source === 'cross-session' ? 'cross-session' : 'practice';
     }
-    if (paceMeasured.H && hForced) {
-      if (allocPace) {
-        deltas.H = allocPace.deltas.H;
-        paceSource.H = 'allocation';
-        assumptions.push({
-          text: `Practice đo được H (+${rawMeasuredH?.toFixed(3)}s) nhanh hơn M nên không dùng được (nhiễu — mỗi tay đua chỉ chạy 1 hợp chất) — xếp hạng H bằng ước tính allocation của game (${allocPace.lapTime.S.toFixed(2)} / ${allocPace.lapTime.M.toFixed(2)} / ${allocPace.lapTime.H.toFixed(2)}s)`,
-          fallbackValue: `H +${allocPace.deltas.H}s vs Soft (giá trị thô +${rawMeasuredH?.toFixed(3)}s)`,
-        });
-      } else {
-        deltas.H = practicePace!.deltas.H!;
-        paceSource.H = 'clamped';
-        assumptions.push({
-          text: `Practice đo được H (+${rawMeasuredH?.toFixed(3)}s) nhanh hơn M nên không dùng được (nhiễu) — giữ quy tắc đơn điệu H = M + 0.15s, ghi rõ đây là giá trị model không phải số đo`,
-          fallbackValue: `H +${deltas.H}s vs Soft (giá trị thô +${rawMeasuredH?.toFixed(3)}s)`,
-        });
-      }
+    if (!mUsable && !hUsable && paceMeasured.M != null && paceMeasured.H != null) {
+      /* both measured but both clamped — no usable measurement survives */
+      assumptions.push({
+        text: 'Cả M và H đều đo được nhưng bị clamp (nhiễu/sanity) — không giá trị đo nào đủ tin để xếp hạng, cả hai dùng hằng số model',
+        fallbackValue: `M +${FALLBACK_PACE_DELTA.M}s, H +${FALLBACK_PACE_DELTA.H}s vs Soft (giá trị thô M +${rawMeasuredM?.toFixed(3)}s, H +${rawMeasuredH?.toFixed(3)}s)`,
+      });
     }
   }
 
@@ -1340,6 +1350,10 @@ export function buildTyreLab(
       // constants for both, but the save's own numbers stay on record.
       const part = (c: 'M' | 'H'): string => {
         const m = paceMeasured[c];
+        if (m && practicePace?.clamped[c] === true) {
+          const raw = (c === 'H' ? rawMeasuredH : rawMeasuredM) ?? 0;
+          return `${c} đo được nhưng bị loại (nhiễu) — thô +${raw.toFixed(3)}s`;
+        }
         return m
           ? `${c} đo được ${fmt(m.delta)} (${m.source === 'cross-session' ? 'cross-session' : 'practice'})`
           : `${c} chưa đo được`;
@@ -1348,15 +1362,16 @@ export function buildTyreLab(
     } else {
       const part = (c: 'M' | 'H'): string => {
         const m = paceMeasured[c];
-        const src = !m ? 'model' : m.source === 'cross-session' ? 'cross-session (ít mẫu)' : 'practice';
-        /* v0.6.1: a forced H delta is labelled for what it is — model or
-           allocation — never "(practice)"; the raw measurement stays on
-           record for comparison. */
-        if (c === 'H' && m && (paceSource.H === 'clamped' || paceSource.H === 'allocation')) {
-          const forcedSource = paceSource.H === 'allocation' ? 'allocation' : 'model';
-          return `${c} ${fmt(deltas.H)} (${forcedSource} — practice đo được H nhanh hơn M nên không dùng được; giá trị thô +${rawMeasuredH?.toFixed(3)}s)`;
-        }
-        return `${c} ${fmt(deltas[c as 'M' | 'H'])} (${src})`;
+        /* v0.9.3: the label reads the RANKING source, never the measurement
+           record — a clamped compound ranks on the model constant and must
+           say so even though paceMeasured keeps its record. */
+        const src =
+          paceSource[c] === 'model' || paceSource[c] === 'baseline'
+            ? 'model'
+            : m?.source === 'cross-session'
+              ? 'cross-session (ít mẫu)'
+              : 'practice';
+        return `${c} ${fmt(deltas[c])} (${src})`;
       };
       /* v0.7.1 (spec bước 5): ONE line carrying both counts — the F1
          sessions present in the save (readiness) vs how many produced a
@@ -1717,8 +1732,11 @@ export function buildTyreLab(
      sessions or allocation consistency within 0.2s · (g) best plan beats
      the first DIFFERENT plan by ≥ 2.0s · (h) plan stops ≥ field reference
      (observed → prior → meta expectedStops). One missing pillar = MEDIUM;
-     ≥ 2 missing or any forced delta = LOW — a HIGH badge must never rest
-     on a forced number or two weak legs. */
+     ≥ 2 missing = LOW — a HIGH badge must never rest on weak legs.
+     v0.9.3: the old "forced delta" trigger is GONE — a clamped value never
+     enters the ranking at all, so there is no forced delta left to punish;
+     the same bug now surfaces as the pace + consistency pillars (both fail
+     when a clamp discarded a measurement). */
   const missingPillars: string[] = [];
   if (!livesFromAllocation) missingPillars.push('lives');
   if (!bothPaceMeasured) missingPillars.push('pace');
@@ -1727,9 +1745,8 @@ export function buildTyreLab(
   if (!paceConsistency) missingPillars.push('consistency');
   if (tieGapS == null || tieGapS < 2.0) missingPillars.push('margin');
   if (fewerPitsThanField) missingPillars.push('fieldStops');
-  const forcedPaceDelta = hForced || paceSource.M === 'clamped';
   const confidence: Confidence =
-    forcedPaceDelta || missingPillars.length >= 2
+    missingPillars.length >= 2
       ? 'LOW'
       : missingPillars.length === 1
         ? 'MEDIUM'
@@ -1741,7 +1758,7 @@ export function buildTyreLab(
     const fewer = fieldRefStops != null && stops < fieldRefStops;
     const missing = missingPillars.filter((p) => p !== 'fieldStops' || fewer);
     if (fewer && !missing.includes('fieldStops')) missing.push('fieldStops');
-    return forcedPaceDelta || missing.length >= 2
+    return missing.length >= 2
       ? 'LOW'
       : missing.length === 1
         ? 'MEDIUM'
@@ -1753,13 +1770,6 @@ export function buildTyreLab(
   /* name every missing pillar (traceability contract, prompt mục 3) */
   if (confidence !== 'HIGH') {
     const reasons: string[] = [];
-    if (hForced) {
-      reasons.push(
-        `delta H bị ép (xếp hạng bằng ${paceSource.H === 'allocation' ? 'allocation' : 'model'}, không phải số đo practice)`,
-      );
-    } else if (paceSource.M === 'clamped') {
-      reasons.push('delta M bị ép');
-    }
     if (missingPillars.includes('pace')) {
       reasons.push('delta xếp hạng chưa đủ cả M và H từ practice');
     }
@@ -2091,9 +2101,9 @@ export function buildTyreLab(
 
   if (race.state === 2) warnings.push('RACE_ALREADY_COMPLETED');
   if (sameTierFallback) warnings.push('SAME_TIER_PACE_FALLBACK');
-  if (paceSource.H === 'clamped' || paceSource.H === 'allocation') {
-    warnings.push('PACE_DELTA_FORCED');
-  }
+  /* v0.9.3: PACE_DELTA_FORCED is gone — a clamped value never reaches the
+     ranking, so the forced-delta state cannot exist; the same situation now
+     raises SAME_TIER_PACE_FALLBACK instead. */
 
   return {
     data: {

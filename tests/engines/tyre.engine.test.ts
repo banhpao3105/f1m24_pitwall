@@ -25,9 +25,10 @@ import {
   SILVERSTONE_LAPS,
 } from '../helpers/silverstone-fixture';
 
-/** Ranking deltas of the Silverstone fixture after step 1 (M practice
- * 0.711, H allocation 0.89) — mirrored here for direct plan evaluation. */
-const SILVERSTONE_DELTAS = { S: 0, M: 0.71, H: 0.89 } as const;
+/** Ranking deltas of the Silverstone fixture after v0.9.3 (M usable + H
+ * clamped → BOTH sides rank on the model constants 0.55/1.05 — the old
+ * allocation-H mix is gone). Mirrored here for direct plan evaluation. */
+const SILVERSTONE_DELTAS = { S: 0, M: 0.55, H: 1.05 } as const;
 
 /* ── helpers to build a minimal SaveModel ────────────────────────────────── */
 
@@ -659,13 +660,13 @@ describe('v0.5.1 track-correction prior (P2, local IndexedDB)', () => {
   });
 });
 
-/* ── v0.6.1 step 1: a forced delta never masquerades as a measurement ──────
+/* ── v0.6.1 step 1 → v0.9.3: a forced delta never masquerades as a measurement
  * Silverstone 2027 (race 199, 52 laps): practice noise measured H (+0.606
- * raw, Russell long-run) faster than M (+0.711). The old engine silently
- * forced H to M+0.15 = +0.861 while STILL labelling it "practice" — the
- * evidence lied. Now: paceSource.H becomes 'allocation' (the game's own
- * EstimatedLapTime estimate) or 'clamped' (forced, labelled), and the raw
- * value stays on the record. */
+ * raw, Russell long-run) faster than M (+0.711). v0.6.1 stopped the lie of
+ * labelling the forced value "practice"; v0.9.3 (Interlagos bug) goes all
+ * the way: a CLAMPED value is unusable, so BOTH compounds rank on the model
+ * constants and the allocation estimate is evidence-only (assumption
+ * fallbackValue) — never a ranking delta. */
 
 describe('v0.6.1 getAllocationPace (EstimatedLapTime)', () => {
   it('derives game-nominal deltas from fresh sets: S 88.91 / M +0.57 / H +0.89', () => {
@@ -751,8 +752,8 @@ describe('v0.6.1 getPracticePace raw + clamped flags (Silverstone)', () => {
   });
 });
 
-describe('v0.6.1 buildTyreLab — Silverstone forced-delta honesty', () => {
-  it('ranks H by the allocation estimate and keeps the raw +0.606 on record', () => {
+describe('v0.6.1 → v0.9.3 buildTyreLab — clamped H ranks on model constants for BOTH sides', () => {
+  it('a clamped H never mixes tiers: both deltas are the model constants; raw + allocation stay evidence-only', () => {
     const lab = buildTyreLab(buildSilverstoneModel(), SILVERSTONE_RACE_ID);
     const data: TyreLab = lab.data;
 
@@ -761,54 +762,54 @@ describe('v0.6.1 buildTyreLab — Silverstone forced-delta honesty', () => {
     expect(data.lifeSource).toEqual({ S: 'allocation', M: 'allocation', H: 'allocation' });
     expect(data.practiceSessions).toBe(1);
 
-    // M keeps its honest practice measurement (ranking value at 2dp)
-    expect(data.deltas.M).toBeCloseTo(0.71, 2);
-    expect(data.paceSource.M).toBe('practice');
+    // NO mixed tiers: M measured (+0.71) but H clamped → BOTH model constants
+    expect(data.sameTierFallback).toBe(true);
+    expect(data.deltas.M).toBe(0.55);
+    expect(data.deltas.H).toBe(1.05);
+    expect(data.paceSource.M).toBe('model');
+    expect(data.paceSource.H).toBe('model');
+    // the measurement records stay visible (M honest, H with its raw value)
     expect(data.paceMeasured.M).toEqual({ delta: expect.closeTo(0.71, 3), source: 'session' });
-
-    // H: the forced value is replaced by the game's own estimate;
-    // paceMeasured.H carries the RANKING delta (forced) with the raw on record
-    expect(data.paceSource.H).toBe('allocation');
-    expect(data.deltas.H).toBeGreaterThanOrEqual(0.85);
-    expect(data.deltas.H).toBeLessThanOrEqual(0.9);
     expect(data.paceMeasured.H).toEqual({
       delta: expect.closeTo(0.86, 3),
       source: 'session',
       rawDelta: expect.closeTo(0.606, 3),
     });
 
-    // the evidence tells the truth: raw value + forced source, never "(practice)"
+    // the assumption tells the truth: measured but discarded — the raw value
+    // AND the allocation estimate live in the fallbackValue, not in deltas
+    const fallback = lab.assumptions.find((a) => a.text.includes('không dùng được'));
+    expect(fallback).toBeDefined();
+    expect(fallback!.text).toContain('+0.606s');
+    expect(fallback!.text).toContain('hằng số model cho cả M và H');
+    expect(fallback!.text).not.toContain('xếp hạng H bằng ước tính allocation');
+    expect(fallback!.fallbackValue).toContain('M +0.55s, H +1.05s');
+    expect(fallback!.fallbackValue).toContain('giá trị thô H +0.606s');
+    expect(fallback!.fallbackValue).toContain('allocation H +0.89s');
+    // the evidence names the discarded measurement — H is never "(practice)"
     const paceEvidence = lab.evidence.find((e) => e.source === 'Races_PracticeResults');
     expect(paceEvidence).toBeDefined();
-    expect(paceEvidence!.label).toContain('+0.606');
-    expect(paceEvidence!.label).toContain('allocation');
-    expect(paceEvidence!.label).toContain('không dùng được');
+    expect(paceEvidence!.label).toContain('+0.606s');
+    expect(paceEvidence!.label).toContain('bị loại');
     expect(paceEvidence!.label).not.toMatch(/H \+0\.\d+s \(practice\)/);
-    expect(lab.assumptions.some((a) => a.text.includes('allocation của game'))).toBe(true);
-    // v0.6.2: the assumption quotes the REAL dry-compound estimates
-    expect(lab.assumptions.some((a) => a.text.includes('(88.91 / 89.48 / 89.80s)'))).toBe(true);
-    expect(lab.warnings).toContain('PACE_DELTA_FORCED');
+    expect(lab.warnings).toContain('SAME_TIER_PACE_FALLBACK');
+    // v0.9.3: PACE_DELTA_FORCED cannot exist — no delta is ever forced
+    expect(lab.warnings).not.toContain('PACE_DELTA_FORCED');
     expect(lab.confidence).not.toBe('HIGH');
   });
 
-  it("falls back to the labelled 'clamped' value when no allocation estimate exists", () => {
-    const lab = buildTyreLab(
+  it('the ranking is identical with or without the allocation estimate (allocation is never a delta)', () => {
+    const withAlloc = buildTyreLab(buildSilverstoneModel(), SILVERSTONE_RACE_ID);
+    const withoutAlloc = buildTyreLab(
       buildSilverstoneModel({ withoutEstimatedLapTime: true }),
       SILVERSTONE_RACE_ID,
     );
-    const data: TyreLab = lab.data;
-    expect(data.paceSource.H).toBe('clamped');
-    expect(data.deltas.H).toBeCloseTo(0.86, 2); // the forced M + 0.15
-    expect(data.paceMeasured.H).toEqual({
-      delta: expect.closeTo(0.86, 3), // the ranking (forced) value
-      source: 'session',
-      rawDelta: expect.closeTo(0.606, 3), // the raw measurement stays on record
-    });
-    const paceEvidence = lab.evidence.find((e) => e.source === 'Races_PracticeResults');
-    expect(paceEvidence!.label).toContain('+0.606');
-    expect(paceEvidence!.label).toContain('(model —');
-    expect(paceEvidence!.label).not.toMatch(/H \+0\.\d+s \(practice\)/);
-    expect(lab.warnings).toContain('PACE_DELTA_FORCED');
+    expect(withoutAlloc.data.paceSource.H).toBe('model');
+    expect(withoutAlloc.data.deltas).toEqual(withAlloc.data.deltas);
+    expect(withoutAlloc.data.paceSource).toEqual(withAlloc.data.paceSource);
+    expect(withoutAlloc.data.best!.order).toEqual(withAlloc.data.best!.order);
+    expect(withoutAlloc.data.best!.timeS).toBe(withAlloc.data.best!.timeS);
+    expect(withoutAlloc.confidence).toBe(withAlloc.confidence);
   });
 
   it('leaves honest measurements untouched (Suzuka H 1.76 stays practice-ranked)', () => {
@@ -915,14 +916,15 @@ describe('v0.6.3 confidence + real-save shape (Silverstone)', () => {
     expect(lab.confidence).toBe('LOW');
     const summary = lab.assumptions.find((a) => a.text.startsWith('Confidence LOW:'));
     expect(summary).toBeDefined();
-    // 1. the forced delta
-    expect(summary!.text).toContain('delta H bị ép');
-    // 2. the ranking deltas are not both practice-measured (H = allocation)
+    // 1. the ranking deltas are not both practice-measured (H clamped → model)
     expect(summary!.text).toContain('chưa đủ cả M và H từ practice');
-    // 3. a single practice session with an allocation mismatch > 0.2s
+    // 2. a single practice session with an allocation mismatch > 0.2s
     expect(summary!.text).toContain('1 session');
+    // v0.9.3: the old "delta H bị ép" reason is GONE — a clamped value never
+    // reaches the ranking, so the same bug surfaces as the two pillars.
+    expect(summary!.text).not.toContain('bị ép');
     // v0.6.3: with the REAL lives the first different-multiset plan is
-    // S→S→H at +3.3s — pillar (g) passes, so the summary carries no tie
+    // S→S→M at +2.9s — pillar (g) passes, so the summary carries no tie
     // reason anymore (the 'hòa' wording lives in the why's alternative
     // tail — asserted below and in the v0.6.2 exact-tie block).
     expect(summary!.text).not.toContain('hòa');
@@ -944,19 +946,20 @@ describe('v0.6.3 confidence + real-save shape (Silverstone)', () => {
     expect(data.best!.order.join('→')).toBe('S→M→S');
   });
 
-  it('keeps the web optimum S(16)→M(21)→S(15) — no tie rule on the real lives', () => {
-    /* v0.6.3 real-save shape: the top 3 plans are exact 0.0s permutations
-       of the same stint multiset {S16,S15,M21} (not rivals by planKey), and
-       the first different multiset is 3.3s behind — isTie is false, so the
+  it('keeps the web optimum S(15)→M(22)→S(15) — no tie rule on the real lives', () => {
+    /* v0.9.3 real-save shape (the ranking deltas are the model constants
+       0.55/1.05 now — the clamp no longer ranks H on allocation, which
+       re-optimizes the split): the top 3 plans are exact 0.0s permutations
+       of the same stint multiset {S15,S15,M22} (not rivals by planKey), and
+       the first different multiset is 2.9s behind — isTie is false, so the
        tie-preference note ("ưu tiên plan của game") must NOT appear; the
-       web's optimal split stays the recommendation. The game plan itself is
-       only 0.2s behind — quoted in the why via the gamePlan total. */
+       web's optimal split stays the recommendation. */
     const rec = lab.recommendations[0];
-    expect(rec.title).toContain('S(16) → M(21) → S(15)');
+    expect(rec.title).toContain('S(15) → M(22) → S(15)');
     expect(rec.why).toContain('kế hoạch kế tiếp');
     expect(rec.why).toContain('hòa (cùng tổng thời gian mô hình)');
     expect(rec.why).not.toContain('ưu tiên');
-    expect(lab.data.best!.pitLaps).toEqual([16, 37]);
+    expect(lab.data.best!.pitLaps).toEqual([15, 37]);
   });
 });
 
