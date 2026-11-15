@@ -155,6 +155,17 @@ export function buildSilverstoneModel(
     laps: SILVERSTONE_LAPS,
     results: [],
     practice: silverstonePracticeRows(),
+    /* v0.7.0 — minimal F1 qualifying so the strategy data gate opens (the
+       real save is post-quali); positions are fixture-local, no locked
+       number consumes them. */
+    qualifying: Array.from({ length: 6 }, (_, i) => ({
+      driverId: i + 1,
+      driverName: `Driver ${i + 1}`,
+      teamId: (i % 2) + 1,
+      finishingPos: i + 1,
+      stage: 1,
+      raceFormula: 1,
+    })),
   };
   return {
     meta: {

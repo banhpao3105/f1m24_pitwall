@@ -218,7 +218,9 @@
       "carRank": "Xếp hạng xe",
       "carByPace": "theo pace đỉnh (fastest lap)",
       "heldPos": "giữ P{pos}",
-      "posBefore": "P{pos} trước {track}"
+      "posBefore": "P{pos} trước {track}",
+      "tyreNoData": "Chưa đủ dữ liệu",
+      "tyreWait": "Chờ quali"
     },
     "sec": {
       "nextRace": "NEXT RACE",
@@ -303,6 +305,16 @@
     "pitCost": "/pit",
     "noRace": "Không có chặng nào để phân tích.",
     "noPlan": "Không xây được kế hoạch lốp hợp lệ cho chặng này.",
+    "checklist": {
+      "title": "Chưa đủ dữ liệu chiến thuật",
+      "intro": "Web không đoán trước quali — đủ cả 3 mục dưới rồi load lại save, plan mới được tính.",
+      "allocation": "Chưa có kho lốp cho chặng này — kho lốp xuất hiện khi weekend mới bắt đầu; load save sau khi vào weekend.",
+      "practice": "Chưa có practice — chạy xong FP rồi load lại save.",
+      "quali": "Chưa có phân hạng — chạy xong quali rồi load lại save.",
+      "raceDone": "Chặng đã chạy xong — web không tính lại plan từ model (dữ liệu practice/allocation đã bị xóa sau race).",
+      "ok": "Đã có dữ liệu.",
+      "draft": "Nháp — chưa đủ dữ liệu, chờ quali"
+    },
     "hero": "Kế hoạch đề xuất",
     "heroPlan": "{plan} — {stops} pit{pits}",
     "timeline": {

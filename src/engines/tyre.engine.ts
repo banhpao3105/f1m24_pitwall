@@ -22,6 +22,7 @@
 import type { Confidence, Evidence, Assumption, Recommendation } from '../domain/provenance';
 import type { EngineResult } from '../domain/types';
 import type { SaveModel, Race, PlayerStrategySection } from '../domain/types';
+import { assessReadiness, type WeekendReadiness } from './grid.engine';
 
 /* ── oracle constants (do not change without a changelog entry) ─────────── */
 
@@ -849,6 +850,13 @@ export interface TyreLab {
     /** v0.6.1: the game plan modelled with the web's own maths (seconds). */
     totalTimeS: number;
   }) | null;
+  /**
+   * v0.7.0 strategy data gate (spec bước 2): no plan may exist until the
+   * save carries the weekend's allocation, ≥1 practice session and a
+   * derivable qualifying grid. When `ready` is false `best`/`strategies`/
+   * `gamePlan` are null/empty and the UI renders the missing-data checklist.
+   */
+  readiness: WeekendReadiness;
 }
 
 /** Prior from the local per-track correction store (v0.5.1 P2, IndexedDB). */
@@ -891,6 +899,8 @@ export function buildTyreLab(
   const laps = race.laps ?? 50;
   const exclude = options.excludeRaceId;
   const deg: DegConstants = { ...ORACLE_DEG, ...options.degOverride };
+  /* v0.7.0 — the strategy data gate: computed once, drives the plan path. */
+  const readiness = assessReadiness(model, race.raceId);
   const trackRaces = (state: number): Race[] =>
     model.races.filter(
       (r) => r.trackId === race.trackId && r.state === state && r.raceId !== exclude,
@@ -955,6 +965,10 @@ export function buildTyreLab(
     expectedStops = Math.max(1, Math.round(1 / stintFactor.factor - 1));
     expectedSource = stintFactor.source;
   }
+
+  /* v0.7.0 — warnings list starts early; the checklist state carries its
+     own provenance (see the evidence pushes right before the gate). */
+  const warnings: string[] = [];
 
   /* pace deltas per lap (vs soft) */
   const assumptions: Assumption[] = [];
@@ -1039,6 +1053,98 @@ export function buildTyreLab(
      plans are broken in the game plan's favour — the model is order-
      agnostic, and among equals the order the game itself runs is the one
      worth suggesting. */
+  /* v0.7.0 — base evidence is built before the gate so the checklist state
+     still carries its provenance (lives / practice / pits). */
+  const evidence: Evidence[] = [];
+  evidence.push({
+    source: 'Races/tyre model',
+    label: `Tyre life S/M/H = ${lives.S}/${lives.M}/${lives.H} vòng (nguồn: ${lifeSource.S === lifeSource.M && lifeSource.M === lifeSource.H ? lifeSource.S : 'mix'})`,
+    detail: `stint factor ${(stintFactor.factor * 100).toFixed(0)}% (${stintFactor.source}, ${stintFactor.samples} mẫu)`,
+  });
+  if (practicePace) {
+    const fmt = (v: number): string => `+${v.toFixed(2)}s`;
+    let label: string;
+    if (sameTierFallback) {
+      // Show the MEASURED values with their tiers — the ranking uses model
+      // constants for both, but the save's own numbers stay on record.
+      const part = (c: 'M' | 'H'): string => {
+        const m = paceMeasured[c];
+        return m
+          ? `${c} đo được ${fmt(m.delta)} (${m.source === 'cross-session' ? 'cross-session' : 'practice'})`
+          : `${c} chưa đo được`;
+      };
+      label = `Practice tại ${race.trackName}: ${part('M')}, ${part('H')} — xếp hạng dùng hằng số model cho cả hai (M ${fmt(FALLBACK_PACE_DELTA.M)} / H ${fmt(FALLBACK_PACE_DELTA.H)})`;
+    } else {
+      const part = (c: 'M' | 'H'): string => {
+        const m = paceMeasured[c];
+        const src = !m ? 'model' : m.source === 'cross-session' ? 'cross-session (ít mẫu)' : 'practice';
+        /* v0.6.1: a forced H delta is labelled for what it is — model or
+           allocation — never "(practice)"; the raw measurement stays on
+           record for comparison. */
+        if (c === 'H' && m && (paceSource.H === 'clamped' || paceSource.H === 'allocation')) {
+          const forcedSource = paceSource.H === 'allocation' ? 'allocation' : 'model';
+          return `${c} ${fmt(deltas.H)} (${forcedSource} — practice đo được H nhanh hơn M nên không dùng được; giá trị thô +${m.delta.toFixed(3)}s)`;
+        }
+        return `${c} ${fmt(deltas[c as 'M' | 'H'])} (${src})`;
+      };
+      label = `Practice deltas vs Soft: ${part('M')}, ${part('H')} (${practicePace.sessions} session tại ${race.trackName})`;
+    }
+    evidence.push({ source: 'Races_PracticeResults', label });
+  }
+  if (observed) {
+    evidence.push({
+      source: 'Races_PitStopTimings',
+      label: `Pit stops quan sát được tại ${race.trackName}: ~${observed.avgStopsPerDriver.toFixed(2)}/driver (${observed.samples} driver×chặng)`,
+    });
+  }
+  evidence.push({
+    source: 'Races_Tracks + model constant',
+    label: `Pit cost ≈ ${pitCostS.toFixed(1)}s (lane ${pitLaneLossS}s + stationary ${PIT_STATIONARY_ESTIMATE}s)`,
+  });
+
+  /* v0.7.0 data gate (spec bước 2): trước khi đủ allocation + practice +
+     quali, KHÔNG plan nào được tính hay hiện — kể cả plan thuần model.
+     Chặng đã chạy xong cũng không bao giờ "ready" (allocation đã bị xóa
+     sau race — tính lại từ model rồi giới thiệu như đề xuất là bịa). */
+  if (!readiness.ready) {
+    const historyEarly = getTrackHistory(model, race.trackId);
+    if (race.state === 2) warnings.push('RACE_ALREADY_COMPLETED');
+    warnings.push('STRATEGY_NOT_READY');
+    assumptions.push({
+      text: `Chưa đủ dữ liệu chiến thuật (${readiness.missing.join(', ') || 'chặng đã xong'}) — web không đoán trước quali: không tính plan nào từ hằng số model`,
+    });
+    return {
+      data: {
+        raceId: race.raceId,
+        trackName: race.trackName,
+        laps,
+        pitLaneLossS,
+        pitCostS,
+        lives,
+        lifeSource,
+        deltas,
+        paceSource,
+        paceMeasured,
+        sameTierFallback,
+        expectedStops,
+        expectedSource,
+        strategies: [],
+        best: null,
+        wet: null,
+        trackHistory: historyEarly,
+        observedStops: observed,
+        practiceSessions: practicePace?.sessions ?? 0,
+        gamePlan: null,
+        readiness,
+      },
+      confidence: 'LOW' as Confidence,
+      evidence,
+      assumptions,
+      recommendations: [],
+      warnings,
+    };
+  }
+
   const activeRace = model.races
     .filter((r) => r.seasonId === model.meta.seasonId && r.state !== 2)
     .sort((a, b) => a.day - b.day)[0];
@@ -1157,7 +1263,6 @@ export function buildTyreLab(
      (any tier), ≥3 stint-factor samples, and a plan at least as pit-heavy
      as the field average observed at this track. Any shortfall caps at
      MEDIUM — a HIGH badge must never rest on unmeasured numbers. */
-  const warnings: string[] = [];
   const livesFromAllocation = lifeSource.S === 'allocation' || lifeSource.M === 'allocation';
   const bothPaceMeasured =
     (paceSource.M === 'practice' || paceSource.M === 'cross-session') &&
@@ -1270,53 +1375,13 @@ export function buildTyreLab(
     });
   }
 
-  /* evidence + assumptions (traceability contract) */
-  const evidence: Evidence[] = [];
-  evidence.push({
-    source: 'Races/tyre model',
-    label: `Tyre life S/M/H = ${lives.S}/${lives.M}/${lives.H} vòng (nguồn: ${lifeSource.S === lifeSource.M && lifeSource.M === lifeSource.H ? lifeSource.S : 'mix'})`,
-    detail: `stint factor ${(stintFactor.factor * 100).toFixed(0)}% (${stintFactor.source}, ${stintFactor.samples} mẫu)`,
-  });
-  if (practicePace) {
-    const fmt = (v: number): string => `+${v.toFixed(2)}s`;
-    let label: string;
-    if (sameTierFallback) {
-      // Show the MEASURED values with their tiers — the ranking uses model
-      // constants for both, but the save's own numbers stay on record.
-      const part = (c: 'M' | 'H'): string => {
-        const m = paceMeasured[c];
-        return m
-          ? `${c} đo được ${fmt(m.delta)} (${m.source === 'cross-session' ? 'cross-session' : 'practice'})`
-          : `${c} chưa đo được`;
-      };
-      label = `Practice tại ${race.trackName}: ${part('M')}, ${part('H')} — xếp hạng dùng hằng số model cho cả hai (M ${fmt(FALLBACK_PACE_DELTA.M)} / H ${fmt(FALLBACK_PACE_DELTA.H)})`;
-    } else {
-      const part = (c: 'M' | 'H'): string => {
-        const m = paceMeasured[c];
-        const src = !m ? 'model' : m.source === 'cross-session' ? 'cross-session (ít mẫu)' : 'practice';
-        /* v0.6.1: a forced H delta is labelled for what it is — model or
-           allocation — never "(practice)"; the raw measurement stays on
-           record for comparison. */
-        if (c === 'H' && m && (paceSource.H === 'clamped' || paceSource.H === 'allocation')) {
-          const forcedSource = paceSource.H === 'allocation' ? 'allocation' : 'model';
-          return `${c} ${fmt(deltas.H)} (${forcedSource} — practice đo được H nhanh hơn M nên không dùng được; giá trị thô +${m.delta.toFixed(3)}s)`;
-        }
-        return `${c} ${fmt(deltas[c as 'M' | 'H'])} (${src})`;
-      };
-      label = `Practice deltas vs Soft: ${part('M')}, ${part('H')} (${practicePace.sessions} session tại ${race.trackName})`;
-    }
-    evidence.push({ source: 'Races_PracticeResults', label });
-  }
-  if (observed) {
+  if (priorApplied && options.prior) {
     evidence.push({
-      source: 'Races_PitStopTimings',
-      label: `Pit stops quan sát được tại ${race.trackName}: ~${observed.avgStopsPerDriver.toFixed(2)}/driver (${observed.samples} driver×chặng)`,
+      source: 'pitwall:track-corrections (local)',
+      label: `Hiệu chỉnh local tại ${race.trackName}: lần trước plan ${options.prior.predictedStops ?? '?'} pit (pit vòng ${options.prior.predictedPitLap ?? '?'}), cả giải chạy ${(options.prior.fieldAvgStops ?? 0).toFixed(2)} pit/driver`,
     });
   }
-  evidence.push({
-    source: 'Races_Tracks + model constant',
-    label: `Pit cost ≈ ${pitCostS.toFixed(1)}s (lane ${pitLaneLossS}s + stationary ${PIT_STATIONARY_ESTIMATE}s)`,
-  });
+
   if (priorApplied && options.prior) {
     evidence.push({
       source: 'pitwall:track-corrections (local)',
@@ -1428,6 +1493,7 @@ export function buildTyreLab(
       observedStops: observed,
       practiceSessions: practicePace?.sessions ?? 0,
       gamePlan,
+      readiness,
     },
     confidence,
     evidence,

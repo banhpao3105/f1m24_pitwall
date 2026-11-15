@@ -17,7 +17,7 @@ import {
   getAllocationPace,
   type TyreLab,
 } from '@/engines/tyre.engine';
-import type { SaveModel, Race, PracticeResult, TyreAllocation } from '@/domain/types';
+import type { SaveModel, Race, PracticeResult, TyreAllocation, QualifyingResult } from '@/domain/types';
 import { emptyPhase2Sections } from '../helpers/model';
 import {
   buildSilverstoneModel,
@@ -32,6 +32,36 @@ const SILVERSTONE_DELTAS = { S: 0, M: 0.71, H: 0.89 } as const;
 /* ── helpers to build a minimal SaveModel ────────────────────────────────── */
 
 let nextRaceId = 1000;
+
+/** v0.7.0 — one S-only practice session (3 drivers): satisfies the strategy
+ * data gate's practice condition WITHOUT measuring M/H (MIN_PACE_SAMPLE
+ * needs M/H rows) — ranking deltas stay on the model constants, exactly
+ * like real saves where practice ran but the off-pace compounds were
+ * under-sampled. */
+function sOnlyPractice(): PracticeResult[] {
+  return [
+    prow2(1, 1, 91_500, 2),
+    prow2(2, 1, 91_700, 2),
+    prow2(3, 1, 91_900, 2),
+  ];
+}
+
+function prow2(driverId: number, session: number, bestLapMs: number, bestLapTyre: number): PracticeResult {
+  return { driverId, teamId: (driverId % 2) + 1, session, bestLapMs, bestLapTyre };
+}
+
+/** v0.7.0 — minimal F1 qualifying (one stage, RaceFormula = 1) so the grid
+ * derivation reports a real grid and the data gate opens. */
+function readyQuali(n = 6): QualifyingResult[] {
+  return Array.from({ length: n }, (_, i) => ({
+    driverId: i + 1,
+    driverName: `Driver ${i + 1}`,
+    teamId: (i % 2) + 1,
+    finishingPos: i + 1,
+    stage: 1,
+    raceFormula: 1,
+  }));
+}
 
 function makeRace(partial: Partial<Race>): Race {
   const id = partial.raceId ?? nextRaceId++;
@@ -224,11 +254,26 @@ describe('getCompoundCaps', () => {
 /* ── the engine end-to-end ───────────────────────────────────────────────── */
 
 describe('buildTyreLab', () => {
-  const target = makeRace({ raceId: 50, trackId: 1, state: 0, laps: 30, results: [] });
-  const model = makeModel([
-    makeRace({ trackId: 1, state: 2, results: fieldResults(1) }),
-    target,
-  ]);
+  const target = makeRace({
+    raceId: 50, trackId: 1, state: 0, laps: 30, results: [],
+    practice: sOnlyPractice(), qualifying: readyQuali(),
+  });
+  const model = makeModel(
+    [
+      makeRace({ trackId: 1, state: 2, results: fieldResults(1) }),
+      target,
+    ],
+    {
+      /* v0.7.0 — the gate needs the weekend allocation; the fresh-set
+         medians mirror the 30-lap envelope (15/23/27) so the lives
+         assertions below keep their model-envelope values. */
+      tyres: [
+        ...[1, 2, 3].map((i) => ({ carId: 1, tyreSetId: i, weekendTyreType: 2, frontLeftWear: 1, availabilityState: 0, estimatedLapLifeRemaining: 15 })),
+        ...[1, 2, 3].map((i) => ({ carId: 1, tyreSetId: 10 + i, weekendTyreType: 1, frontLeftWear: 1, availabilityState: 0, estimatedLapLifeRemaining: 23 })),
+        ...[1, 2].map((i) => ({ carId: 1, tyreSetId: 20 + i, weekendTyreType: 0, frontLeftWear: 1, availabilityState: 0, estimatedLapLifeRemaining: 27 })),
+      ],
+    },
+  );
 
   it('produces a ranked plan with a 6-field recommendation', () => {
     const result = buildTyreLab(model, 50);
@@ -340,6 +385,7 @@ describe('v0.5.1 cross-session pace (P0 Suzuka bug)', () => {
     state: 0,
     laps: 53,
     practice: suzukaPracticeRows(),
+    qualifying: readyQuali(),
   });
 
   it('measures H cross-session when every session is under-sampled (Rule 1)', () => {
@@ -397,7 +443,7 @@ describe('v0.5.1 same-tier fallback (Rule 2)', () => {
       prow(1, 1, 91671, 2), prow(2, 1, 91721, 2), prow(3, 1, 91771, 2),
       prow(4, 1, 92394, 1), prow(5, 1, 92444, 1), prow(6, 1, 92494, 1),
     ];
-    const target = makeRace({ raceId: 301, trackId: 17, trackName: 'Suzuka', state: 0, laps: 53, practice: rows });
+    const target = makeRace({ raceId: 301, trackId: 17, trackName: 'Suzuka', state: 0, laps: 53, practice: rows, qualifying: readyQuali() });
     const lab = buildTyreLab(makeModel([target], { tyres: allocLives25_38_58() }), 301);
     const data = lab.data;
 
@@ -428,6 +474,7 @@ describe('v0.5.1 same-tier fallback (Rule 2)', () => {
     const target = makeRace({
       raceId: 302, trackId: 17, trackName: 'Suzuka', state: 0, laps: 53,
       practice: suzukaPracticeRows(),
+      qualifying: readyQuali(),
     });
     const lab = buildTyreLab(makeModel([target], { tyres: allocLives25_38_58() }), 302);
     expect(lab.data.sameTierFallback).toBe(false);
@@ -506,14 +553,18 @@ describe('v0.5.1 post-race lives (P1 autosave-2 bug)', () => {
     expect(data.deltas).toEqual({ S: 0, M: 0.55, H: 1.05 });
     expect(data.expectedStops).toBe(2); // own-race field average = reference
     expect(data.expectedSource).toBe('track');
-    expect(data.best!.order.join('→')).toBe('S→M');
-    expect(data.best!.timeS).toBeCloseTo(66.6, 1); // v0.6.1: 64.7 + cliff S21/M32
-    // v0.6.1 honest re-grade: model lives + same-tier pace + 0 samples +
-    // 1 pit < own-race field 2 = 4 missing pillars → LOW (was MEDIUM).
-    // The test's core claim — never HIGH without allocation — still holds.
+    /* v0.7.0 data gate: a completed race is NEVER ready — its allocation
+       rows are wiped post-race, so re-computing a model-only plan and
+       presenting it as a recommendation is exactly the Monza bug the spec
+       bans. Lives/deltas/evidence stay; the plan does not. */
+    expect(data.readiness.ready).toBe(false);
+    expect(data.best).toBeNull();
+    expect(data.strategies).toHaveLength(0);
+    expect(data.gamePlan).toBeNull();
+    expect(lab.recommendations).toHaveLength(0);
     expect(lab.confidence).toBe('LOW');
-    expect(lab.confidence).not.toBe('HIGH');
     expect(lab.warnings).toContain('RACE_ALREADY_COMPLETED');
+    expect(lab.warnings).toContain('STRATEGY_NOT_READY');
   });
 });
 
@@ -521,6 +572,7 @@ describe('v0.5.1 confidence gates', () => {
   const practice = suzukaPracticeRows(); // M + H both measured
   const target = makeRace({
     raceId: 420, trackId: 17, trackName: 'Suzuka', state: 0, laps: 53, practice,
+    qualifying: readyQuali(),
   });
   const history = [1, 2, 3].map((i) =>
     makeRace({
@@ -573,6 +625,7 @@ describe('v0.5.1 track-correction prior (P2, local IndexedDB)', () => {
   const target = makeRace({
     raceId: 450, trackId: 17, trackName: 'Suzuka', state: 0, laps: 53,
     practice: suzukaPracticeRows(),
+    qualifying: readyQuali(),
   });
 
   it('caps at MEDIUM + warns when the plan pits less than the prior field average', () => {
@@ -753,6 +806,7 @@ describe('v0.6.1 buildTyreLab — Silverstone forced-delta honesty', () => {
     const target = makeRace({
       raceId: 302, trackId: 17, trackName: 'Suzuka', state: 0, laps: 53,
       practice: suzukaPracticeRows(),
+      qualifying: readyQuali(),
     });
     const lab = buildTyreLab(makeModel([target], { tyres: allocLives25_38_58() }), 302);
     expect(lab.data.paceSource.H).toBe('cross-session');

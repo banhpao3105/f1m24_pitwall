@@ -8,7 +8,7 @@
 
 import { useTranslations, useLocale } from 'next-intl';
 import { useMemo, useState, useEffect, useRef } from 'react';
-import { Waves, SlidersHorizontal, CloudRain, Activity, Bot } from 'lucide-react';
+import { Waves, SlidersHorizontal, CloudRain, Activity, Bot, ClipboardCheck, Check, CircleAlert } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
 import { getTrackCorrection, putTrackCorrection, TRACK_CORRECTIONS_VERSION } from '@/lib/track-corrections';
@@ -129,6 +129,11 @@ export function TyreLabView({
     );
   }
 
+  /* v0.7.0 strategy data gate — before allocation + practice + quali the
+     lab renders the missing-data checklist INSTEAD of any plan (spec bước
+     2: web không được đưa ra dự đoán nào cho đến khi có save sau quali). */
+  const notReady = tyre != null && !tyre.data.readiness.ready;
+
   return (
     <div className="space-y-5" data-testid="tyre-lab">
       <header className="flex flex-wrap items-center gap-2">
@@ -141,7 +146,79 @@ export function TyreLabView({
         {tyre ? <span className="ml-auto"><ConfidenceBadge confidence={tyre.confidence} /></span> : null}
       </header>
 
-      {!tyre || !tyre.data.best ? (
+      {notReady ? (
+        <section
+          aria-label={t('checklist.title')}
+          className="rounded-lg border border-line bg-panel p-4"
+          data-testid="tyre-checklist"
+        >
+          <header className="mb-3 flex flex-wrap items-center gap-2">
+            <ClipboardCheck className="h-4 w-4 text-amber" aria-hidden="true" />
+            <h3 className="text-[15px] font-semibold text-ink">{t('checklist.title')}</h3>
+          </header>
+          <p className="text-xs text-ink-soft">{t('checklist.intro')}</p>
+          {race.state === 2 ? (
+            <p
+              className="mt-3 rounded border border-amber/40 bg-amber/10 px-3 py-2 text-xs text-amber"
+              data-testid="tyre-race-done-note"
+            >
+              {t('checklist.raceDone')}
+            </p>
+          ) : (
+            <ul className="mt-3 space-y-1.5">
+              {(['allocation', 'practice', 'quali'] as const).map((key) => {
+                const missing = tyre!.data.readiness.missing.includes(key);
+                return (
+                  <li
+                    key={key}
+                    className={cn(
+                      'flex items-start gap-2 rounded px-2.5 py-1.5 text-xs',
+                      missing ? 'bg-amber/5 text-amber' : 'bg-surface text-ink-faint',
+                    )}
+                    data-testid={`check-${key}`}
+                  >
+                    {missing ? (
+                      <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    ) : (
+                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-good" aria-hidden="true" />
+                    )}
+                    <span>{missing ? t(`checklist.${key}`) : t('checklist.ok')}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {/* mid-practice save: measured deltas stay visible, clearly labelled
+              a draft — quali has not happened, so NO plan of any kind */}
+          {race.state !== 2 &&
+          !tyre!.data.readiness.missing.includes('practice') &&
+          tyre!.data.readiness.missing.includes('quali') ? (
+            <div
+              className="mt-3 rounded border border-info/30 bg-info/5 px-3 py-2"
+              data-testid="tyre-practice-draft"
+            >
+              <p className="text-xs text-info">{t('checklist.draft')}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {(['M', 'H'] as const).map((c) => {
+                  const m = tyre!.data.paceMeasured[c];
+                  if (!m) return null;
+                  return (
+                    <span
+                      key={c}
+                      className="flex items-center gap-1.5 rounded bg-panel px-2.5 py-1 font-mono text-xs text-ink"
+                    >
+                      {c} +{m.delta.toFixed(2)}s
+                      <span className="rounded bg-raised px-1.5 py-0.5 font-mono text-[9px] uppercase text-ink-faint">
+                        {m.source === 'cross-session' ? t('source.cross-session') : t('source.practice')}
+                      </span>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </section>
+      ) : !tyre || !tyre.data.best ? (
         <p className="rounded-lg border border-line bg-panel p-6 text-sm text-ink-faint">
           {t('noPlan')}
         </p>

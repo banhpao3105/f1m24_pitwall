@@ -105,6 +105,10 @@ export interface QualifyingResult {
   /** Fastest lap time in ms. */
   fastestLapMs?: number;
   championshipPoints?: number;
+  /** v0.7.0 — QualifyingStage of this (highest-stage) row: 1/2/3. */
+  stage?: number;
+  /** v0.7.0 — RaceFormula: 1 = F1, 2 = F2, 3 = F3 (grid filter). */
+  raceFormula?: number;
 }
 
 export interface PitStop {
@@ -125,6 +129,8 @@ export interface PracticeResult {
   bestLapMs: number;
   /** 0=H, 1=M, 2=S (oracle practice encoding). */
   bestLapTyre: number;
+  /** v0.7.0 — laps run in the session (CarID↔driver mapping signal). */
+  lapCount?: number;
 }
 
 export interface Race {
@@ -183,6 +189,15 @@ export interface TyreAllocation {
    * Feeds the allocation pace cross-check when practice deltas are unusable.
    */
   estimatedLapTimeS?: number;
+  /* ── v0.7.0 — verified on 1.11 saves (Monza 2027 set); optional so older
+   * schemas keep the shape. wear is the MIN of the four wheels. ── */
+  frontRightWear?: number;
+  backLeftWear?: number;
+  backRightWear?: number;
+  /** Race laps accumulated on this set — practice-usage signal. */
+  lapsCompleted?: number;
+  /** Session index the set was last used in (11 = never, on real saves). */
+  sessionLastUsedIn?: number;
 }
 
 /* ── Phase 2 sections — schema-adaptive (docs/01 §4.3 degradation) ────────
@@ -379,6 +394,33 @@ export interface RegulationProposal {
 }
 
 /**
+ * v0.7.0 — pre-race grid inputs (Races_GridPenalties + car mapping).
+ * `reasonPlaces` comes from Races_Enum_PenaltyType (the game's own enum:
+ * 0 ExceededEngineLimit 5, 1 ERS 5, 2 Gearbox 5, 3 Collision 3,
+ * 4 MajorCollision 5, 5 ParcFermeBreach 0). `carTeams` maps CarID 0–21 →
+ * F1 team (Teams formula=1, TeamID order), cross-checked against the
+ * sequential Save_CarConfig layout — `carTeamsVerified` false degrades the
+ * UI to team-level labels (spec: never build per-car views on a guess).
+ */
+export interface GridPenaltiesSection {
+  rows: {
+    penaltyId: number;
+    teamId: number;
+    /** Car index within the team (1–2). */
+    carInTeam: number;
+    reasonForPenalty: number;
+    sessionReceived?: number;
+    served: number;
+    pitLaneStart: number;
+    serveInRace?: number;
+    serveInSprint?: number;
+  }[];
+  reasonPlaces: Record<number, number>;
+  carTeams: { carId: number; teamId: number }[];
+  carTeamsVerified: boolean;
+}
+
+/**
  * SaveModel v1 — Phase 2 extends the v0 contract with the schema-adaptive
  * factory/season sections (parts, finance, personnel, regulations) plus
  * qualifying + sprint results on races. Optional tables degrade via
@@ -399,6 +441,12 @@ export interface SaveModel {
   races: Race[];
   standings: { drivers: StandingRow[]; teams: StandingRow[] };
   tyres: TyreAllocation[];
+  /**
+   * v0.7.0 — grid penalties + CarID→team mapping (soft section). Optional:
+   * models persisted by pre-0.7.0 builds (IndexedDB auto-restore) predate
+   * it — engines must degrade to the empty section, never crash.
+   */
+  gridPenalties?: GridPenaltiesSection;
   parts: PartsModel;
   regulations: RegulationProposal[];
   finance: FinanceModel;

@@ -6,6 +6,7 @@
  */
 
 import type { SqlJsDatabase } from '../sqlite/sqljs-loader';
+import { tableColumns } from '../schema';
 
 export interface RawPracticeResult {
   raceId: number;
@@ -17,11 +18,18 @@ export interface RawPracticeResult {
   /** 0=H, 1=M, 2=S (oracle practice encoding). */
   bestLapTyre: number;
   raceFormula: number;
+  /** v0.7.0 — laps completed in the session (CarID↔driver mapping signal).
+   *  Column verified on the Monza 2027 save; undefined on older schemas. */
+  lapCount?: number;
 }
 
 export function getPracticeResults(db: SqlJsDatabase): RawPracticeResult[] {
+  const hasLapCount = tableColumns(db, 'Races_PracticeResults')
+    .some((c) => c.toLowerCase() === 'lapcount');
   const rows = db.exec(`
-    SELECT RaceID, PracticeSession, DriverID, TeamID, BestLapTime, BestLapTyre, RaceFormula
+    SELECT RaceID, PracticeSession, DriverID, TeamID, BestLapTime, BestLapTyre, RaceFormula${
+      hasLapCount ? ', LapCount' : ''
+    }
     FROM Races_PracticeResults
     WHERE BestLapTime IS NOT NULL AND BestLapTime > 0 AND BestLapTyre IS NOT NULL
     ORDER BY RaceID, PracticeSession, DriverID
@@ -36,5 +44,6 @@ export function getPracticeResults(db: SqlJsDatabase): RawPracticeResult[] {
   bestLapMs: Math.round(Number(row[4] ?? 0) * 1000),
     bestLapTyre: Number(row[5] ?? 0),
     raceFormula: Number(row[6] ?? 0),
+    lapCount: hasLapCount && row[7] != null ? Number(row[7]) : undefined,
   }));
 }

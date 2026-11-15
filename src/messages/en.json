@@ -218,7 +218,9 @@
       "carRank": "Car rank",
       "carByPace": "by peak pace (fastest lap)",
       "heldPos": "held P{pos}",
-      "posBefore": "P{pos} before {track}"
+      "posBefore": "P{pos} before {track}",
+      "tyreNoData": "Not enough data",
+      "tyreWait": "Waiting for qualifying"
     },
     "sec": {
       "nextRace": "NEXT RACE",
@@ -303,6 +305,16 @@
     "pitCost": "/pit",
     "noRace": "No race to analyse.",
     "noPlan": "Could not build a valid tyre plan for this race.",
+    "checklist": {
+      "title": "Not enough strategy data yet",
+      "intro": "The web does not guess before qualifying — complete all three items and reload the save before any plan is computed.",
+      "allocation": "No tyre allocation for this race yet — it appears when the new weekend starts; reload the save after entering the weekend.",
+      "practice": "No practice yet — finish the FP sessions and reload the save.",
+      "quali": "No qualifying classification yet — finish qualifying and reload the save.",
+      "raceDone": "This race is already completed — the web does not recompute a plan from the model (practice/allocation data is wiped after a race).",
+      "ok": "Data available.",
+      "draft": "Draft — not enough data, waiting for qualifying"
+    },
     "hero": "Recommended plan",
     "heroPlan": "{plan} — {stops} stop(s){pits}",
     "timeline": {

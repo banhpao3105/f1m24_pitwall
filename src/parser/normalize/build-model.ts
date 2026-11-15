@@ -30,6 +30,8 @@ import { getPracticeResults } from '../repositories/practice.repo';
 import { getPitTimings } from '../repositories/pitstops.repo';
 import { getTyreAllocations } from '../repositories/tyres.repo';
 import { getQualifyingResults } from '../repositories/quali.repo';
+import { getGridPenalties, getPenaltyTypes } from '../repositories/grid-penalties.repo';
+import { getCarConfig } from '../repositories/car-config.repo';
 import { getPlayerStrategyStints } from '../repositories/player-strategy.repo';
 import { getPartsSnapshot } from '../repositories/parts.repo';
 import { getFinanceSnapshot } from '../repositories/finance.repo';
@@ -190,6 +192,8 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
   }
 
   // Practice — flattened rows per race (engine aggregates per compound).
+  // v0.7.0: LapCount rides along when the column exists (1.11 saves) — the
+  // CarID↔driver correlation signal for the tyre inventory / grid penalties.
   for (const p of getPracticeResults(db)) {
     const race = raceById.get(p.raceId);
     if (!race) continue;
@@ -200,6 +204,7 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
       session: p.session,
       bestLapMs: p.bestLapMs,
       bestLapTyre: p.bestLapTyre,
+      ...(p.lapCount != null ? { lapCount: p.lapCount } : {}),
     });
   }
 
@@ -225,6 +230,10 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
       teamId: q.teamId,
       finishingPos: q.finishingPos,
       championshipPoints: q.championshipPoints,
+      /* v0.7.0 additive: stage + formula so the grid derivation can order
+         by (stage desc, pos asc) and filter F1 (RaceFormula = 1). */
+      ...(q.qualifyingStage != null ? { stage: q.qualifyingStage } : {}),
+      ...(q.raceFormula != null ? { raceFormula: q.raceFormula } : {}),
     };
     race.qualifying.push(entry);
   }
@@ -295,6 +304,40 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
   // Tyre allocation — may be empty between weekends (verified: real save
   // has 0 rows post-race); engines must fall back to the model envelope.
   const tyreSets = getTyreAllocations(db);
+
+  /* v0.7.0 — grid penalties + the penalty-reason enum (soft tables).
+     Pending rows (Served = 0) shape the UPCOMING race's grid. */
+  const gridPenaltyRows = safe('Races_GridPenalties', () => getGridPenalties(db), []);
+  const penaltyTypeRows = safe('Races_Enum_PenaltyType', () => getPenaltyTypes(db), []);
+
+  /* v0.7.0 — CarID (0–21) → F1 team mapping. F1 teams in TeamID order own
+     the car pairs (0,1), (2,3), … The Save_CarConfig sequential team index
+     (1..11, verified on real saves) is the independent check: any mismatch
+     flags the mapping unverified and the UI degrades to team-level labels. */
+  const f1Teams = teams.filter((t) => t.formula === 1).sort((a, b) => a.teamId - b.teamId);
+  const carTeams = f1Teams.flatMap((t, i) => [
+    { carId: i * 2, teamId: t.teamId },
+    { carId: i * 2 + 1, teamId: t.teamId },
+  ]);
+  let carTeamsVerified = true;
+  const carConfigRows = safe('Save_CarConfig', () => getCarConfig(db), []);
+  if (carConfigRows.length > 0) {
+    if (carConfigRows.length !== carTeams.length) {
+      carTeamsVerified = false;
+    } else {
+      for (const row of carConfigRows) {
+        /* expected team index (1-based) for a car = floor(carId / 2) + 1 —
+           the strictly sequential layout verified on real 1.11 saves */
+        if (row.teamIndex !== Math.floor(row.loadoutId / 2) + 1) {
+          carTeamsVerified = false;
+          break;
+        }
+      }
+    }
+  }
+  if (!carTeamsVerified) {
+    phase2Warnings.push('CAR_TEAM_MAP_UNVERIFIED');
+  }
 
   // In-game strategist plan (Save_PlayerStrategyStints) — empty before
   // qualifying and after the race; TyreType 0=H / 1=M / 2=S (verified via
@@ -372,7 +415,22 @@ export function buildSaveModel(input: BuildModelInput): SaveModel {
       availabilityState: t.availabilityState,
       estimatedLapLifeRemaining: t.estimatedLapLifeRemaining,
       estimatedLapTimeS: t.estimatedLapTimeS,
+      ...(t.frontRightWear != null ? { frontRightWear: t.frontRightWear } : {}),
+      ...(t.backLeftWear != null ? { backLeftWear: t.backLeftWear } : {}),
+      ...(t.backRightWear != null ? { backRightWear: t.backRightWear } : {}),
+      ...(t.lapsCompleted != null ? { lapsCompleted: t.lapsCompleted } : {}),
+      ...(t.sessionLastUsedIn != null ? { sessionLastUsedIn: t.sessionLastUsedIn } : {}),
     })),
+    gridPenalties: {
+      rows: gridPenaltyRows,
+      /* reason → places straight from the game's own enum table; empty map
+         degrades the engine to back-of-grid-only handling (documented). */
+      reasonPlaces: Object.fromEntries(
+        penaltyTypeRows.map((r) => [r.type, r.gridPenalty]),
+      ),
+      carTeams,
+      carTeamsVerified,
+    },
     parts: partsModel,
     regulations: regulationsModel.proposals,
     finance: {

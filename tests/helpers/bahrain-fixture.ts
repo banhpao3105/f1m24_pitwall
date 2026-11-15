@@ -92,6 +92,26 @@ export function buildBahrainModel(stopsPerDriver = 3): SaveModel {
     isSprint: false,
     laps: BAHRAIN_LAPS,
     results: [],
+    /* v0.7.0 — the data gate needs ≥1 practice session + a derivable grid.
+       The session is S-only with exactly MIN_PACE_SAMPLE drivers: it opens
+       the gate WITHOUT measuring M/H, so every locked number below (deltas
+       on the model constants, S→M best 64.0s, LOW confidence) is unchanged
+       from the real save this fixture mirrors. */
+    practice: [1, 2, 3].map((d) => ({
+      driverId: d,
+      teamId: 1,
+      session: 1,
+      bestLapMs: 93_000 + d * 100,
+      bestLapTyre: 2, // Soft
+    })),
+    qualifying: [1, 2, 3, 4, 5, 6].map((d) => ({
+      driverId: d,
+      driverName: `Driver ${d}`,
+      teamId: (d % 2) + 1,
+      finishingPos: d,
+      stage: 1,
+      raceFormula: 1,
+    })),
   };
   return {
     meta: {

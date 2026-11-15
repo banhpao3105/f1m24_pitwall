@@ -50,6 +50,23 @@ const STRATEGY_SQL = [
   ...suzukaStrategyRows().map((r) => `INSERT INTO Save_PlayerStrategyStints VALUES (${r.join(', ')})`),
 ];
 
+/* v0.7.0 — the strategy data gate opens only with the weekend's allocation,
+   ≥1 practice session and a derivable grid for race 2 (Imola, upcoming).
+   Without these the gamePlan test below degenerates to the checklist state. */
+const RACE2_READY_SQL = [
+  'CREATE TABLE "Save_CarTyreAllocation" ("CarID" INTEGER, "TyreSetID" INTEGER, "WeekendTyreType" INTEGER, "FrontLeftWear" REAL, "AvailabilityState" INTEGER, "EstimatedLapLifeRemaining" INTEGER)',
+  ...[1, 2].flatMap((car) =>
+    [2, 1, 0].map((type, i) =>
+      `INSERT INTO Save_CarTyreAllocation VALUES (${car}, ${car * 10 + i}, ${type}, 1, 0, ${[25, 38, 58][i]})`,
+    ),
+  ),
+  `INSERT INTO Races_PracticeResults VALUES (2023, 2, 1, 101, 1, 90500, 2, 1)`,
+  `INSERT INTO Races_PracticeResults VALUES (2023, 2, 1, 102, 2, 91000, 2, 1)`,
+  'CREATE TABLE "Races_QualifyingResults" ("RaceID" INTEGER, "QualifyingStage" INTEGER, "DriverID" INTEGER, "TeamID" INTEGER, "FinishingPos" INTEGER, "RaceFormula" INTEGER)',
+  `INSERT INTO Races_QualifyingResults VALUES (2, 1, 101, 1, 1, 1)`,
+  `INSERT INTO Races_QualifyingResults VALUES (2, 1, 102, 2, 2, 1)`,
+];
+
 async function parse(sql: string[]) {
   const { bytes } = await buildGvasSave({ sql });
   return runParsePipeline(bytes, {
@@ -63,7 +80,7 @@ async function parse(sql: string[]) {
 describe('Save_PlayerStrategyStints → playerStrategy (v0.5.1 P2)', () => {
   it('normalizes exactly 24 rows into per-loadout strategy candidates', async () => {
     expect(suzukaStrategyRows()).toHaveLength(24);
-    const { model } = await parse([...FIXTURE_SCHEMA_SQL, ...STRATEGY_SQL]);
+    const { model } = await parse([...FIXTURE_SCHEMA_SQL, ...STRATEGY_SQL, ...RACE2_READY_SQL]);
     expect(model.playerStrategy.tablePresent).toBe(true);
     expect(model.playerStrategy.plans).toHaveLength(10); // 5 strategies × 2 loadouts
     const selected = model.playerStrategy.plans.filter((p) => p.selected);
@@ -77,7 +94,7 @@ describe('Save_PlayerStrategyStints → playerStrategy (v0.5.1 P2)', () => {
   });
 
   it('attaches the selected plan as gamePlan to the ACTIVE weekend only', async () => {
-    const { model } = await parse([...FIXTURE_SCHEMA_SQL, ...STRATEGY_SQL]);
+    const { model } = await parse([...FIXTURE_SCHEMA_SQL, ...STRATEGY_SQL, ...RACE2_READY_SQL]);
     // Fixture races: 1 = Bahrain (completed), 2 = Imola day 24 (upcoming,
     // 63 laps) — the game plan belongs to race 2, the current weekend.
     const upcoming = buildTyreLab(model, 2);

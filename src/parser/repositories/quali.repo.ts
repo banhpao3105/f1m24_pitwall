@@ -27,6 +27,12 @@ const CANDIDATES: Record<string, string[]> = {
   finishingPos: ['FinishingPos', 'Position', 'Pos'],
   qualifyingStage: ['QualifyingStage', 'Stage'],
   championshipPoints: ['ChampionshipPoints', 'Points'],
+  /* v0.7.0 — RaceFormula separates F1 (1) from F2 (2) / F3 (3) rows; the
+   * grid derivation must only see F1 drivers. GridPenalty stays on record
+   * but is 0 on every verified real save — real penalties live in
+   * Races_GridPenalties (see grid-penalties.repo.ts). */
+  raceFormula: ['RaceFormula'],
+  gridPenalty: ['GridPenalty'],
 };
 
 export interface RawQualifyingResult {
@@ -36,6 +42,8 @@ export interface RawQualifyingResult {
   finishingPos: number;
   qualifyingStage?: number;
   championshipPoints?: number;
+  raceFormula?: number;
+  gridPenalty?: number;
 }
 
 export function getQualifyingResults(db: SqlJsDatabase): RawQualifyingResult[] {
@@ -51,6 +59,8 @@ export function getQualifyingResults(db: SqlJsDatabase): RawQualifyingResult[] {
   const pIdx = map.championshipPoints
     ? colIndex(tbl.columns, map.championshipPoints)
     : -1;
+  const fmIdx = map.raceFormula ? colIndex(tbl.columns, map.raceFormula) : -1;
+  const gpIdx = map.gridPenalty ? colIndex(tbl.columns, map.gridPenalty) : -1;
   const out: RawQualifyingResult[] = [];
   for (const row of tbl.rows) {
     const raceId = readNum(row, rIdx);
@@ -67,6 +77,8 @@ export function getQualifyingResults(db: SqlJsDatabase): RawQualifyingResult[] {
       finishingPos,
       qualifyingStage: readNum(row, sIdx),
       championshipPoints: readNum(row, pIdx),
+      raceFormula: readNum(row, fmIdx),
+      gridPenalty: readNum(row, gpIdx),
     });
   }
   return out;

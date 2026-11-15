@@ -78,6 +78,17 @@ const baseModel: SaveModel = {
     }),
     race({
       raceId: 2, day: 130, state: 1,
+      /* v0.7.0 — the strategy data gate needs allocation + practice + quali
+         before the Tyre Lab (and its what-if section) may render a plan. */
+      practice: [
+        { driverId: 1, teamId: 1, session: 1, bestLapMs: 91_000, bestLapTyre: 2 },
+        { driverId: 2, teamId: 1, session: 1, bestLapMs: 91_300, bestLapTyre: 2 },
+        { driverId: 3, teamId: 1, session: 1, bestLapMs: 91_600, bestLapTyre: 2 },
+      ],
+      qualifying: [
+        { driverId: 1, driverName: 'Ace Driver', teamId: 1, finishingPos: 1, stage: 1, raceFormula: 1 },
+        { driverId: 2, driverName: 'Backup Driver', teamId: 1, finishingPos: 2, stage: 1, raceFormula: 1 },
+      ],
     }),
   ],
   standings: {
@@ -87,7 +98,10 @@ const baseModel: SaveModel = {
     ],
     teams: [{ position: 1, id: 1, name: 'Player Racing', points: 43 }],
   },
-  tyres: [],
+  tyres: [1, 2, 3].flatMap((c) => [
+    { carId: 1, tyreSetId: c, weekendTyreType: 2, frontLeftWear: 1, availabilityState: 0, estimatedLapLifeRemaining: 15 },
+    { carId: 1, tyreSetId: c + 10, weekendTyreType: 1, frontLeftWear: 1, availabilityState: 0, estimatedLapLifeRemaining: 22 },
+  ]),
   ...emptyPhase2Sections(),
   availability: [],
 };

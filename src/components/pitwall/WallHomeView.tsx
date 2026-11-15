@@ -163,10 +163,20 @@ export function WallHomeView({ model }: { model: SaveModel }) {
     {
       icon: <Waves className="h-3.5 w-3.5" />,
       label: t('kpi.tyreRec'),
-      value: tyre?.data.best
-        ? tyre.data.best.stints.map((s) => `${s.compound}(${s.laps})`).join('→')
-        : '—',
-      sub: tyre ? `${tyre.data.best?.stops ?? 0} pit` : undefined,
+      /* v0.7.0 data gate: before the weekend's allocation + practice + quali
+         the KPI must NOT show a model-only plan — the gate note replaces it */
+      value:
+        tyre && !tyre.data.readiness.ready
+          ? t('kpi.tyreNoData')
+          : tyre?.data.best
+            ? tyre.data.best.stints.map((s) => `${s.compound}(${s.laps})`).join('→')
+            : '—',
+      sub:
+        tyre && !tyre.data.readiness.ready
+          ? t('kpi.tyreWait')
+          : tyre
+            ? `${tyre.data.best?.stops ?? 0} pit`
+            : undefined,
       testId: 'kpi-tyre',
     },
     {
