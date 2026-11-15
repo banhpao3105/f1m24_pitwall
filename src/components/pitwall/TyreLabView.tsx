@@ -1004,7 +1004,7 @@ export function TyreLabView({
                       id="sc-laps"
                       className="mt-2"
                       min={1}
-                      max={8}
+                      max={20}
                       step={1}
                       value={[scWhatIf.scenario.laps]}
                       onValueChange={(v) => setScLaps(v[0] ?? 3)}
