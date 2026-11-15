@@ -229,6 +229,10 @@ export interface PartDesign {
   cost?: number;
   /** Build duration in days if the column maps. */
   buildDays?: number;
+  /** Day the design build completed (Parts_Designs.DayCompleted, OLE day).
+   *  v0.8.0: drives the "latest completed design" loadout fallback —
+   *  only designs with DayCompleted > 0 count as completed. */
+  dayCompleted?: number;
   stats: { name: string; value: number }[];
 }
 
@@ -244,10 +248,23 @@ export interface PartItem {
   faultCount?: number;
 }
 
+/**
+ * One installed-part row of Parts_CarLoadout — v0.8.0 schema fix.
+ *
+ * The REAL F1M24 table is (TeamID, LoadoutID, PartType, DesignID, ItemID);
+ * it has NO CarID column, so the old {carId, itemId, slot} shape mapped
+ * nothing and `model.parts.loadouts` was always empty on real saves.
+ * LoadoutID is the seat WITHIN the team (0/1); DesignID is the part
+ * currently fitted (NULL on some AI rows → engine falls back to the team's
+ * latest COMPLETED design, labelled 'latest', never fabricated).
+ */
 export interface CarLoadoutRow {
-  carId: number;
+  teamId: number;
+  loadoutId: number;
+  /** Part type as stored: string label or numeric FK coerced to string. */
+  partType?: string;
+  designId?: number;
   itemId?: number;
-  slot?: string;
 }
 
 export interface TeamExpertiseRow {

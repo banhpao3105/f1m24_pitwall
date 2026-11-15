@@ -44,6 +44,10 @@ const DESIGN_CANDIDATES: Record<string, string[]> = {
   points: ['Points', 'DesignPoints', 'StatPoints', 'ResearchPoints', 'CDBPoints'],
   cost: ['Cost', 'DesignCost', 'CostCredits', 'Price'],
   buildDays: ['BuildDays', 'Days', 'BuildTime', 'DurationDays'],
+  /* v0.8.0: Parts_Designs.DayCompleted — when a loadout DesignID is NULL
+   * the engine falls back to the team's LATEST COMPLETED design
+   * (DayCompleted > 0), so the day must be mapped, not guessed. */
+  dayCompleted: ['DayCompleted', 'DayFinished', 'CompletedDay'],
 };
 
 const STAT_VALUE_CANDIDATES: Record<string, string[]> = {
@@ -53,7 +57,11 @@ const STAT_VALUE_CANDIDATES: Record<string, string[]> = {
     'Parts_DesignID',
     'ParentID',
   ],
-  stat: ['Stat', 'StatName', 'Name', 'StatType', 'Attribute'],
+  /* v0.8.0: the REAL F1M24 column is PartStat (numeric FK into
+   * Parts_Enum_Stats) — the old candidate list missed it, so every stat row
+   * was labelled "stat-1" and stat identity was lost. Numeric cells resolve
+   * through Parts_Enum_Stats (Value → Name) below. */
+  stat: ['PartStat', 'Stat', 'StatName', 'Name', 'StatType', 'Attribute'],
   value: ['Value', 'StatValue', 'Amount'],
 };
 
@@ -67,10 +75,18 @@ const ITEM_CANDIDATES: Record<string, string[]> = {
   faultCount: ['FaultCount', 'Faults', 'FaultsCount'],
 };
 
+/* v0.8.0 — the REAL Parts_CarLoadout columns are
+ * (TeamID, LoadoutID, PartType, DesignID, ItemID). The old candidates keyed
+ * on CarID, a column this table does not have, so EVERY row was dropped and
+ * model.parts.loadouts was always empty on real saves. LoadoutID is the
+ * seat within the team (0/1); DesignID may be NULL on AI rows (engine
+ * falls back to the team's latest completed design, source-labelled). */
 const LOADOUT_CANDIDATES: Record<string, string[]> = {
-  carId: ['CarID'],
+  teamId: ['TeamID'],
+  loadoutId: ['LoadoutID', 'Loadout', 'SlotIndex'],
+  partType: ['PartType', 'PartTypeID', 'Type', 'SlotType', 'Slot'],
+  designId: [`${DESIGNS_TABLE}ID`, 'DesignID', 'Parts_DesignID'],
   itemId: [`${ITEMS_TABLE}ID`, 'ItemID', 'Parts_ItemID'],
-  slot: ['SlotType', 'PartType', 'Type', 'Slot'],
 };
 
 const EXPERTISE_CANDIDATES: Record<string, string[]> = {
@@ -102,9 +118,44 @@ export interface RawParts {
   };
 }
 
+/**
+ * PartStat display labels from the save's own enum table (v0.8.0).
+ * Parts_Enum_Stats(Value, Name) — the game's authoritative PartStat →
+ * label mapping; StatValues rows store the numeric Value ("0", "13").
+ * Mirrors getPartTypeLabels — no hardcoded lookup in the app.
+ */
+export function getPartStatLabels(db: SqlJsDatabase): Map<number, string> {
+  const enumTable = readTable(db, 'Parts_Enum_Stats');
+  const labels = new Map<number, string>();
+  if (!enumTable.present) return labels;
+  const vIdx = colIndex(enumTable.columns, 'Value');
+  const nIdx = colIndex(enumTable.columns, 'Name');
+  if (vIdx < 0 || nIdx < 0) return labels;
+  for (const row of enumTable.rows) {
+    const value = readNum(row, vIdx);
+    const name = readStr(row, nIdx);
+    if (value != null && name != null && !labels.has(value)) labels.set(value, name);
+  }
+  return labels;
+}
+
+/** Resolve a raw PartStat value against the enum labels (numeric-safe). */
+export function resolvePartStat(
+  raw: string | undefined,
+  labels: Map<number, string>,
+): string | undefined {
+  if (raw == null) return undefined;
+  if (/^\d+$/.test(raw)) {
+    return labels.get(Number(raw)) ?? `PartStat ${raw}`;
+  }
+  return raw;
+}
+
 export function getPartsSnapshot(db: SqlJsDatabase): RawParts {
   /* PartType value → label from the save's own enum table (0.4.1). */
   const typeLabels = getPartTypeLabels(db);
+  /* PartStat value → label from the save's own enum table (v0.8.0). */
+  const statLabels = getPartStatLabels(db);
 
   /* stat values first — designs need them attached */
   const sv = readTable(db, STAT_VALUES_TABLE);
@@ -118,7 +169,10 @@ export function getPartsSnapshot(db: SqlJsDatabase): RawParts {
       const designId = readNum(row, dIdx);
       const value = readNum(row, vIdx);
       if (designId == null || value == null) continue;
-      const name = sIdx >= 0 ? (readStr(row, sIdx) ?? `stat${sIdx}`) : `stat${sIdx}`;
+      const name =
+        sIdx >= 0
+          ? (resolvePartStat(readStr(row, sIdx), statLabels) ?? `stat${sIdx}`)
+          : `stat${sIdx}`;
       const list = svByDesign.get(designId) ?? [];
       list.push({ name, value });
       svByDesign.set(designId, list);
@@ -146,6 +200,7 @@ export function getPartsSnapshot(db: SqlJsDatabase): RawParts {
             points: readNum(row, colIndex(dsg.columns, dMap.points)),
             cost: readNum(row, colIndex(dsg.columns, dMap.cost)),
             buildDays: readNum(row, colIndex(dsg.columns, dMap.buildDays)),
+            dayCompleted: readNum(row, colIndex(dsg.columns, dMap.dayCompleted)),
             stats: svByDesign.get(designId) ?? [],
           },
         ];
@@ -181,15 +236,18 @@ export function getPartsSnapshot(db: SqlJsDatabase): RawParts {
   const lMap = buildColumnMap(lod.columns, LOADOUT_CANDIDATES);
   const loadouts: CarLoadoutRow[] = lod.present
     ? lod.rows.flatMap((row) => {
-        const carId = readNum(row, colIndex(lod.columns, lMap.carId));
-        if (carId == null) return [];
+        const teamId = readNum(row, colIndex(lod.columns, lMap.teamId));
+        const loadoutId = readNum(row, colIndex(lod.columns, lMap.loadoutId));
+        if (teamId == null || loadoutId == null) return [];
         return [
           {
-            carId,
-            itemId: readNum(row, colIndex(lod.columns, lMap.itemId)),
-            slot: lMap.slot
-              ? readNumOrStr(row, lod.columns, lMap, 'slot')
+            teamId,
+            loadoutId,
+            partType: lMap.partType
+              ? resolvePartType(readNumOrStr(row, lod.columns, lMap, 'partType'), typeLabels)
               : undefined,
+            designId: readNum(row, colIndex(lod.columns, lMap.designId)),
+            itemId: readNum(row, colIndex(lod.columns, lMap.itemId)),
           },
         ];
       })

@@ -66,8 +66,10 @@ describe('getPartsSnapshot', () => {
       `INSERT INTO Parts_Designs_StatValues VALUES (11, 'Airflow', 78.5);`,
       `CREATE TABLE Parts_Items (Parts_ItemsID INTEGER, Parts_DesignsID INTEGER, CarID INTEGER, TeamID INTEGER, PartType TEXT, Condition REAL, FaultCount INTEGER);`,
       `INSERT INTO Parts_Items VALUES (5, 11, 2, 1, 'FrontWing', 0.72, 1);`,
-      `CREATE TABLE Parts_CarLoadout (CarID INTEGER, Parts_ItemsID INTEGER, SlotType TEXT);`,
-      `INSERT INTO Parts_CarLoadout VALUES (2, 5, 'FrontWing');`,
+      /* v0.8.0: the REAL Parts_CarLoadout columns (verified 1.11.0) — the
+       * old CarID/SlotType guess mapped nothing on real saves. */
+      `CREATE TABLE Parts_CarLoadout (TeamID INTEGER, LoadoutID INTEGER, PartType TEXT, DesignID INTEGER, ItemID INTEGER);`,
+      `INSERT INTO Parts_CarLoadout VALUES (1, 1, 'FrontWing', 11, 5);`,
       `CREATE TABLE Parts_TeamExpertise (TeamID INTEGER, PartType TEXT, Expertise REAL, NextSeasonExpertise REAL);`,
       `INSERT INTO Parts_TeamExpertise VALUES (1, 'FrontWing', 61.5, 12.25);`,
     ]);
@@ -79,7 +81,7 @@ describe('getPartsSnapshot', () => {
     expect(snap.designs[0]).toMatchObject({ designId: 11, teamId: 1, points: 120, cost: 900000, buildDays: 30 });
     expect(snap.designs[0].stats).toEqual([{ name: 'Airflow', value: 78.5 }]);
     expect(snap.items[0]).toMatchObject({ itemId: 5, designId: 11, carId: 2, condition: 0.72, faultCount: 1 });
-    expect(snap.loadouts[0]).toEqual({ carId: 2, itemId: 5, slot: 'FrontWing' });
+    expect(snap.loadouts[0]).toEqual({ teamId: 1, loadoutId: 1, partType: 'FrontWing', designId: 11, itemId: 5 });
     expect(snap.expertise[0]).toMatchObject({ teamId: 1, nextSeasonExpertise: 12.25 });
   });
 
