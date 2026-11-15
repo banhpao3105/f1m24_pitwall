@@ -13,6 +13,7 @@ import { buildResultsBoard, type ResultsBoard } from '@/engines/results.engine';
 import { buildSeasonSeries, type SeasonSeries } from '@/engines/dashboard.engine';
 import { buildSim, type SimBoard, type SimOptions } from '@/engines/sim.engine';
 import { buildCarLab, type CarLab } from '@/engines/car.engine';
+import { buildCarStrength, type CarStrengthBoard } from '@/engines/car-strength.engine';
 import { buildFinance, type FinanceBoard } from '@/engines/finance.engine';
 import {
   buildPersonnel,
@@ -89,6 +90,18 @@ export function useCarLab(): EngineResult<CarLab> | null {
     if (!model) return null;
     return buildCarLab(model);
   }, [model]);
+}
+
+/** v0.8.0 — the aero strength board. The rival switch re-runs the engine
+ * in memory (same model — never a save reload). */
+export function useCarStrength(
+  rivalTeamId?: number,
+): EngineResult<CarStrengthBoard> | null {
+  const model = useSaveStore((s) => s.model);
+  return useMemo(() => {
+    if (!model) return null;
+    return buildCarStrength(model, rivalTeamId != null ? { rivalTeamId } : undefined);
+  }, [model, rivalTeamId]);
 }
 
 export function useFinance(): EngineResult<FinanceBoard> | null {

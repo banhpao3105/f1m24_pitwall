@@ -24,9 +24,10 @@ import {
   YAxis,
 } from 'recharts';
 import type { CarLeagueRow, DevQueueRow, PartConditionRow } from '@/engines/car.engine';
+import type { CarStrengthRow } from '@/engines/car-strength.engine';
 import type { PartItem, SaveModel } from '@/domain/types';
 import { teamColour, FALLBACK_TEAM_COLOUR } from '@/lib/team-colours';
-import { CHART_COLORS, TICK_STYLE, useChartAnimation } from './chart-theme';
+import { CHART_COLORS, TICK_STYLE, LABEL_STYLE, useChartAnimation } from './chart-theme';
 
 export function CarLeagueChart({
   rows,
@@ -377,6 +378,116 @@ export function DevPointsChart({ rows }: { rows: DevQueueRow[] }) {
         </BarChart>
       </ResponsiveContainer>
       <p className="mt-1 text-[10px] text-ink-faint">{t('devHint')}</p>
+    </div>
+  );
+}
+
+/* ── v0.8.0 — aero strength: % vs per-stat best and % vs grid mean ──────── */
+
+const fmt1 = (v: number | null | undefined): string =>
+  v == null ? '—' : v.toFixed(1);
+
+/**
+ * CarStrengthChart — one row per aero stat, two bars each: % vs the
+ * per-stat best (player colour, red when < 60%) and % vs the grid mean
+ * (muted). Reference line at 100% = the best of that stat. Numbers come
+ * verbatim from the SAME engine output the table renders — never recomputed.
+ */
+export function CarStrengthChart({ rows }: { rows: CarStrengthRow[] }) {
+  const t = useTranslations('charts.car');
+  const anim = useChartAnimation();
+
+  if (rows.length === 0) {
+    return <p className="text-xs text-ink-faint">{t('noStrength')}</p>;
+  }
+
+  const data = rows.map((r) => ({
+    ...r,
+    label: `${r.part} · ${r.stat}`,
+  }));
+
+  return (
+    <div style={{ width: '100%', height: rows.length * 30 + 28 }} data-testid="car-strength-chart">
+      <ResponsiveContainer>
+        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 56, bottom: 0, left: 0 }}>
+          <XAxis
+            type="number"
+            domain={[0, (dataMax: number) => Math.ceil((dataMax || 100) / 10) * 10 + 8]}
+            hide
+          />
+          <YAxis
+            type="category"
+            dataKey="label"
+            width={170}
+            axisLine={false}
+            tickLine={false}
+            tick={{ ...TICK_STYLE, fontSize: 9 }}
+          />
+          <ReferenceLine
+            x={100}
+            stroke={CHART_COLORS.gold}
+            strokeDasharray="4 4"
+            label={{
+              value: t('strengthRefLine'),
+              position: 'top',
+              fill: CHART_COLORS.gold,
+              fontSize: 10,
+              fontFamily: 'var(--font-jetbrains-mono), monospace',
+            }}
+          />
+          <Tooltip
+            cursor={{ fill: 'rgba(46,230,200,0.06)' }}
+            content={({ active, payload }) => {
+              if (!active || !payload?.length) return null;
+              const row = payload[0].payload as (typeof data)[number];
+              return (
+                <div className="rounded-md border border-line bg-surface px-3 py-2 text-xs shadow-lg">
+                  <p className="font-medium text-ink">{row.label}</p>
+                  <p className="mt-1 font-mono text-[11px] text-ink-soft">
+                    {t('strengthBar')}: {fmt1(row.pctBest)}% · {t('strengthMeanBar')}: {fmt1(row.pctMean)}%
+                  </p>
+                  <p className="font-mono text-[11px] text-ink-soft">
+                    {row.part}: {fmt1(row.playerValue)} · {row.bestTeamName} {fmt1(row.bestValue)}
+                  </p>
+                </div>
+              );
+            }}
+          />
+          <Bar dataKey="pctBest" barSize={9} radius={[0, 3, 3, 0]} {...anim}>
+            {data.map((row) => (
+              <Cell
+                key={`best-${row.label}`}
+                fill={(row.pctBest ?? 100) < 60 ? CHART_COLORS.danger : CHART_COLORS.player}
+              />
+            ))}
+            <LabelList
+              dataKey="pctBest"
+              position="right"
+              formatter={(value: number) => (value != null ? `${fmt1(value)}%` : '—')}
+              style={LABEL_STYLE}
+            />
+          </Bar>
+          <Bar dataKey="pctMean" barSize={9} radius={[0, 3, 3, 0]} fill={CHART_COLORS.bar} {...anim}>
+            <LabelList
+              dataKey="pctMean"
+              position="right"
+              formatter={(value: number) => (value != null ? `${fmt1(value)}%` : '')}
+              style={LABEL_STYLE}
+            />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+      <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-ink-faint" aria-hidden="true">
+        <li className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-sm" style={{ backgroundColor: CHART_COLORS.player }} />
+          {t('strengthBar')}
+        </li>
+        <li className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-sm" style={{ backgroundColor: CHART_COLORS.bar }} />
+          {t('strengthMeanBar')}
+        </li>
+      </ul>
+      <p className="mt-1 text-[10px] text-ink-faint">{t('strengthHint')}</p>
     </div>
   );
 }

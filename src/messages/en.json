@@ -120,7 +120,12 @@
       "medianBar": "League median",
       "partPerfHint": "Median of every team’s average condition (Parts_Items, teams with data for the same group).",
       "devHint": "Stored design points of the dev-queue designs (Parts_Designs.Points).",
-      "expertiseHint": "Your team’s expertise points per part group (Parts_Expertise)."
+      "expertiseHint": "Your team’s expertise points per part group (Parts_Expertise).",
+      "strengthBar": "% vs best",
+      "strengthMeanBar": "% vs grid mean",
+      "strengthRefLine": "100% = per-stat best",
+      "noStrength": "No aero stats in this save.",
+      "strengthHint": "Numbers come straight from the car-strength engine — the same source as the table, never recomputed."
     },
     "series": {
       "peak": "Peak pace (fastest lap)",
@@ -157,6 +162,7 @@
     "alternatives": "ALTERNATIVES",
     "lives": "COMPOUND LIFE",
     "league": "LEAGUE",
+    "strength": "AERO STRENGTH",
     "durability": "DURABILITY",
     "queue": "DEV QUEUE",
     "calendar": "CALENDAR",
@@ -560,7 +566,25 @@
     "supplier": "supplier part — bank resets each season",
     "noPartsData": "Parts_* has no data in this save",
     "noPartsDataHint": "Car Lab runs degraded: league via pace fallback; load the save during a race weekend or introspect to enable the part grid.",
-    "perfTitle": "Part-group performance — you vs league median"
+    "perfTitle": "Part-group performance — you vs league median",
+    "strengthTitle": "Aerodynamic strength — per part, per stat",
+    "strengthSource": "Parts_StatValues.Value",
+    "strengthStatCol": "Stat",
+    "strengthPlayer": "Your car",
+    "strengthBest": "Best",
+    "strengthPctBest": "% vs best",
+    "strengthPctMean": "% vs grid mean",
+    "strengthRival": "Rival",
+    "strengthRivalSelect": "Comparison rival",
+    "strengthGap": "Standings: {rival} {rivalPts} pts vs {player} {playerPts} pts (gap {gap})",
+    "strengthNoStandings": "Team standings missing from this save — points gap not shown.",
+    "srcInstalled": "installed",
+    "srcLatest": "latest design",
+    "srcUnknown": "unknown",
+    "strengthWeakLegend": "Red rows: % vs best < 60% — standout weaknesses (presentation only, not a rating).",
+    "strengthDelta": "Δ vs your car",
+    "strengthNoData": "No aero stats readable in this save (Parts_StatValues empty or unmapped) — nothing is invented.",
+    "strengthNote": "\"Best\" is the best AT EACH STAT — the strongest team differs per row, there is no single fastest team. Rows using the latest completed design (fallback) carry a source label. The save contains no formula converting aero stats into lap time, so every % below is a % OF THE STAT VALUE — not a lap-time %; the car's observed pace lives in the League section right above (pace source, unchanged)."
   },
   "strategy": {
     "title": "Strategy — finance & personnel",

@@ -219,8 +219,20 @@ export function buildCarStrengthFixture(options: FixtureOptions = {}): SaveModel
     standings: {
       drivers: [],
       teams: [
+        /* DoD-verified: Williams 95 (P7) directly above CustomTeam 92 (P8).
+         * The other nine teams are synthetic-but-consistent fillers so the
+         * head-to-head gap line works for EVERY rival choice. */
+        { position: 1, id: 3, name: 'Red Bull Racing', points: 180 },
+        { position: 2, id: 2, name: 'McLaren', points: 150 },
+        { position: 3, id: 4, name: 'Mercedes AMG Petronas F1', points: 140 },
+        { position: 4, id: 1, name: 'Ferrari', points: 120 },
+        { position: 5, id: 5, name: 'Alpine', points: 110 },
+        { position: 6, id: 10, name: 'Aston Martin', points: 100 },
         { position: 7, id: 6, name: 'Williams Racing', points: 95 },
         { position: 8, id: PLAYER_TEAM, name: 'CustomTeam', points: 92 },
+        { position: 9, id: 7, name: 'Haas F1', points: 60 },
+        { position: 10, id: 8, name: 'AlphaTauri', points: 45 },
+        { position: 11, id: 9, name: 'Alfa Romeo Racing', points: 30 },
       ],
     },
     tyres: [],

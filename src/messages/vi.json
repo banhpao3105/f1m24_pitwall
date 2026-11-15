@@ -120,7 +120,12 @@
       "medianBar": "Median giải",
       "partPerfHint": "Median tính trên điều kiện trung bình từng đội (Parts_Items, các đội có dữ liệu cùng nhóm part).",
       "devHint": "Design points đã lưu của các thiết kế trong hàng chờ phát triển (Parts_Designs.Points).",
-      "expertiseHint": "Điểm expertise của đội bạn theo nhóm part (Parts_Expertise)."
+      "expertiseHint": "Điểm expertise của đội bạn theo nhóm part (Parts_Expertise).",
+      "strengthBar": "% so với mạnh nhất",
+      "strengthMeanBar": "% so với TB grid",
+      "strengthRefLine": "100% = mạnh nhất từng chỉ số",
+      "noStrength": "Không có chỉ số aero nào trong save này.",
+      "strengthHint": "Lấy đúng số từ engine sức mạnh aero — cùng một nguồn với bảng, không tính lại."
     },
     "series": {
       "peak": "Pace đỉnh (fastest lap)",
@@ -157,6 +162,7 @@
     "alternatives": "ALTERNATIVES",
     "lives": "COMPOUND LIFE",
     "league": "LEAGUE",
+    "strength": "SỨC MẠNH AERO",
     "durability": "DURABILITY",
     "queue": "DEV QUEUE",
     "calendar": "CALENDAR",
@@ -560,7 +566,25 @@
     "supplier": "supplier part — bank reset mỗi mùa",
     "noPartsData": "Parts_* chưa có dữ liệu trong save này",
     "noPartsDataHint": "Car Lab chạy chế độ suy giảm: league theo pace fallback; nạp save trong race weekend hoặc introspect để bật part grid.",
-    "perfTitle": "Hiệu năng nhóm part — bạn vs median giải"
+    "perfTitle": "Hiệu năng nhóm part — bạn vs median giải",
+    "strengthTitle": "Sức mạnh khí động học — từng bộ phận, từng chỉ số",
+    "strengthSource": "Parts_StatValues.Value",
+    "strengthStatCol": "Chỉ số",
+    "strengthPlayer": "Xe bạn",
+    "strengthBest": "Mạnh nhất",
+    "strengthPctBest": "% mạnh nhất",
+    "strengthPctMean": "% TB grid",
+    "strengthRival": "Đối thủ",
+    "strengthRivalSelect": "Đối thủ so sánh",
+    "strengthGap": "Bảng đội: {rival} {rivalPts} điểm vs {player} {playerPts} điểm (chênh {gap})",
+    "strengthNoStandings": "Bảng đội không có trong save — không hiển thị khoảng cách điểm.",
+    "srcInstalled": "đang gắn",
+    "srcLatest": "thiết kế mới nhất",
+    "srcUnknown": "không rõ",
+    "strengthWeakLegend": "Tô đỏ: % mạnh nhất < 60% — điểm yếu nổi bật (chỉ cách trình bày, không phải chấm điểm).",
+    "strengthDelta": "Δ với xe bạn",
+    "strengthNoData": "Không đọc được chỉ số aero nào trong save này (Parts_StatValues trống hoặc không map được) — không bịa số.",
+    "strengthNote": "\"Mạnh nhất\" là mạnh nhất ở TỪNG chỉ số — đội mạnh nhất khác nhau theo từng hàng, không có một đội nhanh nhất duy nhất. Hàng dùng thiết kế mới nhất (fallback) đều có nhãn nguồn. Save không chứa công thức đổi chỉ số aero ra thời gian vòng, nên mọi % dưới đây là % GIÁ TRỊ CHỈ SỐ — không phải % thời gian vòng; pace đã quan sát của xe nằm ở section League ngay trên (nguồn pace, không đổi)."
   },
   "strategy": {
     "title": "Strategy — tài chính & nhân sự",
