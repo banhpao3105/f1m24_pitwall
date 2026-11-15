@@ -443,3 +443,68 @@ describe('buildTyreLab — inventory re-pricing (Monza 53 laps, spec bước 3)'
     expect(lab.assumptions.some((a) => a.text.includes('kho không chạy được') || a.text.includes('kho lốp'))).toBe(true);
   });
 });
+
+/* ── v0.7.0 step 4 — the two-car split by grid position (spec bước 4) ──────
+ * Owner-verified Monza shape: O'Ward (285) grid P20 leads with the
+ * optimizer's S(19)→M(34) pit V19; Ricciardo (13) grid P21 trails with the
+ * tied M(34)→S(19) pit V34 — different starting compound, pits 15 laps
+ * apart. The 2-pit M→S→M (54.5s on the cap — FASTER on paper) must NOT
+ * become the trail plan: its first pit V21 sits only 2 laps from the
+ * lead's V19 (< 3 → double-stack risk). No invented queue constant — the
+ * ≥3-lap offset rule IS the handling. */
+
+describe('buildTyreLab carPlans — lead/trail split on the Monza grid', () => {
+  it("lead O'Ward P20 S(19)→M(34) V19; trail Ricciardo P21 M(34)→S(19) V34", () => {
+    const lab = buildTyreLab(monzaModel(), MONZA_RACE_ID);
+    const split = lab.data.carPlans;
+    expect(split).not.toBeNull();
+    expect(split!.lead.driverId).toBe(285);
+    expect(split!.lead.gridPos).toBe(20);
+    expect(split!.lead.role).toBe('lead');
+    expect(split!.lead.plan.stints.map((s) => `${s.compound}(${s.laps})`)).toEqual(['S(19)', 'M(34)']);
+    expect(split!.lead.plan.pitLaps).toEqual([19]);
+    expect(split!.lead.plan.timeS).toBeCloseTo(57.6, 1);
+    expect(split!.trail).not.toBeNull();
+    expect(split!.trail!.driverId).toBe(13);
+    expect(split!.trail!.gridPos).toBe(21);
+    expect(split!.trail!.plan.stints.map((s) => `${s.compound}(${s.laps})`)).toEqual(['M(34)', 'S(19)']);
+    expect(split!.trail!.plan.pitLaps).toEqual([34]);
+    expect(split!.trail!.plan.timeS).toBeCloseTo(57.6, 1);
+    expect(split!.trail!.reason).toBe('diff-compound');
+  });
+
+  it('rejects the faster 2-pit M→S→M as trail: first pit V21 is 2 laps from V19', () => {
+    const lab = buildTyreLab(monzaModel(), MONZA_RACE_ID);
+    const split = lab.data.carPlans!;
+    // the 2-pit plan exists among the ranked strategies and is cheaper…
+    const two = lab.data.strategies.find((s) => s.order.join('→') === 'M→S→M' && s.stops === 2);
+    expect(two).toBeDefined();
+    expect(two!.pitLaps[0]).toBe(21);
+    expect(two!.timeS).toBeCloseTo(54.5, 1);
+    // …but it must NOT be the trail plan (V21 − V19 = 2 < 3)
+    expect(split.trail!.plan.order.join('→')).not.toBe('M→S→M');
+    expect(split.trail!.plan.pitLaps.every((p) => Math.abs(p - 19) >= 3)).toBe(true);
+  });
+
+  it('flags the tie: same multiset, hedge not speed — and records the model limitation', () => {
+    const lab = buildTyreLab(monzaModel(), MONZA_RACE_ID);
+    const split = lab.data.carPlans!;
+    expect(split.tie).toBe(true);
+    expect(lab.assumptions.some((a) => a.text.includes('hedge, không phải vì nhanh hơn'))).toBe(true);
+    expect(lab.assumptions.some((a) => a.text.includes('không phân biệt deg của stint chạy đầu'))).toBe(true);
+  });
+
+  it('carPlans null when the grid does not cover both player drivers', () => {
+    const model = monzaModel();
+    model.drivers = model.drivers.filter((d) => d.teamId !== 32);
+    const lab = buildTyreLab(model, MONZA_RACE_ID);
+    expect(lab.data.carPlans).toBeNull();
+  });
+
+  it('per-plan confidence uses the same v0.6.1 pillars', () => {
+    const lab = buildTyreLab(monzaModel(), MONZA_RACE_ID);
+    const split = lab.data.carPlans!;
+    expect(split.lead.confidence).toBe(lab.confidence);
+    expect(split.trail!.confidence).toBe(lab.confidence);
+  });
+});

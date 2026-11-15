@@ -874,6 +874,39 @@ export interface TyreLab {
    * allocation is absent or the gate has not opened.
    */
   inventory: TyreInventory | null;
+  /**
+   * v0.7.0 step 4 — the two-car split (spec bước 4): the higher-grid car
+   * (lead) runs the optimizer's plan, the lower-grid car (trail) runs the
+   * best plan whose pit laps stay ≥ 3 laps clear of the lead's (double-
+   * stack avoidance — the offset rule IS the handling; no invented penalty
+   * constant). null when the grid does not cover both player drivers.
+   */
+  carPlans: CarPlans | null;
+}
+
+/** One car's plan with its attribution (spec bước 4 UI contract). */
+export interface CarPlan {
+  driverId: number;
+  driverName: string;
+  gridPos: number;
+  /** 'lead' = optimizer output; 'trail' = the offset plan. */
+  role: 'lead' | 'trail';
+  plan: StrategyResult;
+  confidence: Confidence;
+  /**
+   * Why the trail plan differs (machine-computed, one line):
+   * diff-compound / pit-gap / shifted (could not fully separate).
+   */
+  reason: 'diff-compound' | 'pit-gap' | 'shifted' | null;
+  /** Extra laps gained by the fallback pit shift (shifted reason only). */
+  shiftedBy?: number;
+}
+
+export interface CarPlans {
+  lead: CarPlan;
+  trail: CarPlan | null;
+  /** True when the two plans tie on modelled time — hedge, not speed. */
+  tie: boolean;
 }
 
 /** Prior from the local per-track correction store (v0.5.1 P2, IndexedDB). */
@@ -1178,6 +1211,7 @@ export function buildTyreLab(
         gamePlan: null,
         readiness,
         inventory: null,
+        carPlans: null,
       },
       confidence: 'LOW' as Confidence,
       evidence,
@@ -1460,6 +1494,19 @@ export function buildTyreLab(
       : missingPillars.length === 1
         ? 'MEDIUM'
         : 'HIGH';
+  /* v0.7.0 per-plan confidence (spec bước 4: tính riêng từng plan, giữ
+     nguyên các pillar v0.6.1) — the pillars are plan-independent except
+     fieldStops, which is re-checked per plan's own stop count. */
+  const planConfidenceFor = (stops: number): Confidence => {
+    const fewer = fieldRefStops != null && stops < fieldRefStops;
+    const missing = missingPillars.filter((p) => p !== 'fieldStops' || fewer);
+    if (fewer && !missing.includes('fieldStops')) missing.push('fieldStops');
+    return forcedPaceDelta || missing.length >= 2
+      ? 'LOW'
+      : missing.length === 1
+        ? 'MEDIUM'
+        : 'HIGH';
+  };
   if (fewerPitsThanField) {
     warnings.push(priorApplied ? 'PLAN_BELOW_FIELD_STOPS_PRIOR' : 'PLAN_BELOW_FIELD_STOPS');
   }
@@ -1523,11 +1570,113 @@ export function buildTyreLab(
     });
   }
 
-  if (priorApplied && options.prior) {
-    evidence.push({
-      source: 'pitwall:track-corrections (local)',
-      label: `Hiệu chỉnh local tại ${race.trackName}: lần trước plan ${options.prior.predictedStops ?? '?'} pit (pit vòng ${options.prior.predictedPitLap ?? '?'}), cả giải chạy ${(options.prior.fieldAvgStops ?? 0).toFixed(2)} pit/driver`,
+  /* ── v0.7.0 step 4: the two-car split (spec bước 4) ────────────────────
+     Lead = the higher-grid player driver, running the optimizer's plan
+     (already feasibility-gated + re-priced by the inventory cap in step 3).
+     Trail = the best feasible plan whose EVERY pit lap stays ≥ 3 laps
+     clear of every lead pit lap — the offset rule IS the double-stack
+     handling (the model has no queue-time constant and none may be
+     invented). A different starting compound (a) is preferred when the
+     plan sits within the repo's 2.0s "tie" band of the optimal plan; a
+     same-compound plan qualifies through the pit gap alone (b). Without
+     any qualifying plan the lead's pits shift as far as the tyres allow
+     and the shortfall is stated. CẤM bịa hằng số phạt double-stack. */
+  const TRAIL_PIT_GAP = 3;
+  const playerDriverIds = new Set(
+    model.drivers.filter((d) => d.teamId === model.player.teamId).map((d) => d.staffId),
+  );
+  const playerGrid = (readiness.grid ?? [])
+    .filter((g) => playerDriverIds.has(g.driverId))
+    .sort((a, b) => a.gridPos - b.gridPos);
+  let carPlans: CarPlans | null = null;
+  if (best && playerGrid.length >= 2) {
+    const [leadGrid, trailGrid] = playerGrid;
+    const driverName = (id: number): string =>
+      model.drivers.find((d) => d.staffId === id)?.fullName ?? `Driver ${id}`;
+    const leadPlan = best;
+    const gapOk = (p: StrategyResult): boolean =>
+      p.pitLaps.every((pl) =>
+        leadPlan.pitLaps.every((lp) => Math.abs(pl - lp) >= TRAIL_PIT_GAP),
+      );
+    const candidates = ranked.filter((p) => p !== leadPlan && gapOk(p));
+    /* (a) different starting compound, within the 2.0s tie band of the
+       optimal plan — the spec's preference order */
+    const diffCompound = candidates.filter(
+      (p) => p.order[0] !== leadPlan.order[0] && (p.vsBestS ?? Infinity) <= 2.0,
+    );
+    let trailPlan: StrategyResult | null = diffCompound[0] ?? candidates[0] ?? null;
+    let reason: CarPlan['reason'] = null;
+    let shiftedBy: number | undefined;
+    if (trailPlan) {
+      reason = trailPlan.order[0] !== leadPlan.order[0] ? 'diff-compound' : 'pit-gap';
+    } else {
+      /* fallback: keep the optimal plan but push its pits as far from the
+         lead's as the tyres allow — never reach ≥3 is stated, not hidden */
+      let bestShifted: { plan: StrategyResult; gap: number; shift: number } | null = null;
+      for (const shift of [3, -3, 4, -4, 5, -5, 2, -2, 1, -1]) {
+        const r = whatIfPitShift(leadPlan, laps, invCap, deltas, pitCostS, shift);
+        if (!r.shifted) continue;
+        const minGap = Math.min(
+          ...r.shifted.pitLaps.map((pl) =>
+            Math.min(...leadPlan.pitLaps.map((lp) => Math.abs(pl - lp))),
+          ),
+        );
+        if (minGap >= TRAIL_PIT_GAP) {
+          bestShifted = { plan: r.shifted, gap: minGap, shift };
+          break;
+        }
+        if (!bestShifted || minGap > bestShifted.gap) {
+          bestShifted = { plan: r.shifted, gap: minGap, shift };
+        }
+      }
+      if (bestShifted) {
+        trailPlan = bestShifted.plan;
+        reason = 'shifted';
+        shiftedBy = bestShifted.shift;
+      }
+    }
+    const tie =
+      trailPlan != null &&
+      (planKey(leadPlan) === planKey(trailPlan) ||
+        Math.abs(
+          (trailPlan.modelTimeS ?? trailPlan.timeS) -
+            (leadPlan.modelTimeS ?? leadPlan.timeS),
+        ) < 2.0);
+    if (tie) {
+      assumptions.push({
+        text: 'Hai plan hòa nhau về tổng thời gian mô hình — tách để tránh dẫm chân + hedge, không phải vì nhanh hơn',
+      });
+    }
+    /* documented model limitation (spec bước 4): fuel load makes early
+       stints dearer than late ones in reality — the model cannot see it */
+    assumptions.push({
+      text: 'Giới hạn model: không phân biệt deg của stint chạy đầu race (xe nặng xăng) với stint chạy cuối — hai plan cùng multiset stint cho cùng tổng thời gian dù thứ tự khác nhau',
     });
+    carPlans = {
+      lead: {
+        driverId: leadGrid.driverId,
+        driverName: driverName(leadGrid.driverId),
+        gridPos: leadGrid.gridPos,
+        role: 'lead',
+        plan: leadPlan,
+        confidence: planConfidenceFor(leadPlan.stops),
+        reason: null,
+      },
+      trail:
+        trailPlan != null
+          ? {
+              driverId: trailGrid.driverId,
+              driverName: driverName(trailGrid.driverId),
+              gridPos: trailGrid.gridPos,
+              role: 'trail',
+              plan: trailPlan,
+              confidence: planConfidenceFor(trailPlan.stops),
+              reason,
+              ...(shiftedBy != null ? { shiftedBy } : {}),
+            }
+          : null,
+      tie,
+    };
   }
 
   if (lifeSource.S === 'model') {
@@ -1652,6 +1801,7 @@ export function buildTyreLab(
       gamePlan,
       readiness,
       inventory,
+      carPlans,
     },
     confidence,
     evidence,

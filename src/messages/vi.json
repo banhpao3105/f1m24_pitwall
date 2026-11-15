@@ -327,6 +327,16 @@
       "teamLevel": "Kho lốp đang ở cấp đội — chưa tách được theo từng xe.",
       "checkInGame": "Chưa xác minh được CarID nào là xe nào (kiểm tra trong game) — nhãn Xe 1/Xe 2 theo thứ tự đội."
     },
+    "split": {
+      "lead": "Lead — {name} (P{pos})",
+      "trailTitle": "Xe dưới — {name} (P{pos}): {plan}",
+      "reasonDiffCompound": "Lệch so với lead: xuất phát bằng compound khác ({compound}) để hedge — 2 xe không dẫm cùng chiến thuật.",
+      "reasonPitGap": "Lệch so với lead: cùng compound xuất phát nhưng mọi vòng pit cách lead ≥ 3 vòng (tránh double-stack).",
+      "reasonShifted": "Không tách được hẳn — chỉ dịch được vòng pit {laps} vòng so với lead.",
+      "tieNote": "Hòa về tổng thời gian mô hình — tách để tránh dẫm chân + hedge, không phải vì nhanh hơn.",
+      "total": "Tổng thời gian mô hình: {time}s",
+      "noTrail": "Không có plan riêng cho xe dưới — grid chưa đủ dữ liệu cho cả 2 tay đua."
+    },
     "hero": "Kế hoạch đề xuất",
     "heroPlan": "{plan} — {stops} pit{pits}",
     "timeline": {

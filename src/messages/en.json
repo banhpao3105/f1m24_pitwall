@@ -327,6 +327,16 @@
       "teamLevel": "Inventory is team-level — per-car split unavailable.",
       "checkInGame": "CarID→driver mapping unverified (check in game) — labels Xe 1/Xe 2 follow team order."
     },
+    "split": {
+      "lead": "Lead — {name} (P{pos})",
+      "trailTitle": "Trail car — {name} (P{pos}): {plan}",
+      "reasonDiffCompound": "Offset vs the lead: starts on a different compound ({compound}) to hedge — the two cars do not share one strategy.",
+      "reasonPitGap": "Offset vs the lead: same starting compound but every pit lap stays ≥ 3 laps clear of the lead's (double-stack avoidance).",
+      "reasonShifted": "Could not fully separate — pit laps moved only {laps} laps away from the lead.",
+      "tieNote": "Tied on modelled time — split to avoid traffic + hedge, not because it is faster.",
+      "total": "Modelled total: {time}s",
+      "noTrail": "No separate plan for the trail car — the grid lacks data for both drivers."
+    },
     "hero": "Recommended plan",
     "heroPlan": "{plan} — {stops} stop(s){pits}",
     "timeline": {

@@ -224,7 +224,7 @@ export function TyreLabView({
         </p>
       ) : (
         <>
-          {/* hero plan */}
+          {/* hero plan — the LEAD car's plan when the grid splits the team */}
           <section aria-label={t('hero')} className="rounded-lg border border-teal/30 bg-panel p-4">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <h3 className="text-sm font-semibold text-teal">
@@ -240,6 +240,18 @@ export function TyreLabView({
                       : '',
                 })}
               </h3>
+              {/* v0.7.0 — who runs this plan and from where on the grid */}
+              {tyre.data.carPlans ? (
+                <span
+                  className="rounded bg-teal/10 px-2 py-0.5 font-mono text-[10px] text-teal"
+                  data-testid="lead-plan-driver"
+                >
+                  {t('split.lead', {
+                    name: tyre.data.carPlans.lead.driverName,
+                    pos: tyre.data.carPlans.lead.gridPos,
+                  })}
+                </span>
+              ) : null}
               {tyre.data.expectedStops != null ? (
                 <span className="rounded bg-raised px-2 py-0.5 font-mono text-[10px] text-ink-soft">
                   {t('expectedStops', { stops: tyre.data.expectedStops, source: t(`source.${tyre.data.expectedSource ?? 'model'}`) })}
@@ -380,6 +392,93 @@ export function TyreLabView({
                 <p className="mt-2 text-[11px] text-ink-faint">{t('inventory.checkInGame')}</p>
               ) : null}
             </section>
+          ) : null}
+
+          {/* v0.7.0 step 4 — the TRAIL car's offset plan (double-stack rule) */}
+          {tyre.data.carPlans?.trail ? (
+            <section
+              aria-label={t('split.trailTitle')}
+              className="rounded-lg border border-line bg-panel p-4"
+              data-testid="trail-plan"
+            >
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-semibold text-ink">
+                  {t('split.trailTitle', {
+                    name: tyre.data.carPlans.trail.driverName,
+                    pos: tyre.data.carPlans.trail.gridPos,
+                    plan: tyre.data.carPlans.trail.plan.stints
+                      .map((s) => `${s.compound}(${s.laps})`)
+                      .join(' → '),
+                  })}
+                </h3>
+                <span className="font-mono text-[11px] text-amber">
+                  {tyre.data.carPlans.trail.plan.pitLaps.length > 0
+                    ? t('gamePlan.pitLaps', {
+                        laps: tyre.data.carPlans.trail.plan.pitLaps.map((l) => `V${l}`).join(', '),
+                      })
+                    : null}
+                </span>
+                <span className="ml-auto">
+                  <ConfidenceBadge confidence={tyre.data.carPlans.trail.confidence} />
+                </span>
+              </div>
+              {/* one-line offset reason (engine-computed) */}
+              <p className="mb-3 text-xs text-ink-soft" data-testid="trail-plan-reason">
+                {tyre.data.carPlans.trail.reason === 'diff-compound'
+                  ? t('split.reasonDiffCompound', {
+                      compound: tyre.data.carPlans.trail.plan.stints[0]?.compound ?? '',
+                    })
+                  : tyre.data.carPlans.trail.reason === 'pit-gap'
+                    ? t('split.reasonPitGap')
+                    : t('split.reasonShifted', {
+                        laps: tyre.data.carPlans.trail.shiftedBy ?? 0,
+                      })}
+                {tyre.data.carPlans.tie ? ` ${t('split.tieNote')}` : ''}
+              </p>
+              <StintTimeline
+                stints={tyre.data.carPlans.trail.plan.stints}
+                totalLaps={tyre.data.laps}
+                pitLaps={tyre.data.carPlans.trail.plan.pitLaps}
+              />
+              <table className="mt-3 w-full text-left text-xs" data-testid="trail-stint-table">
+                <thead>
+                  <tr className="text-[10px] uppercase tracking-wide text-ink-faint">
+                    <th className="py-1 pr-2 font-medium">{t('table.stint')}</th>
+                    <th className="py-1 pr-2 font-medium">{t('table.compound')}</th>
+                    <th className="py-1 pr-2 font-medium">{t('table.laps')}</th>
+                    <th className="py-1 pr-2 font-medium">{t('table.range')}</th>
+                    <th className="py-1 font-medium">{t('table.pit')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tyre.data.carPlans.trail.plan.stints.map((s, i) => (
+                    <tr key={i} className="border-t border-line">
+                      <td className="py-1.5 pr-2 font-mono text-ink-faint">#{i + 1}</td>
+                      <td className="py-1.5 pr-2">
+                        <CompoundBadge compound={s.compound as CompoundKey} size="sm" showLabel />
+                      </td>
+                      <td className="py-1.5 pr-2 font-mono text-ink">{s.laps}</td>
+                      <td className="py-1.5 pr-2 font-mono text-ink-soft">
+                        {s.fromLap}–{s.toLap}
+                      </td>
+                      <td className="py-1.5 font-mono text-amber">
+                        {tyre.data.carPlans!.trail!.plan.pitLaps[i] != null
+                          ? `V${tyre.data.carPlans!.trail!.plan.pitLaps[i]}`
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="mt-2 font-mono text-[10px] text-ink-faint">
+                {t('split.total', { time: tyre.data.carPlans.trail.plan.timeS.toFixed(1) })}
+              </p>
+            </section>
+          ) : null}
+          {tyre.data.carPlans?.trail == null && tyre.data.carPlans ? (
+            <p className="rounded-lg border border-line bg-surface px-3 py-2 text-xs text-ink-faint" data-testid="trail-unavailable">
+              {t('split.noTrail')}
+            </p>
           ) : null}
 
           {/* evidence clock (v0.5.1 P2) — the source of every number behind
