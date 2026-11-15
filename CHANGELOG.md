@@ -2,6 +2,79 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.9.1] — Chiến thuật lốp phải chạy được trên đúng số bộ còn dùng được
+
+Minor bump theo prompt v0.9.1 (sửa lỗi logic nghiêm trọng, không phải patch).
+Lỗi do Nguyen phát hiện và assistant kiểm chứng 2026-11-15 trên save
+MarinaBay pre-race `autosave-4.sav` (Day 46663, race 204, 62 vòng,
+post-quali): web v0.8.1 đề xuất **lead S→M→M (94.0s)** trong khi mỗi xe chỉ
+có đúng **1 bộ M dùng được** (bộ mới #8, đời 31 vòng) — 2 bộ M còn lại bị
+khóa (`AvailabilityState = 2`). Plan của game (S→M→H, 103.7s) mới là hình
+dạng đúng. Kho khả dụng mỗi xe: S [21,21,21,19,19] · M [31] · H [48].
+
+### Root cause
+
+`buildTyreInventory` chỉ tính **cap theo bộ tốt nhất** mỗi hợp chất
+(`maxStint[C] = min(modelLife, best set life)`), không đếm **số bộ**;
+`evaluateStrategy` chỉ kẹp mỗi stint ≤ cap nên một plan lặp M ở 2 stint
+(23 ≤ 31, 23 ≤ 31) đều qua — như thể một bộ M mới chạy được 2 lần. Block
+"count stints per compound" cũ chỉ đếm **tổng cả đội** (M cần 2, cả đội có
+2 → không flag) và chỉ đẩy một assumption rồi vẫn đề xuất plan.
+
+### Changed — luật khả thi mới, một định nghĩa dùng khắp nơi (`c91c162`)
+
+- **Greedy set assignment theo từng xe** (`assignSetsForCar`,
+  `isPlanFeasibleForCar`): với mỗi hợp chất, stint xếp giảm dần theo độ dài
+  đối chiếu bộ khả dụng của ĐÚNG xe đó (`AvailabilityState = 0`,
+  `lifeRemaining > 0`) giảm dần theo đời — stint thứ k phải vừa bộ tốt thứ
+  k. Cấm cộng dồn kho 2 xe: bộ của xe 1 không chạy được cho xe 2.
+- `buildTyreLab`: sau khi re-split theo cap, mọi plan phải gán được bộ trên
+  **cả 2 xe**; không gán được → loại khỏi xếp hạng với note đúng định dạng:
+  *"Bỏ phương án nhanh hơn theo model vì kho không chạy được: S→M→M — cần
+  2 stint M (23 + 23 vòng) nhưng mỗi xe chỉ có 1 bộ M khả dụng (đời 31)"*.
+  Block "tạm giả định dùng lại bộ tốt nhất" đã bị xóa (tiền đề không còn).
+- **`setUsed` lấy từ phép gán thật** (thêm `tyreSetId`): stint dài nhất ↔ bộ
+  đời dài nhất — không còn chọn độc lập khiến 2 stint trỏ chung một bộ.
+- **`vsBestS` re-base sau lọc**: so với plan khả thi tốt nhất (lead = +0.0s)
+  thay vì model best 90.7s đã bị loại; `modelTimeS` giữ nguyên để tham chiếu.
+- `priceOn` (lead/trail) tính trên kho đúng xe đó và trả `null` khi plan
+  không gán được; `whatIfPitShift` nhận thêm kho xe đang xét — dời pit làm
+  stint vượt đời bộ → `shifted: null, clamped: true`; `buildWetPlan` áp cùng
+  luật cho I/W (Inter 5 bộ mới/xe, Wet 2 bộ mới/xe) khi có inventory.
+
+### Added — UI hiện bộ lốp gán cho từng stint (`976c9e6`)
+
+- Bảng stint của plan lead **và** xe dưới hiện đúng bộ được gán:
+  *"bộ #8 · mới · đời 31"* (vi) / *"set #8 · fresh · life 31"* (en) — số
+  từ `setUsed.tyreSetId` của engine, view không tự suy lại.
+- Toggle mưa: wet plan chạy qua cùng luật bộ; không gán được → state
+  "thiếu dữ liệu" như cũ.
+
+### Số liệu khóa trên save MarinaBay (autosave-4.sav, Day 46663)
+
+- **Sau fix — lead: S→S→M (S17/S18/M27), pit 17,35 · 97.1s, 2 stops**;
+  stint M 27 vòng chạy bộ mới #8 (đời 31).
+- **Trail: M→S→S (M27/S17/S18), pit 27,44 · 97.1s** — hòa tuyệt đối với
+  lead (cùng multiset S/S/M) → tách để tránh dẫm chân + hedge; pit cách
+  nhau ≥ 3 vòng (27/17 = 10, 44/35 = 9).
+- **Không plan 2-M và không plan 2-H nào** xuất hiện; tổng số plan khả thi
+  **22/52** sau sanity filter. S→M→H tốt nhất của engine: S15/M23/H24 ·
+  101.9s (thứ 6) — game plan giữ nguyên 103.7s (pit 19,38).
+- Lead `vsBestS` = **+0.0s** (không phải +6.4s so với model best 90.7s bị
+  loại). Mọi số đã đối chiếu bằng `scripts/compute-marina-feasible.ts`
+  (mirror đúng pipeline engine, để lại trong repo).
+- **Hồi quy Monza** (save4.sav Day 46635): lead S(19)→M(34) 57.6s + trail
+  M(34)→S(19) 57.6s không đổi. (Plan 2-pit M→S→M 54.5s cũ của Monza cũng
+  bị loại đúng luật — mỗi xe chỉ có 1 bộ M.)
+
+### Tests
+
+- 24 test mới (tổng 420/420 xanh): luật greedy (đủ bộ / thiếu bộ / đủ số
+  nhưng bộ ngắn / vừa đúng đời / state 2 không tính / 2 xe khác kho / I+W),
+  buildTyreLab trên fixture MarinaBay (lead/trail/note/vsBestS/game plan/
+  22-of-52), what-if set gate, wet set gate, component test bộ gán (#8)
+  trên cả vi + en.
+
 ## [0.8.1] — F5 đọc lại ĐÚNG file save trên đĩa (không cần bấm Đổi save + nạp lại)
 
 Patch bump theo prompt v0.8.1. Yêu cầu của Nguyen 2026-11-15: đang chơi game
