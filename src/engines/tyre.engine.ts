@@ -787,6 +787,151 @@ export function buildWetPlan(
   };
 }
 
+/* ── v0.9.2 — the SC/VSC what-if (roadmap v0.9 §2.2.3, probe-verified) ────── */
+
+export type SCVSCMode = 'sc' | 'vsc';
+
+/** The user-chosen interruption window (1-based laps, inclusive start). */
+export interface SCVSCScenario {
+  mode: SCVSCMode;
+  /** First lap of the interruption. */
+  startLap: number;
+  /** Window length in laps. */
+  laps: number;
+}
+
+/** One re-priced plan row (green vs scenario). */
+export interface SCVSCRow {
+  order: Compound[];
+  stops: number;
+  pitLaps: number[];
+  stints: PlannedStint[];
+  /** The lab's own green-flag number (unchanged). */
+  greenTimeS: number;
+  /** Green time with every in-window stop priced at the scenario pit cost. */
+  scenarioTimeS: number;
+  /** greenTimeS − scenarioTimeS, rounded 0.1 (positive = saved). */
+  savedS: number;
+  stopsInWindow: number;
+}
+
+/** Structured assumptions — the UI translates them (no raw strings here). */
+export type SCVSCAssumptionKey =
+  | 'scRatio'
+  | 'vscMidpoint'
+  | 'repricedOnly'
+  | 'userWindow';
+
+export interface SCVSCWhatIf {
+  scenario: SCVSCScenario;
+  laps: number;
+  /** The lab's green pit cost — engine-calibrated, UNCHANGED by this what-if. */
+  pitCostGreenS: number;
+  /** Green cost scaled by the track's real columns for the scenario mode. */
+  pitCostScenarioS: number;
+  /** The raw Races_Tracks columns the scaling comes from (game seconds). */
+  trackCols: { pitLaneS: number; greenFlagS: number; scS: number; chance: number };
+  /** The lab's surviving plans re-priced, sorted by scenario time. */
+  rows: SCVSCRow[];
+  assumptions: Array<{ key: SCVSCAssumptionKey; params: Record<string, string | number> }>;
+}
+
+/**
+ * Re-prices the tyre lab's surviving plans under an SC/VSC scenario.
+ *
+ * Semantics (probe-v090-pitcost §2.2.3, verified on a real F1M 24 save):
+ *   - Races_Tracks carries per-track pit costs: PitLaneTimeLoss (green) and
+ *     SafetyCarTimeLoss (SC). The save records no per-lap SC history, so the
+ *     window itself is user input — the engine only supplies honest pricing.
+ *   - The green pit cost stays the lab's own calibrated constant (never the
+ *     game's raw column); the SC cost scales it by the track's REAL
+ *     green→SC ratio: pitCostScenario = pitCostGreen × SC/Pit. VSC has no
+ *     column of its own — midpoint between green and SC, labelled.
+ *   - Only pit costs inside the window change. Deg/deltas/set assignment are
+ *     untouched: every row is a plan the v0.9.1 feasibility law already
+ *     passed on each car's own sets, and no new plan can appear.
+ * Returns null when the save lacks the track columns (feature off, honestly)
+ * or the lab has no plan to re-price.
+ */
+export function whatIfSCVSC(
+  model: SaveModel,
+  raceId: number,
+  scenario: SCVSCScenario,
+): SCVSCWhatIf | null {
+  const race = model.races.find((r) => r.raceId === raceId) ?? null;
+  if (
+    !race ||
+    race.trackPitLaneTimeLossS == null ||
+    race.trackSafetyCarTimeLossS == null ||
+    race.trackPitLaneTimeLossS <= 0
+  ) {
+    return null;
+  }
+  const lab = buildTyreLab(model, raceId);
+  const d = lab.data;
+  if (!d || !d.readiness.ready || d.strategies.length === 0) return null;
+
+  const scRatio = clamp(race.trackSafetyCarTimeLossS / race.trackPitLaneTimeLossS, 0, 1);
+  /* VSC: no column in the save — the green↔SC midpoint, labelled as such. */
+  const ratio = scenario.mode === 'sc' ? scRatio : 1 - (1 - scRatio) / 2;
+  const pitCostScenarioS = d.pitCostS * ratio;
+  const discount = d.pitCostS - pitCostScenarioS;
+
+  const rows: SCVSCRow[] = d.strategies
+    .map((plan) => {
+      const stopsInWindow = plan.pitLaps.filter(
+        (l) => l >= scenario.startLap && l < scenario.startLap + scenario.laps,
+      ).length;
+      const scenarioTimeS = plan.timeS - stopsInWindow * discount;
+      return {
+        order: plan.order,
+        stops: plan.stops,
+        pitLaps: plan.pitLaps,
+        stints: plan.stints,
+        greenTimeS: plan.timeS,
+        scenarioTimeS: Math.round(scenarioTimeS * 10) / 10,
+        savedS: Math.round((plan.timeS - scenarioTimeS) * 10) / 10,
+        stopsInWindow,
+      };
+    })
+    .sort((a, b) => a.scenarioTimeS - b.scenarioTimeS);
+
+  const assumptions: SCVSCWhatIf['assumptions'] = [];
+  if (scenario.mode === 'sc') {
+    assumptions.push({
+      key: 'scRatio',
+      params: {
+        sc: race.trackSafetyCarTimeLossS,
+        pit: race.trackPitLaneTimeLossS,
+        green: d.pitCostS.toFixed(1),
+        cost: pitCostScenarioS.toFixed(1),
+      },
+    });
+  } else {
+    assumptions.push({
+      key: 'vscMidpoint',
+      params: { cost: pitCostScenarioS.toFixed(1) },
+    });
+  }
+  assumptions.push({ key: 'repricedOnly', params: {} });
+  assumptions.push({ key: 'userWindow', params: {} });
+
+  return {
+    scenario,
+    laps: d.laps,
+    pitCostGreenS: d.pitCostS,
+    pitCostScenarioS: Math.round(pitCostScenarioS * 10) / 10,
+    trackCols: {
+      pitLaneS: race.trackPitLaneTimeLossS,
+      greenFlagS: race.trackGreenFlagTimeLossS ?? 0,
+      scS: race.trackSafetyCarTimeLossS,
+      chance: race.trackSafetyCarChance ?? 0,
+    },
+    rows,
+    assumptions,
+  };
+}
+
 /* ── the engine ──────────────────────────────────────────────────────────── */
 
 /** A practice-measured pace delta, kept visible even when overridden. */

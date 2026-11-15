@@ -8,12 +8,12 @@
 
 import { useTranslations, useLocale } from 'next-intl';
 import { useMemo, useState, useEffect, useRef } from 'react';
-import { Waves, SlidersHorizontal, CloudRain, Activity, Bot, ClipboardCheck, Check, CircleAlert } from 'lucide-react';
+import { Waves, SlidersHorizontal, CloudRain, Flag, Activity, Bot, ClipboardCheck, Check, CircleAlert } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
 import { getTrackCorrection, putTrackCorrection, TRACK_CORRECTIONS_VERSION } from '@/lib/track-corrections';
 import { useTyreLab } from '@/lib/engine-hooks';
-import { whatIfPitShift, buildWetPlan, type TyreLabPrior } from '@/engines/tyre.engine';
+import { whatIfPitShift, whatIfSCVSC, buildWetPlan, type TyreLabPrior } from '@/engines/tyre.engine';
 import { RecommendationCard } from './RecommendationCard';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { StintTimeline } from './StintTimeline';
@@ -81,6 +81,11 @@ export function TyreLabView({
   // what-if local state (docs/03 §5.3: pit sớm/muộn ±, toggle mưa)
   const [pitShift, setPitShift] = useState(0);
   const [rainOn, setRainOn] = useState(false);
+  /* v0.9.2 — SC/VSC what-if state. startLap null = the plan's own first pit. */
+  const [scOn, setScOn] = useState(false);
+  const [scMode, setScMode] = useState<'sc' | 'vsc'>('sc');
+  const [scStart, setScStart] = useState<number | null>(null);
+  const [scLaps, setScLaps] = useState(3);
 
   const seasonRaces = model.races.filter((r) => r.seasonId === model.meta.seasonId);
   const race = seasonRaces.find((r) => r.raceId === raceId) ?? seasonRaces.find((r) => r.state !== 2) ?? seasonRaces.at(-1) ?? null;
@@ -162,6 +167,25 @@ export function TyreLabView({
        stints must be runnable on each car's OWN stock. */
     return buildWetPlan(model, tyre.data.laps, tyre.data.inventory);
   }, [model, rainOn, tyre]);
+
+  /* v0.9.2 — SC/VSC what-if: the engine re-prices the lab's surviving
+     plans with the track's real Races_Tracks columns; no plan is invented. */
+  const scWhatIf = useMemo(() => {
+    if (!scOn || !tyre?.data || !race) return null;
+    const startLap = scStart ?? tyre.data.best?.pitLaps[0] ?? 1;
+    return whatIfSCVSC(model, race.raceId, { mode: scMode, startLap, laps: scLaps });
+  }, [model, race, scOn, scMode, scStart, scLaps, tyre]);
+
+  /* Season interruption history from Races_Results (context line only —
+     the counts the save does carry; no per-lap history exists). */
+  const scHistory = useMemo(() => {
+    const done = model.races.filter((r) => r.state === 2 && r.results.length > 0);
+    return {
+      sc: done.filter((r) => (r.results[0]?.safetyCarDeployments ?? 0) > 0).length,
+      vsc: done.filter((r) => (r.results[0]?.vscDeployments ?? 0) > 0).length,
+      total: done.length,
+    };
+  }, [model]);
 
   if (!race) {
     return (
@@ -883,6 +907,176 @@ export function TyreLabView({
                 </p>
               )
             ) : null}
+          </section>
+
+          {/* v0.9.2 — the SC/VSC what-if (real Races_Tracks columns, honest pricing) */}
+          <section
+            aria-label={tWhat('scTitle')}
+            className="rounded-lg border border-line bg-panel p-4"
+            data-testid="tyre-whatif-sc"
+          >
+            <header className="mb-3 flex flex-wrap items-center gap-2">
+              <Flag className="h-4 w-4 text-amber" aria-hidden="true" />
+              <span className="font-mono text-[11px] uppercase tracking-wider text-amber">{tSec('whatif')}</span>
+              <h3 className="text-[15px] font-semibold text-ink">{tWhat('scTitle')}</h3>
+              <Switch
+                id="sc-toggle"
+                className="ml-auto"
+                checked={scOn}
+                onCheckedChange={(v) => setScOn(v)}
+                data-testid="sc-toggle"
+              />
+            </header>
+
+            {!scOn ? null : scWhatIf ? (
+              <div className="space-y-3">
+                <p
+                  className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-ink-faint"
+                  data-testid="sc-context"
+                >
+                  <span>{tWhat('scChance', { chance: (scWhatIf.trackCols.chance * 100).toFixed(1) })}</span>
+                  <span>
+                    {tWhat('scGameCols', {
+                      pit: scWhatIf.trackCols.pitLaneS,
+                      green: scWhatIf.trackCols.greenFlagS,
+                      sc: scWhatIf.trackCols.scS,
+                    })}
+                  </span>
+                  <span>
+                    {tWhat('scHistory', { sc: scHistory.sc, vsc: scHistory.vsc, total: scHistory.total })}
+                  </span>
+                </p>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div>
+                    <p className="text-xs text-ink-soft">{tWhat('scMode')}</p>
+                    <div className="mt-2 flex gap-1" role="group" aria-label={tWhat('scMode')}>
+                      <button
+                        type="button"
+                        aria-pressed={scMode === 'sc'}
+                        onClick={() => setScMode('sc')}
+                        className={cn(
+                          'min-h-[32px] rounded border px-2.5 py-1 text-xs',
+                          scMode === 'sc'
+                            ? 'border-amber bg-amber/10 text-amber'
+                            : 'border-line text-ink-soft hover:bg-raised',
+                        )}
+                        data-testid="sc-mode-sc"
+                      >
+                        {tWhat('scModeSC')}
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={scMode === 'vsc'}
+                        onClick={() => setScMode('vsc')}
+                        className={cn(
+                          'min-h-[32px] rounded border px-2.5 py-1 text-xs',
+                          scMode === 'vsc'
+                            ? 'border-amber bg-amber/10 text-amber'
+                            : 'border-line text-ink-soft hover:bg-raised',
+                        )}
+                        data-testid="sc-mode-vsc"
+                      >
+                        {tWhat('scModeVSC')}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label htmlFor="sc-start" className="text-xs text-ink-soft">
+                      {tWhat('scStart', { lap: scWhatIf.scenario.startLap })}
+                    </label>
+                    <Slider
+                      id="sc-start"
+                      className="mt-2"
+                      min={1}
+                      max={Math.max(1, scWhatIf.laps - 3)}
+                      step={1}
+                      value={[scWhatIf.scenario.startLap]}
+                      onValueChange={(v) => setScStart(v[0] ?? 1)}
+                      data-testid="sc-start-slider"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="sc-laps" className="text-xs text-ink-soft">
+                      {tWhat('scWindow', { laps: scWhatIf.scenario.laps })}
+                    </label>
+                    <Slider
+                      id="sc-laps"
+                      className="mt-2"
+                      min={1}
+                      max={8}
+                      step={1}
+                      value={[scWhatIf.scenario.laps]}
+                      onValueChange={(v) => setScLaps(v[0] ?? 3)}
+                      data-testid="sc-laps-slider"
+                    />
+                  </div>
+                </div>
+
+                <ul className="space-y-2" data-testid="sc-rows">
+                  {scWhatIf.rows.map((row, i) => (
+                    <li
+                      key={i}
+                      className="flex flex-wrap items-center gap-2 text-xs"
+                      data-testid={`sc-row-${i}`}
+                    >
+                      <span className="w-10 font-mono text-ink-faint">{row.stops} pit</span>
+                      <span className="flex flex-wrap gap-1">
+                        {row.stints.map((st, j) => (
+                          <span key={j} className="inline-flex items-center gap-0.5">
+                            <CompoundBadge compound={st.compound as CompoundKey} size="sm" />
+                            <span className="font-mono text-[10px] text-ink-soft">{st.laps}</span>
+                          </span>
+                        ))}
+                      </span>
+                      <span className="font-mono text-ink-faint">
+                        {row.greenTimeS.toFixed(1)}s →{' '}
+                        <span className={i === 0 ? 'text-good' : 'text-ink'}>
+                          {row.scenarioTimeS.toFixed(1)}s
+                        </span>
+                      </span>
+                      {row.stopsInWindow > 0 ? (
+                        <span className="rounded bg-amber/10 px-2 py-0.5 font-mono text-[10px] text-amber">
+                          {tWhat('scSaved', { saved: row.savedS.toFixed(1), stops: row.stopsInWindow })}
+                        </span>
+                      ) : (
+                        <span className="rounded bg-raised px-2 py-0.5 font-mono text-[10px] text-ink-faint">
+                          {tWhat('scNone')}
+                        </span>
+                      )}
+                      {i === 0 ? <span className="text-good">{t('fastest')}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+
+                <ul className="space-y-1 border-t border-line pt-2">
+                  {scWhatIf.assumptions.map((a, i) => (
+                    <li key={i} className="text-[11px] text-ink-faint">
+                      •{' '}
+                      {a.key === 'scRatio'
+                        ? tWhat('scAssumpRatio', {
+                            green: String(a.params.green),
+                            sc: String(a.params.sc),
+                            pit: String(a.params.pit),
+                            cost: String(a.params.cost),
+                          })
+                        : a.key === 'vscMidpoint'
+                          ? tWhat('scAssumpVSC', { cost: String(a.params.cost) })
+                          : a.key === 'repricedOnly'
+                            ? tWhat('scAssumpReprice')
+                            : tWhat('scAssumpWindow')}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p
+                className="rounded border border-line bg-surface px-3 py-2 text-xs text-ink-faint"
+                data-testid="sc-no-data"
+              >
+                {tWhat('scNoCols')}
+              </p>
+            )}
           </section>
 
           {/* alternatives */}
