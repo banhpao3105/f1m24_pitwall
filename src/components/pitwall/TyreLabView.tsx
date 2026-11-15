@@ -200,6 +200,13 @@ export function TyreLabView({
      2: web không được đưa ra dự đoán nào cho đến khi có save sau quali). */
   const notReady = tyre != null && !tyre.data.readiness.ready;
 
+  /* v0.9.4 — the ONE proposal shown to the user: the LEAD card's plan when
+     the grid splits the team, the ranked best otherwise. `tyre.data.best`
+     (the car-1-basis ranked winner) stays in the ranking table and the
+     GAME/WEB row only — after the wear correction the two can differ
+     (Vegas: hero S14/S14/M22 72.2s vs best S13/S13/M24 72.7s). */
+  const heroPlan = tyre?.data.carPlans ? tyre.data.carPlans.lead.plan : tyre?.data.best ?? null;
+
   return (
     <div className="space-y-5" data-testid="tyre-lab">
       <header className="flex flex-wrap items-center gap-2">
@@ -295,15 +302,17 @@ export function TyreLabView({
               its own garage, the hero shows THAT plan (same object as best
               whenever the cars cap identically — every save verified so far). */}
           {(() => {
-            const heroPlan = tyre.data.carPlans ? tyre.data.carPlans.lead.plan : tyre.data.best;
-            const heroStops = heroPlan.stops;
-            const heroPitLaps = heroPlan.pitLaps;
+            /* the else-branch guarantees a plan exists (best != null and the
+               lead card carries one when the split exists) */
+            const hero = heroPlan!;
+            const heroStops = hero.stops;
+            const heroPitLaps = hero.pitLaps;
           return (
           <section aria-label={t('hero')} className="rounded-lg border border-teal/30 bg-panel p-4">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <h3 className="text-sm font-semibold text-teal">
                 {t('heroPlan', {
-                  plan: heroPlan.stints.map((s) => `${s.compound}(${s.laps})`).join(' → '),
+                  plan: hero.stints.map((s) => `${s.compound}(${s.laps})`).join(' → '),
                   stops: heroStops,
                   /* v0.6.3: the pit laps ride along in the hero — "2 pit
                      (V21, V43)" — straight from the engine's pitLaps, so the
@@ -314,13 +323,17 @@ export function TyreLabView({
                       : '',
                 })}
               </h3>
-              {/* v0.7.0 — who runs this plan and from where on the grid */}
+              {/* v0.7.0 — who runs this plan and from where on the grid.
+                  v0.9.4 — {car} names the GARAGE the sets come from (Xe 1/2
+                  while the seats are unverified, the driver's name once
+                  verified) — the card is a per-car briefing. */}
               {tyre.data.carPlans ? (
                 <span
                   className="rounded bg-teal/10 px-2 py-0.5 font-mono text-[10px] text-teal"
                   data-testid="lead-plan-driver"
                 >
                   {t('split.lead', {
+                    car: tyre.data.carPlans.lead.carLabel ?? '',
                     name: tyre.data.carPlans.lead.driverName,
                     pos: tyre.data.carPlans.lead.gridPos,
                   })}
@@ -345,9 +358,9 @@ export function TyreLabView({
               ) : null}
             </div>
             <StintTimeline
-              stints={heroPlan.stints}
+              stints={hero.stints}
               totalLaps={tyre.data.laps}
-              pitLaps={heroPlan.pitLaps}
+              pitLaps={hero.pitLaps}
 />
             {/* v0.6.0 step 4 — the pit plan as a stint-by-stint table */}
             <table className="mt-3 w-full text-left text-xs" data-testid="tyre-stint-table">
@@ -364,7 +377,7 @@ export function TyreLabView({
                 </tr>
               </thead>
               <tbody>
-                {heroPlan.stints.map((s, i) => (
+                {hero.stints.map((s, i) => (
                   <tr key={i} className="border-t border-line">
                     <td className="py-1.5 pr-2 font-mono text-ink-faint">#{i + 1}</td>
                     <td className="py-1.5 pr-2">
@@ -380,10 +393,12 @@ export function TyreLabView({
                     {/* v0.7.0 — which garage set the stint runs on.
                         v0.9.1 — the set id comes from the REAL assignment
                         (longest stint ↔ longest-life set), so the UI names
-                        the physical set (#8) instead of guessing. */}
+                        the physical set (#8) instead of guessing.
+                        v0.9.4 — the fresh/used label reads `fresh` (the
+                        per-set truth); the never-set `spare` flag is gone. */}
                     {tyre.data.inventory ? (
                       <td className="py-1.5 font-mono text-[10px] text-ink-soft">
-                        {s.setUsed && !s.setUsed.spare
+                        {s.setUsed && s.setUsed.fresh
                           ? t('inventory.setFresh', { id: s.setUsed.tyreSetId, life: s.setUsed.life })
                           : s.setUsed
                             ? t('inventory.setUsed', { id: s.setUsed.tyreSetId, life: s.setUsed.life })
@@ -394,6 +409,16 @@ export function TyreLabView({
                 ))}
               </tbody>
             </table>
+            {/* v0.9.4 — the lead plan's wear cost, when its own garage makes
+                one (fresh sets at cap lives → no line at all) */}
+            {hero.wearS != null && hero.wearS !== 0 ? (
+              <p className="mt-2 font-mono text-[10px] text-ink-faint" data-testid="hero-wear-cost">
+                {t('split.wearCost', {
+                  sign: hero.wearS > 0 ? '+' : '−',
+                  time: Math.abs(hero.wearS).toFixed(1),
+                })}
+              </p>
+            ) : null}
             {heroPitLaps.length > 0 ? (
               <div className="mt-4">
                 <PitWindowBar
@@ -401,7 +426,7 @@ export function TyreLabView({
                   windowLo={Math.max(2, heroPitLaps[0] - 2)}
                   windowHi={heroPitLaps[0] + 2}
                   totalLaps={tyre.data.laps}
-                  lifeCap={tyre.data.lives[heroPlan.stints[0].compound as CompoundKey]}
+                  lifeCap={tyre.data.lives[hero.stints[0].compound as CompoundKey]}
                 />
               </div>
             ) : null}
@@ -485,6 +510,7 @@ export function TyreLabView({
           {tyre.data.carPlans?.trail ? (
             <section
               aria-label={t('split.trailTitle', {
+                car: tyre.data.carPlans.trail.carLabel ?? '',
                 name: tyre.data.carPlans.trail.driverName,
                 pos: tyre.data.carPlans.trail.gridPos,
                 plan: tyre.data.carPlans.trail.plan.stints
@@ -497,6 +523,7 @@ export function TyreLabView({
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <h3 className="text-sm font-semibold text-ink">
                   {t('split.trailTitle', {
+                    car: tyre.data.carPlans.trail.carLabel ?? '',
                     name: tyre.data.carPlans.trail.driverName,
                     pos: tyre.data.carPlans.trail.gridPos,
                     plan: tyre.data.carPlans.trail.plan.stints
@@ -563,10 +590,11 @@ export function TyreLabView({
                           : '—'}
                       </td>
                       {/* v0.9.1 — the trail stint's own set (from the trail
-                          car's garage when the seats are verified) */}
+                          car's garage when the seats are verified).
+                          v0.9.4 — the label reads `fresh`; `spare` is gone. */}
                       {tyre.data.inventory ? (
                         <td className="py-1.5 font-mono text-[10px] text-ink-soft">
-                          {s.setUsed && !s.setUsed.spare
+                          {s.setUsed && s.setUsed.fresh
                             ? t('inventory.setFresh', { id: s.setUsed.tyreSetId, life: s.setUsed.life })
                             : s.setUsed
                               ? t('inventory.setUsed', { id: s.setUsed.tyreSetId, life: s.setUsed.life })
@@ -580,6 +608,16 @@ export function TyreLabView({
               <p className="mt-2 font-mono text-[10px] text-ink-faint">
                 {t('split.total', { time: tyre.data.carPlans.trail.plan.timeS.toFixed(1) })}
               </p>
+              {/* v0.9.4 — the trail plan's wear cost on ITS OWN garage */}
+              {tyre.data.carPlans.trail.plan.wearS != null &&
+              tyre.data.carPlans.trail.plan.wearS !== 0 ? (
+                <p className="mt-1 font-mono text-[10px] text-ink-faint" data-testid="trail-wear-cost">
+                  {t('split.wearCost', {
+                    sign: tyre.data.carPlans.trail.plan.wearS > 0 ? '+' : '−',
+                    time: Math.abs(tyre.data.carPlans.trail.plan.wearS).toFixed(1),
+                  })}
+                </p>
+              ) : null}
             </section>
           ) : null}
           {tyre.data.carPlans?.trail == null && tyre.data.carPlans ? (
@@ -792,8 +830,10 @@ export function TyreLabView({
                 laps: tyre.data.laps,
                 deltas: tyre.data.deltas,
                 lives: tyre.data.lives,
-                pitLap: tyre.data.best.pitLaps[0],
-                firstCompound: tyre.data.best.stints[0]?.compound as CompoundKey | undefined,
+                /* v0.9.4 — the curve marks the PROPOSAL's first pit (the
+                   lead card), not the ranked list's basis plan */
+                pitLap: heroPlan!.pitLaps[0],
+                firstCompound: heroPlan!.stints[0]?.compound as CompoundKey | undefined,
               }}
             />
           </section>
@@ -1079,12 +1119,15 @@ export function TyreLabView({
             )}
           </section>
 
-          {/* alternatives */}
+          {/* alternatives — v0.9.4: this is the RANKING table (car-1 basis,
+              wear-corrected); the per-car proposal lives on the cards above,
+              so the basis is named right in the section */}
           <section aria-label={t('alternatives')} className="rounded-lg border border-line bg-panel p-4">
-            <h3 className="mb-3 text-[15px] font-semibold text-ink">
+            <h3 className="mb-1 text-[15px] font-semibold text-ink">
               <span className="mr-2 font-mono text-[11px] uppercase tracking-wider text-teal">{tSec('alternatives')}</span>
               {t('alternatives')}
             </h3>
+            <p className="mb-3 text-[11px] text-ink-faint">{t('alternativesBasis')}</p>
             <ul className="space-y-2.5">
               {tyre.data.strategies.slice(0, 5).map((s: StrategyResult, i) => (
                 <li

@@ -343,12 +343,13 @@
       "checkInGame": "CarID→driver mapping unverified (check in game) — labels Xe 1/Xe 2 follow team order."
     },
     "split": {
-      "lead": "Lead — {name} (P{pos})",
-      "trailTitle": "Trail car — {name} (P{pos}): {plan}",
+      "lead": "{car} — {name} (P{pos})",
+      "trailTitle": "{car} — {name} (P{pos}): {plan}",
       "reasonDiffCompound": "Offset vs the lead: starts on a different compound ({compound}) to hedge — the two cars do not share one strategy.",
       "reasonPitGap": "Offset vs the lead: same starting compound but every pit lap stays ≥ 3 laps clear of the lead's (double-stack avoidance).",
       "reasonShifted": "Could not fully separate — pit laps moved only {laps} laps away from the lead.",
-      "tieNote": "Tied on modelled time — split to avoid traffic + hedge, not because it is faster.",
+      "tieNote": "Tied on execution time — split to avoid traffic + hedge, not because it is faster.",
+      "wearCost": "tyre wear: {sign}{time}s",
       "total": "Modelled total: {time}s",
       "noTrail": "No separate plan for the trail car — the grid lacks data for both drivers.",
       "gridNote": "Grid positions = qualifying order + penalties already in this save (no unapplied penalty right now)."
@@ -363,6 +364,7 @@
     "expectedStops": "Field average stops: ~{stops} (source: {source})",
     "stopsReconcile": "Why they differ: ~{expected} stops is the field average (reference from {source}); your {plan}-stop plan is the total-time optimum (pace + degradation + pit cost) for your tyres.",
     "alternatives": "Alternatives",
+    "alternativesBasis": "Ranked on the team cap with car 1's garage (wear-corrected) — the per-car proposals live on the cards above.",
     "degTitle": "Degradation curves",
     "fastest": "Fastest",
     "lives": "Compound lives",

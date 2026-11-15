@@ -343,12 +343,13 @@
       "checkInGame": "Chưa xác minh được CarID nào là xe nào (kiểm tra trong game) — nhãn Xe 1/Xe 2 theo thứ tự đội."
     },
     "split": {
-      "lead": "Lead — {name} (P{pos})",
-      "trailTitle": "Xe dưới — {name} (P{pos}): {plan}",
+      "lead": "{car} — {name} (P{pos})",
+      "trailTitle": "{car} — {name} (P{pos}): {plan}",
       "reasonDiffCompound": "Lệch so với lead: xuất phát bằng compound khác ({compound}) để hedge — 2 xe không dẫm cùng chiến thuật.",
       "reasonPitGap": "Lệch so với lead: cùng compound xuất phát nhưng mọi vòng pit cách lead ≥ 3 vòng (tránh double-stack).",
       "reasonShifted": "Không tách được hẳn — chỉ dịch được vòng pit {laps} vòng so với lead.",
-      "tieNote": "Hòa về tổng thời gian mô hình — tách để tránh dẫm chân + hedge, không phải vì nhanh hơn.",
+      "tieNote": "Hòa về tổng thời gian thực thi — tách để tránh dẫm chân + hedge, không phải vì nhanh hơn.",
+      "wearCost": "mòn lốp: {sign}{time}s",
       "total": "Tổng thời gian mô hình: {time}s",
       "noTrail": "Không có plan riêng cho xe dưới — grid chưa đủ dữ liệu cho cả 2 tay đua.",
       "gridNote": "Vị trí trên grid là thứ tự phân hạng + các phạt đã có trong save này (hiện chưa có phạt nào chưa chấp hành)."
@@ -363,6 +364,7 @@
     "expectedStops": "Trung bình pit của cánh quân: ~{stops} (nguồn: {source})",
     "stopsReconcile": "Vì sao khác: ~{expected} pit là trung bình cả cánh quân (tham khảo từ {source}), còn plan {plan} pit là kết quả tối ưu tổng thời gian (pace + degradation + chi phí pit) trên lốp của đội bạn.",
     "alternatives": "Phương án thay thế",
+    "alternativesBasis": "Bảng xếp hạng tính trên cap đội với kho Xe 1 (đã hiệu chỉnh mòn bộ được gán) — plan đề xuất cho từng xe ở thẻ riêng bên trên.",
     "degTitle": "Đường cong degradation",
     "fastest": "Nhanh nhất",
     "lives": "Đời lốp từng compound",
