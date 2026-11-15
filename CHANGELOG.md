@@ -2,6 +2,94 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.9.3] — Delta bị clamp = chưa đo: hết trộn tier khi xếp hạng
+
+Lỗi do Nguyen bắt trên đường đua thật: Interlagos 2027 (chặng 207, 71
+vòng, save `save2.sav` Day 46698 post-quali). Web v0.9.1/v0.9.2 đề xuất
+lead **S→S→H (S19/S19/H33) pit 19,38 · 94.8s**; Nguyen chạy S→M→S cho
+O'Ward (pit 20,48) trong game → **P14→P10, +1 điểm** (Ricciardo giữ SSH →
+P16, 0 điểm). Chặng có 3 SC nên kết quả chặng không dùng để chứng minh —
+nhưng model sai đã kiểm chứng bằng code + số.
+
+### Root cause — xếp hạng trộn hai thước đo
+
+Practice Interlagos đo được **M +0.97s** (1 session) và **H thô +0.384s**.
+H thô nhanh hơn M → luật đơn điệu v0.6.1 kích hoạt (`deltas.H = M + 0.15`
+= 1.12, `clamped.H = true`). Luật cùng-tier v0.5.1 chỉ kiểm tra
+"đã đo hay chưa" (`paceMeasured != null`) — H "đã đo" (dù giá trị bị loại
+vì nhiễu) nên fallback không kích hoạt: **M giữ practice +0.97, H rơi vào
+nhánh hForced và xếp hạng bằng allocation +0.71** (ước tính fresh-set của
+game). SSH thắng SMS đúng 10.0s chỉ nhờ khoảng chênh đó.
+
+Đối chứng bằng cùng engine, chỉ đổi tier: cả hai model constants (M +0.55
+/ H +1.05) → SMS thắng 12.4s (86.5 vs 98.9); cả hai allocation → SMS
+thắng 10.5s. **Chỉ bản trộn mới ra SSH** — tier trộn là root cause.
+
+### Changed — luật khả dụng mới (`ccbf866`)
+
+- **Usable = measured && !clamped**: giá trị bị clamp là ý kiến của model,
+  không phải số đo — không được xuất hiện trong delta xếp hạng ở bất cứ đâu,
+  kể cả khi nó là giá trị duy nhất còn lại.
+- `sameTierFallback` tính trên usable: đúng một bên usable → **cả hai về
+  hằng số model** (nhánh fallback v0.5.1 hiện có, không viết nhánh mới).
+  Ma trận: usable+usable → practice/practice (Monza +0.03/+1.32 không
+  đổi); usable+clamped hoặc clamped+usable hoặc cả hai clamped → model
+  /model (Interlagos +0.55/+1.05 — ca này); cả hai chưa đo → model/model
+  (MarinaBay không đổi).
+- **Allocation không bao giờ là delta xếp hạng nữa** — nhánh hForced/
+  allocation bị xóa khỏi đường xếp hạng; giá trị allocation và giá trị thô
+  vẫn hiển thị làm bằng chứng trong `fallbackValue` của assumption (quy
+  tắc v0.7.1).
+- Văn bản assumption cho ca clamp nói đúng sự thật: *"Practice đo được H
+  (+0.384s) nhanh hơn M nên không dùng được (nhiễu…) — dùng hằng số model
+  cho cả M và H"* + fallbackValue ghi giá trị thô và allocation. Câu "Delta
+  H chưa được đo ở track này" chỉ còn cho ca CHƯA đo thật; câu "xếp hạng H
+  bằng ước tính allocation của game" biến mất khỏi UI.
+- `PACE_DELTA_FORCED` / `hForced` / "delta H bị ép" bị xóa — trạng thái
+  "delta bị ép" không còn tồn tại trên đường xếp hạng; cùng tình huống nay
+  nổi lên qua 2 pillar pace + consistency. Phương án "cả hai allocation"
+  đã cân nhắc và HOÃN (giữ fallback model constants v0.5.1, giảm hồi quy).
+
+### Số liệu khóa trên save Interlagos (save2.sav, Day 46698 — fixture mirror)
+
+- **Lead mới: S→S→M (S20/S20/M31), pit 20,40 · 93.2s** (model 86.5s);
+  bộ gán: S20 = #0 mới đời 27, S20 = #2 mới đời 27, M31 = #9 mới đời 42.
+- **Trail: M→S→S (M31/S20/S20), pit 31,51 · 93.2s** — hòa tuyệt đối (cùng
+  multiset); pit cách lead 11 và 11 vòng.
+- **S→M→S** (thứ tự Nguyen đã chạy) cũng 93.2s — cùng multiset, model
+  không phân biệt thứ tự; lead giữ theo thứ tự liệt kê (S→S→M đầu nhóm hòa).
+- **SSH cũ tụt xuống 105.6s (+12.4, hạng #6)**. Top 6: S→S→M 93.2 /
+  M→S→S 93.2 / S→M→S 93.2 / S→S→M→S 96.2 / S→M→S→S 96.2 / S→S→H 105.6.
+- Note loại plan: *"Bỏ phương án nhanh hơn theo model vì kho không chạy
+  được: S→M→M — cần 2 stint M (27 + 26 vòng) nhưng mỗi xe chỉ có 1 bộ M
+  khả dụng (đời 42)"*.
+- Confidence vẫn **LOW**, đúng 2 lý do §4: delta xếp hạng chưa đủ cả M và
+  H từ practice; practice chỉ 1 session đo được delta và allocation lệch
+  quá 0.2s so với practice.
+- **Game plan S→S→H pit 19,33: 108.3s → 121.5s** (H 39 vòng giá theo công
+  thức engine, +1.05 thay vì +0.71 — công thức không đổi).
+- Inputs (save thật): lives S30/M45/H64; cap S27/M42/H58; pit 20.7s;
+  practice M +0.97 (1 session), H thô +0.384 (clamped); allocation S
+  70.30 / M 70.58 / H 71.01s; kho mỗi xe S mới ×4/×3 (đời 27), M mới ×1
+  (đời 42), H mới ×2 (đời 58).
+
+### Hồi quy — KHÔNG ĐỔI
+
+- **MarinaBay** (autosave-4.sav): lead S→S→M 97.1s + trail M→S→S 97.1s,
+  deltas M +0.55 / H +1.05 — fixture v0.9.1 chạy lại xanh.
+- **Monza** (save4.sav): lead S(19)→M(34) 57.6s + trail M(34)→S(19) 57.6s,
+  deltas M +0.03 / H +1.32 (cả hai practice — usable) — không đổi.
+- Silverstone (ca clamp gốc của v0.6.1): giờ cũng cả hai về model constants
+  — xếp hạng giống hệt khi bỏ EstimatedLapTime (allocation không còn vai
+  trò xếp hạng); các test allocation-H cũ được viết lại theo luật mới.
+
+### Tests
+
+- 17 test mới (tổng 450/450 xanh): ma trận tier đủ 5 dòng của §3 + "không
+  bao giờ 'allocation'/'clamped' làm nguồn xếp hạng" + toàn bộ DoD
+  Interlagos trên fixture `tests/helpers/interlagos-fixture.ts` (số thật
+  §4 — không bịa). Test Silverstone allocation-H cũ viết lại theo luật mới.
+
 ## [0.9.2] — What-if SC/VSC: re-price chi phí pit bằng cột thật của track
 
 Hoàn thành phần việc v0.9 (§2.2.3) còn dang dở — prompt v0.9.0 gốc bị bỏ

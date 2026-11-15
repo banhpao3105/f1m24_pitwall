@@ -13,7 +13,7 @@
  * Bump CACHE_VERSION on each release to invalidate stale shells.
  */
 
-const CACHE_VERSION = 'pitwall-v0.9.2';
+const CACHE_VERSION = 'pitwall-v0.9.3';
 const SHELL_PRECACHE = [
   '/',
   '/manifest.webmanifest',
