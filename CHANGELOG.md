@@ -2,12 +2,143 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.7.1] — Sửa 2 lỗi DoD của 0.7.0 (grid + kho lốp) + thống nhất số liệu practice
+
+Năm bước theo prompt v0.7.1. Bối cảnh: kiểm chứng v0.7.0 trên cây đã push
+chỉ ra **2 lỗi DoD trên save thật** — cả hai cùng một mẫu: *code đúng với
+fixture, sai với save thật* (đúng kiểu bẫy đã gặp ở v0.6.2 mapping lốp và
+v0.6.1 fixture hardcode delta). Mỗi bước = 1 commit, cửa xanh (lint +
+typecheck + test 326/326) trước MỖI commit.
+
+### Hai lỗi gốc của 0.7.0 (và chỗ sửa)
+
+1. **Grid sai (lỗi A).** Engine xuất grid = thứ tự phân hạng thuần: Piastri
+   P7, O'Ward P21, Ricciardo P22 — thực tế sau race: P22 / P20 / P21. Nguyên
+   nhân: save trước race **không có phạt nào chưa chấp hành** (9 dòng
+   `Races_GridPenalties` đều `Served=1`); cú phạt đẩy Piastri về P22 chỉ có
+   trong save SAU race (dòng 40: Team 2 Car 2, Reason 5 ParcFerme,
+   PitLaneStart 1). DoD "grid khớp `StartingPos` cả 22 xe" của prompt v0.7.0
+   là claim kiểm chứng sai (đọc nhầm dòng phạt team 2), và test của bước 2
+   v0.7.0 pass chỉ vì fixture tự bịa một phạt chưa chấp hành không có trong
+   save thật. → Sửa ở **bước 3** (`91db97f`).
+2. **Cap kho lốp không siết (lỗi B).** `maxStint` vẫn là đời model
+   {S26, M39, H60}, plan vẫn 51.7s — CHANGELOG 0.7.0 ghi 57.6s là **sai trên
+   save thật**. Hai nguyên nhân đều đã xác minh trong code: (a) công thức
+   kiểm tra `Save_CarConfig` (`floor(loadoutId/2)+1`) tính ra 1 cho mọi dòng
+   thật (`LoadoutID` chỉ là {0,1} theo từng đội) → fail ngay dòng thứ 2 →
+   `carTeamsVerified` luôn false → rơi fallback; (b) fallback gộp **cả 440
+   bộ toàn giải** thay vì 2 xe người chơi → cap = max đời toàn giải, không
+   bao giờ siết. → Sửa ở **bước 1** (`1557a27`) + **bước 2** (`af828f1`).
+
+### Fixed — Bước 1: kiểm tra `Save_CarConfig` theo đúng shape thật (`1557a27`)
+- Kiểm tra mới: tập 22 cặp `(teamIndex, loadoutId)` phải đúng bằng
+  {(t,0),(t,1) : t ∈ 1..11} (so Set, không còn công thức floor). Sửa comment
+  sai trong `car-config.repo.ts`: `LoadoutID` là ghế 0/1 theo từng đội
+  (KHÔNG phải CarID 0–21); `TeamID` ở bảng này là chỉ số đội tuần tự 1..11
+  (KHÔNG phải FK `Teams.TeamID`) — giả định còn lại (thứ tự đội F1 theo
+  TeamID tăng dần, đội 11 = TeamID 32 CustomTeam → CarID 20/21) được ghi rõ
+  là giả định có căn cứ, không phải bằng chứng tuyệt đối.
+- Audit trên save thật (`scripts/audit-monza-v071.ts`, save1.sav race 193):
+  `carTeamsVerified: true` — lần đầu tiên bảng này pass trên save thật.
+- Test mới dùng đúng 22 dòng thật của Monza (verified true) + fixture phủ
+  định thiếu 1 cặp (false), trùng cặp (false), shape "LoadoutID 0..21" cũ
+  (false).
+
+### Fixed — Bước 2: kho lốp fallback chỉ tính 2 xe người chơi (`af828f1`)
+- Xóa nhánh `model.tyres.map(...)` — `allSets` LUÔN là `cars.flatMap(c =>
+  c.sets)` (2 xe người chơi). Cờ `perCar` chỉ quyết định nhãn hiển thị,
+  không bao giờ phạm vi dữ liệu. Không có mapping CarID→đội → inventory
+  null (thiếu trung thực thay vì đoán toàn giải).
+- Expose `perCarMaxStint` (cap từng xe, khóa theo CarID); `maxStint` đội là
+  min qua 2 xe — chỉ là con số hiển thị tổng hợp thận trọng. Plan tách 2 xe
+  tính giá từng xe trên cap ĐÚNG XE đó khi ghế đã xác minh (cap đội là
+  fallback cho ghế chưa xác minh — không bao giờ định giá xe trên ph đoán).
+- **Plan của game cũng được tính lại giá dưới cap kho lốp** (cùng cơ sở với
+  mọi plan xếp hạng): Monza M→H pit 25 = **75.0s** trên cap (deg M24 7.2s /
+  H29 8.1s), thay vì 72.5s theo đời model — so sánh web↔game cùng cơ sở.
+- DoD save Monza pre-race (số lock trong test trên fixture số liệu thật):
+  `teamAggregate` mới **S ×6 (đời 24), M ×2 (36), H ×2 (55)**; đã dùng
+  S ×10, M ×4, H ×2 — không còn ×44/×24/×23 toàn giải. `maxStint` =
+  {S 24, M 36, H 55}; per-car caps cả 2 xe = {S 24, M 36, H 55}.
+- Test khóa trực tiếp lỗi: fixture mang ĐỦ 2 phía số thật (toàn giải mới
+  44/24/23 vs đội 6/2/2 + 10/4/2), ép `perCar=false` → aggregate vẫn là số
+  2 xe. Test khóa cả 2 đường định giá (per-car + team) bằng fixture kho lệch
+  nhau giữa 2 xe: lead chạy tối ưu trên cap đúng xe mình, trail bị siết bởi
+  cap xe trail.
+
+### Fixed — Bước 3: grid trung thực với những gì save chứa (`91db97f`)
+- **Rút lại DoD sai của 0.7.0** (chi tiết trong mục 0.7.0 bên dưới). Grid
+  suy từ save pre-race Monza = thuần phân hạng: **Piastri P7, O'Ward P21,
+  Ricciardo P22** — P20/P21 chỉ đúng sau race, khi save mới chứa phạt.
+- Phạt chưa gán được ghế XÁC MINH → **KHÔNG áp**, tính unresolved (kèm chi
+  tiết đội + xe + lý do trong `unresolvedList` mới). Áp một phạt vào nhầm
+  tay đua tệ hơn không áp. DoD fixture: 1 phạt pending + tín hiệu ghế chết
+  → grid không đổi, `unresolvedPenalties = 1`, `appliedPenalties = 0`.
+- UI: thẻ "Grid xuất phát" mới ở Race Weekend — mỗi dòng P{n}, hiện cả
+  `qualiPos` lẫn `gridPos` khi khác nhau, ghi chú rõ khi
+  `appliedPenalties = 0` ("Phạt sau quali chỉ xuất hiện khi load save mới
+  hơn — kiểm tra lại trước race"), và liệt kê các phạt unresolved. Tyre Lab
+  (carPlans) hiện cùng ghi chú: gridPos của lead/trail trên save này là
+  P21/P22 (phân hạng), không bao giờ P20/P21.
+- Test: fixture phạt tự bịa gắn nhãn **SYNTHETIC — test-only**; thêm test
+  khóa save thật (9 dòng đều Served=1 → grid = quali order, applied 0,
+  unresolved 0) — test này FAIL nếu ai đó ép grid về P22/P20/P21 từ save
+  này; carPlans khóa grid P21/P22 thật.
+
+### Docs — Bước 4: audit lại từ save thật + rút lại claim 0.7.0 (`7403bb5`)
+- Chạy lại audit bằng engine đã sửa (script `scripts/audit-monza-v071.ts`).
+  **Lưu ý trung thực:** save Monza pre-race (save4.db) không còn trong môi
+  trường làm việc — số Monza bên dưới chạy qua CÙNG các engine đó trong
+  bộ test, trên fixture dựng từ đúng các số đã chủ-verify của save Monza;
+  chân audit trên save thật dùng save1.sav (race 193 Bahrain, pre-race).
+- **Số Monza sau sửa (lock trong test, KHÔNG copy từ prompt):** lead
+  O'Ward S(19)→M(34) pit V19 = **57.6s** (độ mòn S19 12.5s / M34 23.3s);
+  trail Ricciardo M(34)→S(19) pit V34 = **57.6s** (hòa tuyệt đối, pit cách
+  15 vòng); game plan M→H (M24+H29, pit 25) = **75.0s**. Trên save thật tại
+  thời điểm 0.7.0: plan là 51.7s (cap không siết) và grid là P21/P22.
+- Mục 0.7.0 trong CHANGELOG: rút claim "grid khớp StartingPos 22/22", sửa
+  mô tả sai shape `Save_CarConfig`, ghi rõ 57.6s chỉ đúng sau 0.7.1 — từng
+  chỗ có chú thích inline, không xóa lịch sử.
+
+### Fixed — Bước 5: một pipeline báo cáo duy nhất cho số liệu practice (`a552076`)
+- **Một định nghĩa:** `practiceSessions` = số session practice **F1** có
+  mặt trong save (lọc `RaceFormula = 1` — session 1 còn có sân F2/F3),
+  tính MỘT lần trong `assessReadiness`, truyền qua `readiness`; TyreLab
+  không tự tính lại. `getPracticePace` giữ số session cho ra gap nhưng đổi
+  tên thành **`sessionsMeasured`** (Monza: 2); evidence hiện dạng
+  "(2/3 session đo được delta)". GetPracticePace cũng chỉ pools lap F1.
+- **Delta M một số duy nhất:** delta xếp hạng = giá trị đo (raw, làm tròn
+  2 chữ số) cho cả M và H — floor 0.05 của M CHỈ còn áp khi số đo
+  degenerate (≤ 0). Trên Monza, median đo được thật (0.0285 → +0.03s)
+  không còn bị ghi đè bằng 0.05 bịa (mỗi tổng thời gian trước đây lệch
+  +0.6s không có bằng chứng). Giới hạn trên (M ≤ 2.5, H ∈ [0.1, 3.5]) và
+  quy tắc đơn điệu H giữ nguyên; `clamped` chỉ đánh dấu khi một CLAMP thực
+  sự kích hoạt (làm tròn không phải clamp). `paceMeasured.delta` = đúng
+  delta xếp hạng (một nguồn); giá trị thô nằm ở `rawDeltas`/`rawDelta`.
+- DoD save Monza: `readiness.practiceSessions = 3` = `TyreLab.practiceSessions`;
+  `sessionsMeasured = 2`; delta M = **+0.03s** ở mọi nơi (ranking, evidence,
+  UI), H = +1.32s; không còn "+0.05s" cho M. Test khóa: cùng một nguồn
+  getPracticePace ↔ buildTyreLab; F2/F3 (89.0s nhanh hơn mọi lap F1 trong
+  fixture) không bao giờ lọt vào pool pace; degenerate ≤ 0 vẫn floor 0.05.
+
+### Technical
+- `PracticeResult.raceFormula` đi qua build-model (cột mềm — schema cũ vẫn
+  parse được); `DerivedGrid.unresolvedList` mới (additive).
+- Không đổi: pillar confidence, hằng số deg/DEG_CLIFF, pit cost 20.7s,
+  mapping lốp 0=H/1=M/2=S/3=I/4=W, quy tắc availability state 0, thuật toán
+  xếp hạng plan. SW cache bump `pitwall-v0.7.1`.
+- Cửa mỗi commit: lint + typecheck + test xanh (326/326 sau bước 5); audit
+  save thật chạy lại sau bước 1, 2, 5.
+
 ## [0.7.0] — Cổng dữ liệu sau quali + kho lốp từng xe + tách chiến thuật 2 xe
 
 Bốn bước theo prompt v0.7.0, dựa trên bằng chứng save thật (Monza 2027
 pre-race save4.sav, Day 46635, race 202, 53 vòng — và 2 save 1.11 khác dùng
 để xác minh enum/mapping). Nguyên tắc xuyên suốt: web KHÔNG được đưa ra dự
-đoán nào trước khi người chơi load được save sau quali.
+đoán nào trước khi người chơi load được save sau quali. **Lưu ý 0.7.1:**
+một số claim của mục này chưa đủ căn cứ tại thời điểm release và đã được
+rút lại/sửa — tìm các chú thích **[SỬA Ở 0.7.1]** / **[RÚT LẠI ở 0.7.1]**
+bên dưới.
 
 ### Fixed — Bước 1: chữ "false" trong kết quả đội bạn (`2d656ef`)
 - RaceWeekendView truyền `String(lastResult.dnf)` vào slot `{dnf}` của
