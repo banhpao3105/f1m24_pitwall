@@ -397,7 +397,13 @@ export function TyreLabView({
           {/* v0.7.0 step 4 — the TRAIL car's offset plan (double-stack rule) */}
           {tyre.data.carPlans?.trail ? (
             <section
-              aria-label={t('split.trailTitle')}
+              aria-label={t('split.trailTitle', {
+                name: tyre.data.carPlans.trail.driverName,
+                pos: tyre.data.carPlans.trail.gridPos,
+                plan: tyre.data.carPlans.trail.plan.stints
+                  .map((s) => `${s.compound}(${s.laps})`)
+                  .join(' → '),
+              })}
               className="rounded-lg border border-line bg-panel p-4"
               data-testid="trail-plan"
             >

@@ -1352,7 +1352,7 @@ export function buildTyreLab(
     }
   }
   /* per-stint set info (best available fit) + the reuse assumption */
-  if (inventory && capTightens) {
+  if (inventory) {
     for (const plan of ranked) {
       for (const st of plan.stints) {
         const carSets = inventory.cars
