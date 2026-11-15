@@ -333,15 +333,30 @@ export interface InventoryCompoundAgg {
 
 export interface TyreInventory {
   cars: InventoryCar[];
-  /** False when the CarID→team map itself is unverified (aggregate only). */
+  /** False when the CarID→team map itself is unverified (labels only). */
   perCar: boolean;
+  /**
+   * v0.7.1: ALWAYS the player's two cars — never the whole-championship
+   * allocation. The v0.7.0 fallback aggregated model.tyres (440 sets, all
+   * 22 cars) whenever the map was unverified, which displayed ×44/×24/×23
+   * of fresh S/M/H as if they were the garage and produced a cap that
+   * never bound (max field life ≥ model life).
+   */
   teamAggregate: InventoryCompoundAgg[];
   /**
    * The feasibility cap per dry compound: min(model life, the best
    * remaining life among AVAILABLE sets of the player's team). This — not
    * the field-median model life — is what plans must physically survive.
+   * Team-level conservative aggregate: the MIN across the player's cars.
    */
   maxStint: Record<'S' | 'M' | 'H', number>;
+  /**
+   * v0.7.1 — the same cap per CAR (keyed by CarID). The two-car split must
+   * optimise each car against ITS OWN cap; `maxStint` (min across cars) is
+   * only the conservative team-level display number. Both paths are locked
+   * by tests so a future divergence between cars cannot be silently lost.
+   */
+  perCarMaxStint: Record<number, Record<'S' | 'M' | 'H', number>>;
   availableNote: 'state0' | 'none';
 }
 
@@ -368,6 +383,9 @@ export function buildTyreInventory(
   const carTeams = model.gridPenalties?.carTeams ?? [];
   const playerTeamId = model.player.teamId;
   const teamCars = carTeams.filter((c) => c.teamId === playerTeamId).map((c) => c.carId);
+  /* v0.7.1: without the CarID→team mapping the player's sets cannot be
+     identified — an honest absence, not a whole-championship guess. */
+  if (teamCars.length === 0) return null;
   const perCar = model.gridPenalties?.carTeamsVerified !== false && teamCars.length === 2;
 
   const wearOf = (t: (typeof model.tyres)[number]): number => {
@@ -407,17 +425,13 @@ export function buildTyreInventory(
     };
   });
 
-  /* aggregate across the player's cars (fallback display + cap basis) */
-  const allSets = perCar ? cars.flatMap((c) => c.sets) : model.tyres.map((t) => ({
-    tyreSetId: t.tyreSetId,
-    compound: (ALLOC_COMPOUND[t.weekendTyreType] ?? 'H') as InventoryCompound,
-    wear: wearOf(t),
-    lifeRemaining: t.estimatedLapLifeRemaining ?? null,
-    lapsCompleted: t.lapsCompleted ?? 0,
-    sessionLastUsedIn: t.sessionLastUsedIn ?? null,
-    available: t.availabilityState === 0,
-    fresh: t.frontLeftWear >= 0.99,
-  }));
+  /* aggregate across the player's cars — v0.7.1: ALWAYS. The old
+     `perCar ? cars.flatMap(...) : model.tyres.map(...)` branch aggregated
+     the WHOLE CHAMPIONSHIP (440 sets) whenever the map was unverified,
+     displaying ×44/×24/×23 as the garage and building a cap from max field
+     life that could never bind. The `perCar` flag now decides LABELS only
+     (verified driver names vs "Xe 1 / Xe 2"), never the data scope. */
+  const allSets = cars.flatMap((c) => c.sets);
   const teamAggregate: InventoryCompoundAgg[] = (['S', 'M', 'H', 'I', 'W'] as const)
     .map((compound) => {
       const rows = allSets.filter((s) => s.compound === compound);
@@ -437,15 +451,27 @@ export function buildTyreInventory(
       };
     });
 
-  /* the feasibility cap — best AVAILABLE life per compound, then floored by
-     the conservative aggregation across both cars (min over cars) */
+  /* the feasibility cap — best AVAILABLE life per compound. v0.7.1 keeps
+     the conservative min(per-car caps, team cap) for the team-level
+     maxStint AND exposes each car's own cap so the two-car split can
+     optimise every car against its own garage. All inputs are the
+     player's sets — never the field's. */
+  const carCap = (car: InventoryCar, compound: InventoryCompound): number => {
+    const usable = car.sets.filter(
+      (s) => s.compound === compound && s.available && (s.lifeRemaining ?? 0) > 0,
+    );
+    return usable.length > 0 ? Math.max(...usable.map((s) => s.lifeRemaining as number)) : 0;
+  };
+  const perCarMaxStint: Record<number, Record<'S' | 'M' | 'H', number>> = {};
+  for (const car of cars) {
+    perCarMaxStint[car.carId] = { S: 0, M: 0, H: 0 };
+    for (const c of ['S', 'M', 'H'] as const) {
+      const cap = carCap(car, c);
+      perCarMaxStint[car.carId]![c] = cap > 0 ? Math.min(lives[c], Math.round(cap)) : lives[c];
+    }
+  }
   const capFor = (compound: InventoryCompound): number => {
-    const perCarCaps = (perCar ? cars : []).map((car) => {
-      const usable = car.sets.filter(
-        (s) => s.compound === compound && s.available && (s.lifeRemaining ?? 0) > 0,
-      );
-      return usable.length > 0 ? Math.max(...usable.map((s) => s.lifeRemaining as number)) : 0;
-    });
+    const perCarCaps = cars.map((car) => carCap(car, compound));
     const teamCap = (() => {
       const usable = allSets.filter(
         (s) => s.compound === compound && s.available && (s.lifeRemaining ?? 0) > 0,
@@ -462,7 +488,7 @@ export function buildTyreInventory(
     maxStint[c] = cap > 0 ? Math.min(lives[c], Math.round(cap)) : lives[c];
   }
 
-  return { cars, perCar, teamAggregate, maxStint, availableNote: 'state0' };
+  return { cars, perCar, teamAggregate, maxStint, perCarMaxStint, availableNote: 'state0' };
 }
 
 /** WeekendTyreType → compound — the v0.6.2-verified encoding (0=H…4=W). */

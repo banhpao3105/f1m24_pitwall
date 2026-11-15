@@ -72,7 +72,7 @@ async function main() {
       );
     }
     console.log('maxStint (team):', inventory.maxStint);
-    /* v0.7.1 bước 2 sẽ expose perCarMaxStint — in thêm khi có */
+    console.log('perCarMaxStint:', JSON.stringify(inventory.perCarMaxStint));
   } else {
     console.log('inventory: null (gate closed or no player-car mapping)');
   }

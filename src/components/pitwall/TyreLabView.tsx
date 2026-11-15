@@ -224,19 +224,27 @@ export function TyreLabView({
         </p>
       ) : (
         <>
-          {/* hero plan — the LEAD car's plan when the grid splits the team */}
+          {/* hero plan — the LEAD car's plan when the grid splits the team.
+              v0.7.1: when per-car cap pricing re-split the lead's plan on
+              its own garage, the hero shows THAT plan (same object as best
+              whenever the cars cap identically — every save verified so far). */}
+          {(() => {
+            const heroPlan = tyre.data.carPlans ? tyre.data.carPlans.lead.plan : tyre.data.best;
+            const heroStops = heroPlan.stops;
+            const heroPitLaps = heroPlan.pitLaps;
+          return (
           <section aria-label={t('hero')} className="rounded-lg border border-teal/30 bg-panel p-4">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <h3 className="text-sm font-semibold text-teal">
                 {t('heroPlan', {
-                  plan: tyre.data.best.stints.map((s) => `${s.compound}(${s.laps})`).join(' → '),
-                  stops: tyre.data.best.stops,
+                  plan: heroPlan.stints.map((s) => `${s.compound}(${s.laps})`).join(' → '),
+                  stops: heroStops,
                   /* v0.6.3: the pit laps ride along in the hero — "2 pit
                      (V21, V43)" — straight from the engine's pitLaps, so the
                      headline matches the timeline's per-stint pit labels. */
                   pits:
-                    tyre.data.best.pitLaps.length > 0
-                      ? ` (${tyre.data.best.pitLaps.map((l) => `V${l}`).join(', ')})`
+                    heroPitLaps.length > 0
+                      ? ` (${heroPitLaps.map((l) => `V${l}`).join(', ')})`
                       : '',
                 })}
               </h3>
@@ -260,21 +268,21 @@ export function TyreLabView({
               {/* 0.4.1: reconcile the two numbers when they differ — the field
                   average is reference data, the plan is the time optimum. */}
               {tyre.data.expectedStops != null &&
-              tyre.data.expectedStops !== tyre.data.best.stops ? (
+              tyre.data.expectedStops !== heroStops ? (
                 <p className="mt-2 text-[11px] leading-relaxed text-ink-faint" data-testid="tyre-stops-reconcile">
                   {t('stopsReconcile', {
                     expected: tyre.data.expectedStops,
                     source: t(`source.${tyre.data.expectedSource ?? 'model'}`),
-                    plan: tyre.data.best.stops,
+                    plan: heroStops,
                   })}
                 </p>
               ) : null}
             </div>
             <StintTimeline
-              stints={tyre.data.best.stints}
+              stints={heroPlan.stints}
               totalLaps={tyre.data.laps}
-              pitLaps={tyre.data.best.pitLaps}
-            />
+              pitLaps={heroPlan.pitLaps}
+/>
             {/* v0.6.0 step 4 — the pit plan as a stint-by-stint table */}
             <table className="mt-3 w-full text-left text-xs" data-testid="tyre-stint-table">
               <thead>
@@ -290,7 +298,7 @@ export function TyreLabView({
                 </tr>
               </thead>
               <tbody>
-                {tyre.data.best.stints.map((s, i) => (
+                {heroPlan.stints.map((s, i) => (
                   <tr key={i} className="border-t border-line">
                     <td className="py-1.5 pr-2 font-mono text-ink-faint">#{i + 1}</td>
                     <td className="py-1.5 pr-2">
@@ -301,7 +309,7 @@ export function TyreLabView({
                       {s.fromLap}–{s.toLap}
                     </td>
                     <td className="py-1.5 font-mono text-amber">
-                      {tyre.data.best!.pitLaps[i] != null ? `V${tyre.data.best!.pitLaps[i]}` : '—'}
+                      {heroPitLaps[i] != null ? `V${heroPitLaps[i]}` : '—'}
                     </td>
                     {/* v0.7.0 — which garage set the stint runs on */}
                     {tyre.data.inventory ? (
@@ -317,18 +325,20 @@ export function TyreLabView({
                 ))}
               </tbody>
             </table>
-            {tyre.data.best.pitLaps.length > 0 ? (
+            {heroPitLaps.length > 0 ? (
               <div className="mt-4">
                 <PitWindowBar
-                  optimalLap={tyre.data.best.pitLaps[0]}
-                  windowLo={Math.max(2, tyre.data.best.pitLaps[0] - 2)}
-                  windowHi={tyre.data.best.pitLaps[0] + 2}
+                  optimalLap={heroPitLaps[0]}
+                  windowLo={Math.max(2, heroPitLaps[0] - 2)}
+                  windowHi={heroPitLaps[0] + 2}
                   totalLaps={tyre.data.laps}
-                  lifeCap={tyre.data.lives[tyre.data.best.stints[0].compound as CompoundKey]}
+                  lifeCap={tyre.data.lives[heroPlan.stints[0].compound as CompoundKey]}
                 />
               </div>
             ) : null}
           </section>
+          );
+          })()}
 
           {/* v0.7.0 — the per-car garage inventory + the feasibility cap it
               imposes on every plan (spec bước 3) */}

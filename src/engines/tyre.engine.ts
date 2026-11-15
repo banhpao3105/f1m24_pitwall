@@ -1229,11 +1229,16 @@ export function buildTyreLab(
       ? buildGamePlan(model.playerStrategy ?? { tablePresent: false, plans: [] }, laps)
       : null;
   /* v0.6.1: the game plan always carries its web-modelled total so the user
-     sees exactly how far the web disagrees with the game, in seconds. */
+     sees exactly how far the web disagrees with the game, in seconds.
+     v0.7.1: the modelled total is priced on the GARAGE cap (invCap), the
+     same basis as every ranked plan — the v0.7.0 pass priced it on the
+     field-median model lives, so the game plan's 72.5s on the Monza save
+     was never executable (the garage's best M/H lives are 36/55, giving
+     75.0s). Same-basis comparison or the gap number is meaningless. */
   const gamePlan: TyreLab['gamePlan'] = gamePlanBase
     ? {
         ...gamePlanBase,
-        totalTimeS: gamePlanTotalTimeS(gamePlanBase, deltas, lives, pitCostS, deg),
+        totalTimeS: gamePlanTotalTimeS(gamePlanBase, deltas, invCap, pitCostS, deg),
       }
     : null;
   const gameOrder = gamePlan ? gamePlan.compounds.join('→') : null;
@@ -1593,12 +1598,56 @@ export function buildTyreLab(
     const [leadGrid, trailGrid] = playerGrid;
     const driverName = (id: number): string =>
       model.drivers.find((d) => d.staffId === id)?.fullName ?? `Driver ${id}`;
-    const leadPlan = best;
+    /* v0.7.1 — per-car cap pricing (spec bước 2): a driver with a VERIFIED
+       seat is priced against THEIR OWN car's garage; the conservative team
+       cap (min across cars) stays the fallback because pricing a car on an
+       unverified seat guess is exactly the v0.6/v0.7 failure shape. On the
+       Monza pre-race save both cars cap identically → both paths give the
+       same numbers (locked in tests so a future divergence is not lost). */
+    const capOfDriver = (driverId: number): Record<Compound, number> => {
+      const car = inventory?.cars.find((c) => c.driverId === driverId && c.seatVerified);
+      return car && inventory ? { ...lives, ...inventory.perCarMaxStint[car.carId]! } : invCap;
+    };
+    const priceOn = (
+      plan: StrategyResult,
+      cap: Record<Compound, number>,
+    ): StrategyResult | null => {
+      if ((['S', 'M', 'H'] as const).every((c) => cap[c] === invCap[c])) return plan;
+      const r = evaluateStrategy(plan.order, laps, cap, deltas, pitCostS, deg);
+      if (!r) return null;
+      let lap = 0;
+      for (const st of r.stints) {
+        st.fromLap = lap + 1;
+        lap += st.laps;
+        st.toLap = lap;
+      }
+      return {
+        ...plan,
+        modelTimeS: plan.modelTimeS ?? plan.timeS,
+        timeS: Math.round(r.timeS * 10) / 10,
+        stints: r.stints,
+        pitLaps: r.stints.slice(0, -1).map((st) => st.toLap),
+      };
+    };
+    const leadPlan = priceOn(best, capOfDriver(leadGrid.driverId)) ?? best;
+    if (leadPlan !== best) {
+      assumptions.push({
+        text: 'Plan của xe lead tính lại giá trên kho lốp đúng xe đó (cap xe khác cap đội) — bảng xếp hạng phía trên vẫn xếp theo cap đội',
+      });
+    }
     const gapOk = (p: StrategyResult): boolean =>
       p.pitLaps.every((pl) =>
         leadPlan.pitLaps.every((lp) => Math.abs(pl - lp) >= TRAIL_PIT_GAP),
       );
-    const candidates = ranked.filter((p) => p !== leadPlan && gapOk(p));
+    /* candidates are priced on the TRAIL car's own garage before the
+       offset rules run — a re-split can move pit laps, so the gap check
+       applies AFTER pricing */
+    const candidates: StrategyResult[] = [];
+    for (const p of ranked) {
+      if (p === best) continue; // the lead's ranked entry (clone or not)
+      const priced = priceOn(p, capOfDriver(trailGrid.driverId));
+      if (priced && gapOk(priced)) candidates.push(priced);
+    }
     /* (a) different starting compound, within the 2.0s tie band of the
        optimal plan — the spec's preference order */
     const diffCompound = candidates.filter(
@@ -1611,10 +1660,12 @@ export function buildTyreLab(
       reason = trailPlan.order[0] !== leadPlan.order[0] ? 'diff-compound' : 'pit-gap';
     } else {
       /* fallback: keep the optimal plan but push its pits as far from the
-         lead's as the tyres allow — never reach ≥3 is stated, not hidden */
+         lead's as the tyres allow — never reach ≥3 is stated, not hidden.
+         v0.7.1: the shift runs on the TRAIL car's own cap. */
+      const trailCap = capOfDriver(trailGrid.driverId);
       let bestShifted: { plan: StrategyResult; gap: number; shift: number } | null = null;
       for (const shift of [3, -3, 4, -4, 5, -5, 2, -2, 1, -1]) {
-        const r = whatIfPitShift(leadPlan, laps, invCap, deltas, pitCostS, shift);
+        const r = whatIfPitShift(leadPlan, laps, trailCap, deltas, pitCostS, shift);
         if (!r.shifted) continue;
         const minGap = Math.min(
           ...r.shifted.pitLaps.map((pl) =>

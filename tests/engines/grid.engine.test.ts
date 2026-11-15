@@ -19,7 +19,7 @@ import { describe, it, expect } from 'vitest';
 import { assessReadiness, buildTyreInventory, deriveGrid, resolveCarDrivers } from '@/engines/grid.engine';
 import { buildTyreLab } from '@/engines/tyre.engine';
 import { emptyPhase2Sections } from '../helpers/model';
-import type { SaveModel, Race, QualifyingResult, PracticeResult, Team, Driver, TyreAllocation } from '@/domain/types';
+import type { SaveModel, Race, QualifyingResult, PracticeResult, Team, Driver, TyreAllocation, PlayerStrategySection } from '@/domain/types';
 
 const MONZA_RACE_ID = 202;
 
@@ -112,7 +112,14 @@ function monzaPractice(): PracticeResult[] {
  * (the spec's verified Monza numbers) while the PLAYER team's own fresh
  * sets (CarID 20/21) are shorter-lived: S 24 / M 36 / H 55 — plus used
  * (state 2) sets that must never raise a cap. This is the exact shape the
- * owner verified: field-median lives {26,39,60}, garage cap {24,36,55}. */
+ * owner verified: field-median lives {26,39,60}, garage cap {24,36,55}.
+ *
+ * v0.7.1 step 2: the whole-championship fresh totals match the REAL save
+ * exactly — fresh S ×44 / M ×24 / H ×23 across all 22 cars (the wrong
+ * numbers the v0.7.0 fallback displayed as the garage) while the player's
+ * two cars hold fresh S ×6 / M ×2 / H ×2 and used S ×10 / M ×4 / H ×2
+ * (the real allocation counts). The player-scope test below locks that
+ * the aggregate can never again show the field numbers. */
 function monzaAllocation(): TyreAllocation[] {
   const sets: TyreAllocation[] = [];
   const push = (
@@ -138,22 +145,29 @@ function monzaAllocation(): TyreAllocation[] {
     push(carId, 1, 39);
     push(carId, 0, 60);
   }
-  // AI cars: field-median fresh lives
-  for (const carId of [0, 1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]) {
-    push(carId, 2, 26);
+  // AI cars: field-median fresh lives. v0.7.1 real-save totals — the 18 AI
+  // cars carry 34 S / 20 M / 19 H fresh (team 2 above adds S4/M2/H2), so
+  // the WHOLE FIELD totals fresh S 44 / M 24 / H 23 with the player's 6/2/2.
+  const aiCars = [0, 1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
+  for (const carId of aiCars) {
+    const isShortCar = carId === 18; // 1 fresh S, 2 fresh M
+    const isLongCar = carId === 19; // 1 fresh S, 2 fresh M, 2 fresh H
+    const sCount = isShortCar || isLongCar ? 1 : 2;
+    for (let i = 0; i < sCount; i++) push(carId, 2, 26);
     push(carId, 1, 39);
+    if (isShortCar || isLongCar) push(carId, 1, 39);
     push(carId, 0, 60);
+    if (isLongCar) push(carId, 0, 60);
   }
-  // the player's two cars (CarID 20/21 = TeamID 32): shorter-lived fresh
-  // sets + used (AvailabilityState 2) sets that must never lift a cap
+  // the player's two cars (CarID 20/21 = TeamID 32) — the REAL allocation
+  // counts: fresh S×3 / M×1 / H×1 per car (lives 24/36/55) + used
+  // (AvailabilityState 2) S×5 / M×2 / H×1 per car that must never lift a cap
   for (const carId of [20, 21]) {
-    push(carId, 2, 24);
-    push(carId, 2, 24);
-    push(carId, 2, 24);
-    push(carId, 2, 18.2, { state: 2, wear: 0.6 });
-    push(carId, 2, 18.2, { state: 2, wear: 0.66 });
+    for (let i = 0; i < 3; i++) push(carId, 2, 24);
+    for (let i = 0; i < 5; i++) push(carId, 2, 18.2 - i * 0.4, { state: 2, wear: 0.6 + i * 0.05 });
     push(carId, 1, 36);
     push(carId, 1, 25.5, { state: 2, wear: 0.57 });
+    push(carId, 1, 24.8, { state: 2, wear: 0.62 });
     push(carId, 0, 55);
     push(carId, 0, 41, { state: 2, wear: 0.75 });
   }
@@ -173,6 +187,33 @@ function monzaPenaltyRow(): SaveModel['gridPenalties'] extends undefined ? never
     pitLaneStart: 0,
     serveInRace: 1,
     serveInSprint: 0,
+  };
+}
+
+/** The in-game strategist plan the owner read off the Monza pre-race save:
+ * selected M→H, pit 25 (stints M24 + H29 on the 53-lap race). */
+function monzaGamePlan(): PlayerStrategySection {
+  return {
+    tablePresent: true,
+    plans: [
+      {
+        loadoutId: 0,
+        strategyId: 1,
+        selected: true,
+        stints: [
+          {
+            stintIndex: 0, compound: 'M',
+            pitWindowStart: null, pitWindowEnd: null,
+            expectedPitLap: null, optimalPitLap: null,
+          },
+          {
+            stintIndex: 1, compound: 'H',
+            pitWindowStart: 23, pitWindowEnd: 27,
+            expectedPitLap: 25, optimalPitLap: 25,
+          },
+        ],
+      },
+    ],
   };
 }
 
@@ -217,6 +258,7 @@ function monzaModel(withPenalty = true): SaveModel {
       carTeamsVerified: true,
     },
     ...emptyPhase2Sections(),
+    playerStrategy: monzaGamePlan(),
     availability: [],
   };
 }
@@ -375,6 +417,106 @@ describe('buildTyreInventory — Monza garage (owner-verified numbers)', () => {
     // the fixture carries no practice-lap pairing for team 32 → Xe 1 / Xe 2
     expect(inventory.cars.map((c) => c.label)).toEqual(['Xe 1', 'Xe 2']);
     expect(inventory.cars.every((c) => !c.seatVerified)).toBe(true);
+  });
+});
+
+/* ── v0.7.1 bước 2 — the garage is the PLAYER's two cars, never the field ──
+ * The v0.7.0 fallback aggregated model.tyres (440 sets, 22 cars) whenever
+ * the map was unverified: the Monza save then displayed fresh S×44 / M×24 /
+ * H×23 (the whole championship) as the garage and built a cap from max
+ * field life that could never bind. The fixture carries the REAL save's
+ * numbers on both sides so this test is the direct lock. */
+describe('buildTyreInventory v0.7.1 — player scope + per-car caps', () => {
+  it('teamAggregate stays the PLAYER cars even with perCar forced false: 6/2/2 fresh (24/36/55), 10/4/2 used — never 44/24/23', () => {
+    const model = monzaModel();
+    model.gridPenalties!.carTeamsVerified = false; // force the old fallback path
+    const inventory = buildTyreInventory(model, { S: 26, M: 39, H: 60 }, MONZA_RACE_ID)!;
+    expect(inventory.perCar).toBe(false); // the flag really flipped
+    const agg = (c: 'S' | 'M' | 'H') => inventory.teamAggregate.find((a) => a.compound === c)!;
+    expect(agg('S').fresh).toBe(6);
+    expect(agg('S').freshLife).toBe(24);
+    expect(agg('M').fresh).toBe(2);
+    expect(agg('M').freshLife).toBe(36);
+    expect(agg('H').fresh).toBe(2);
+    expect(agg('H').freshLife).toBe(55);
+    expect(agg('S').used).toBe(10);
+    expect(agg('M').used).toBe(4);
+    expect(agg('H').used).toBe(2);
+  });
+
+  it('exposes per-car caps; the team maxStint is the min across cars (both paths locked)', () => {
+    const inventory = buildTyreInventory(monzaModel(), { S: 26, M: 39, H: 60 }, MONZA_RACE_ID)!;
+    expect(inventory.perCarMaxStint[20]).toEqual({ S: 24, M: 36, H: 55 });
+    expect(inventory.perCarMaxStint[21]).toEqual({ S: 24, M: 36, H: 55 });
+    expect(inventory.maxStint).toEqual({ S: 24, M: 36, H: 55 });
+  });
+
+  it('returns null when no CarID→team mapping exists — honest absence, no field-wide guess', () => {
+    const model = monzaModel();
+    model.gridPenalties!.carTeams = [];
+    expect(buildTyreInventory(model, { S: 26, M: 39, H: 60 }, MONZA_RACE_ID)).toBeNull();
+  });
+
+  it('prices the LEAD plan on the LEAD car own cap when seats are verified and the garages diverge', () => {
+    const model = monzaModel();
+    // seat signal: car 20 ↔ driver 13, car 21 ↔ driver 285 (StaffID order).
+    // The best laps sit WELL below every session best so the pace deltas
+    // (M +0.03 / H +1.32) stay untouched — only LapCount matters here.
+    model.races[0]!.practice!.push(
+      { driverId: 13, teamId: 32, session: 1, bestLapMs: 91_500, bestLapTyre: 2, lapCount: 19 },
+      { driverId: 13, teamId: 32, session: 2, bestLapMs: 91_500, bestLapTyre: 2, lapCount: 17 },
+      { driverId: 285, teamId: 32, session: 1, bestLapMs: 91_600, bestLapTyre: 2, lapCount: 21 },
+      { driverId: 285, teamId: 32, session: 2, bestLapMs: 91_600, bestLapTyre: 2, lapCount: 16 },
+    );
+    const pair = (carId: number, laps: [number, number]) => {
+      const rows = model.tyres.filter((t) => t.carId === carId);
+      rows[0]!.lapsCompleted = laps[0];
+      rows[0]!.sessionLastUsedIn = 1;
+      rows[1]!.lapsCompleted = laps[1];
+      rows[1]!.sessionLastUsedIn = 2;
+    };
+    pair(20, [19, 17]);
+    pair(21, [21, 16]);
+    // divergent garage: car 20 — the TRAIL's car (13, grid P21) — has a
+    // shorter-lived M set: 30 laps instead of the team's 36. The team cap
+    // (min) follows car 20; the LEAD's own cap stays M 36, so the split
+    // must NOT price the lead's plan on the trail's shorter garage.
+    for (const t of model.tyres) {
+      if (t.carId === 20 && t.weekendTyreType === 1 && t.availabilityState === 0) {
+        t.estimatedLapLifeRemaining = 30;
+      }
+    }
+    const inventory = buildTyreInventory(model, { S: 26, M: 39, H: 60 }, MONZA_RACE_ID)!;
+    expect(inventory.perCarMaxStint[20]).toEqual({ S: 24, M: 30, H: 55 });
+    expect(inventory.perCarMaxStint[21]).toEqual({ S: 24, M: 36, H: 55 });
+    expect(inventory.maxStint).toEqual({ S: 24, M: 30, H: 55 }); // team min
+
+    const lab = buildTyreLab(model, MONZA_RACE_ID);
+    const split = lab.data.carPlans!;
+    expect(split.lead.driverId).toBe(285);
+    // the lead (car 21) runs the optimum on ITS OWN cap: S(19)→M(34) 57.6s —
+    // not the team-min (M 30) re-split the ranked list carries
+    expect(split.lead.plan.stints.map((s) => `${s.compound}(${s.laps})`)).toEqual(['S(19)', 'M(34)']);
+    expect(split.lead.plan.timeS).toBeCloseTo(57.6, 1);
+    expect(lab.assumptions.some((a) => a.text.includes('cap xe khác cap đội'))).toBe(true);
+    // the trail (13, car 20) is priced on its own shorter garage: the M
+    // stint can never exceed 30 laps
+    expect(split.trail!.driverId).toBe(13);
+    expect(split.trail!.plan.stints.map((s) => s.compound)).toEqual(['M', 'S']);
+    expect(split.trail!.plan.stints[0]!.laps).toBeLessThanOrEqual(30);
+    // every trail pit stays ≥ 3 laps clear of the lead's pits
+    const leadPits = split.lead.plan.pitLaps;
+    expect(split.trail!.plan.pitLaps.every((p) => leadPits.every((l) => Math.abs(p - l) >= 3))).toBe(true);
+  });
+
+  it('prices the game plan on the garage cap: M→H pit 25 = 75.0s, not the model-lives 72.5s', () => {
+    const lab = buildTyreLab(monzaModel(), MONZA_RACE_ID);
+    const game = lab.data.gamePlan;
+    expect(game).not.toBeNull();
+    expect(game!.compounds.join('→')).toBe('M→H');
+    expect(game!.stintLaps).toEqual([24, 29]);
+    expect(game!.pitLaps).toEqual([25]);
+    expect(game!.totalTimeS).toBeCloseTo(75.0, 1);
   });
 });
 
