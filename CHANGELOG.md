@@ -2,6 +2,93 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.9.8] — Kho save thành tab riêng: mở lại, tải xuống, xóa nhiều
+
+Thư viện save rời đáy wall shell thành tab full-page **`/?view=saves`**
+(nhóm mới "DỮ LIỆU" trong sidebar + palette, không chiếm số 1–9) và —
+theo yêu cầu tường minh của user — **từ v0.9.8, bytes gốc của file .sav
+được lưu trong IndexedDB trên máy user cùng model đã parse**. Trước đây
+chỉ model được lưu (header cũ ghi "raw .sav is NEVER persisted"), nên
+"tải xuống lại file save" là bất khả thi — model đã chuẩn hóa không thể
+tái tạo thành file GVAS+SQLite.
+
+**Ranh giới quyền riêng tư không đổi:** bytes gốc chỉ nằm trong IndexedDB
+trên máy user, KHÔNG bao giờ rời khỏi thiết bị (nút tải xuống trả đúng
+những bytes đó lại cho chính user đó); xóa record là xóa cả model lẫn
+bytes gốc. Key vẫn là SHA-256, dedupe không đổi, handle/F5 không đụng
+tới, không có network call mới.
+
+### Bước 1 — Storage (`cd5c8c1`)
+
+- `StoredSave.raw?: Blob` (idb-keyval structured-clone Blob — không
+  serialize tay); `putSave(model, fileLastModified?, raw?)` ghi raw khi
+  caller đưa vào, không có raw → record như cũ (legacy model-only).
+- `parse-controller` truyền `file` (File IS a Blob) vào putSave — nằm
+  trong try/catch best-effort đã có: lỗi lưu raw (quota/private mode)
+  không bao giờ làm fail parse. Re-upload cùng file → cùng key →
+  overwrite model + raw + savedAt (hành vi putSave giữ nguyên).
+- `getSave` / `listSaves` / `deleteSave` giữ nguyên signature và hành vi
+  (cascade handle v0.8.1 không đụng tới).
+
+### Bước 2 — Tab Kho save (`845fccf`)
+
+- Routing: `WallView` thêm `'saves'`; WallViews case mới; page.tsx bỏ
+  library ở đáy wall shell và render tab này trong **idle branch** (view
+  duy nhất dùng được khi CHƯA mở save nào — các view idle khác giữ
+  dropzone). KHÔNG thêm phím tắt số: Cmd+K 1–9 giữ nguyên cho 9 view cũ
+  (saves nằm cuối MODULES, không chạm handler `n-1`); vào bằng
+  sidebar/sheet mobile/palette. Badge shortcut rỗng không render (guard
+  ở cả sidebar lẫn palette).
+- Sidebar: group mode `S` (accent `text-info` — màu trung tính, khác
+  teal/amber/gold của 3 nhóm cũ), icon Database; mobile: thêm vào sheet
+  "thêm", KHÔNG vào 5 tab chính.
+- Tab: header với subtitle chính sách lưu trữ mới + dòng thống kê
+  "N save · tổng X MB" (MiB 1 số lẻ; 8,831,556 B → "8.4 MB"); mỗi dòng
+  giữ nguyên field cũ + size + badge file gốc ("có file gốc" / mờ "chỉ
+  model") + checkbox (aria-label "Chọn {fileName}").
+- Actions: **Mở** (setReady + setLastActiveSaveId + về ngay wall view) ·
+  **Tải xuống** từng dòng (chỉ enable khi có raw; objectURL → anchor
+  click → revoke ngay; không có raw → disabled + title giải thích) ·
+  **Xoá 1** (window.confirm — pattern cũ giữ nguyên: destructive action,
+  keyboard-safe) · **Xoá nhiều**: checkbox chọn tất cả (indeterminate khi
+  chọn 1 phần) + thanh bulk "Đã chọn N" → confirm
+  `"Xoá {count} save đã chọn khỏi trình duyệt?"` → deleteSave tuần tự →
+  nếu save đang mở nằm trong số đã xóa → setLastActiveSaveId(null) 1 lần
+  → refresh + clear selection. Xóa save đang mở chỉ xóa khỏi storage +
+  clear auto-restore; model trong memory của session giữ đến reload
+  (hành vự cũ giữ nguyên).
+- i18n: library thêm download/downloadNoRaw/hasRaw/modelOnly/selectAll/
+  selectRow/selectedCount/deleteSelected/confirmDeleteMany/totalSize +
+  subtitle mới; wall thêm nav.saves ("Kho save" / "Save library") + modeS.
+
+### DoD
+
+- save-db test (mock idb): raw 64KB roundtrip **byte-for-byte** (không chỉ
+  so size); record legacy đọc lại raw === undefined; xóa record xóa cả
+  model lẫn bytes; toàn bộ test cascade v0.8.1 pass không đổi.
+- Component test SaveLibrary (mock save-db): dòng có raw → nút tải enable
+  + badge "có file gốc"; dòng legacy → nút disabled + badge "chỉ model"
+  + title `downloadNoRaw`; tick 2 checkbox → "Đã chọn 2" → confirm →
+  deleteSave gọi đúng 2 id, list còn 1 dòng, selection clear; declined
+  confirm không xóa gì; "chọn tất cả" chọn hết 3; Mở → setReady đúng
+  model + router.replace('/') về wall; xóa 1 giữ hành vi cũ.
+- Nav test: /?view=saves resolve qua WallViews; view khác không render
+  library; palette 10 module — 9 view cũ giữ shortcut 1–9, saves cuối
+  KHÔNG có shortcut.
+- Suite: **531/531** (518 cũ + 13 mới); lint + tsc + build sạch.
+- Live (Agent Browser): /?view=saves idle renders tab; sidebar hiện
+  "Kho save" trong nhóm DỮ LIỆU; Cmd+K có "Kho save"; record ghi qua
+  IndexedDB thật hiện size + badge + nút tải enable; click tải xuống,
+  chọn tất cả, xóa nhiều + confirm, — 0 console errors.
+- Hồi quy không đổi số nào (không đụng engine): MarinaBay lead/trail
+  **97.1s** game **103.7s** · Monza **57.6s** game **75.0s** · Interlagos
+  lead/trail **93.2s** game **121.5s** (4-stint 96.2) · Vegas lead
+  **72.2s** trail **75.7s** game **73.4s** · Shanghai lead/trail **83.1s**
+  game **104s**; F5 re-read handle + auto-restore hành vi không đổi.
+
+**Lưu ý dữ liệu cũ:** save nạp trước v0.9.8 chỉ có model, không tải xuống
+được — nạp lại file để bật tải xuống.
+
 ## [0.9.7] — Mô phỏng tự do: Strategy Builder + multi-SC/VSC timeline + Inter/rain
 
 Ba món trong một section mới của Tyre Lab ("Mô phỏng tự do", đặt SAU 3
