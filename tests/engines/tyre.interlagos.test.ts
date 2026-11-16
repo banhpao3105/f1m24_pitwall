@@ -216,6 +216,20 @@ describe('v0.9.3 buildTyreLab — Interlagos DoD (prompt §4, save2.sav numbers)
     expect(data.strategies[5]!.wearS).toBeUndefined();
   });
 
+  it('paceMeasured keeps the raw measurement the v0.9.5 view displays', () => {
+    // the view lock: H's ranking delta is the CLAMPED 1.12, the measured
+    // value is the raw 0.384 — the UI shows the raw one, marked discarded.
+    // If the engine ever stops carrying rawDelta, the clamp display breaks.
+    // (rawDelta carries ms→s float dust — the view's toFixed(2) is the
+    // display contract, "0.38"; the assumption keeps its own toFixed(3).)
+    expect(data.paceMeasured.M).toEqual({ delta: 0.97, source: 'session' });
+    expect(data.paceMeasured.H).toEqual({
+      delta: 1.12,
+      source: 'session',
+      rawDelta: expect.closeTo(0.384, 3),
+    });
+  });
+
   it('the infeasible note names S→M→M with the exact §4 wording', () => {
     expect(lab.assumptions.some((a) =>
       a.text ===

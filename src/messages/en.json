@@ -386,8 +386,10 @@
       "stops": "field stops",
       "noData": "none",
       "measuredBut": "measured +{delta}s — ranked as model",
+      "measuredButDiscarded": "measured +{delta}s — discarded as noise, ranked as model",
       "measuredButForced": "measured +{delta}s — forced, ranked as {source}",
       "unmeasuredWarn": "Ranking uses the model constant for both {compounds} because {unmeasured} is not measured at this track (measured: {measured}) — treat as an estimate.",
+      "clampedWarn": "Ranking uses the model constant for both {compounds} — {clamped} was measured but discarded as noise. Measured: {measured}.",
       "prior": "Last time at {track}: plan {stops} stops (pit lap {lap}), the field ran {field} stops/driver."
     },
     "gamePlan": {

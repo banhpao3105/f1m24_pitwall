@@ -386,8 +386,10 @@
       "stops": "pit cả giải",
       "noData": "chưa có",
       "measuredBut": "đo được +{delta}s — xếp hạng bằng model",
+      "measuredButDiscarded": "đo được +{delta}s — bị loại vì nhiễu, xếp hạng bằng model",
       "measuredButForced": "đo được +{delta}s — bị ép, xếp hạng bằng {source}",
       "unmeasuredWarn": "Xếp hạng đang dùng hằng số model cho cả {compounds} vì {unmeasured} chưa đo được ở track này (đã đo được: {measured}) — coi như ước lượng.",
+      "clampedWarn": "Xếp hạng đang dùng hằng số model cho cả {compounds} vì {clamped} đo được nhưng bị loại vì nhiễu — đã đo được: {measured}.",
       "prior": "Lần trước tại {track}: plan {stops} pit (pit vòng {lap}), cả giải chạy {field} pit/driver."
     },
     "gamePlan": {

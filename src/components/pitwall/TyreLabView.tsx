@@ -13,7 +13,7 @@ import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
 import { getTrackCorrection, putTrackCorrection, TRACK_CORRECTIONS_VERSION } from '@/lib/track-corrections';
 import { useTyreLab } from '@/lib/engine-hooks';
-import { whatIfPitShift, whatIfSCVSC, buildWetPlan, type TyreLabPrior } from '@/engines/tyre.engine';
+import { whatIfPitShift, whatIfSCVSC, buildWetPlan, type TyreLabPrior, type PaceMeasuredEntry } from '@/engines/tyre.engine';
 import { RecommendationCard } from './RecommendationCard';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { StintTimeline } from './StintTimeline';
@@ -35,6 +35,17 @@ import { cn } from '@/lib/utils';
  * collapse to a single value, per the owner-verified DoD strings:
  * "đã dùng ×1 (mòn 74%, đời 41)" and "đã dùng ×2 (mòn 55–57%, đời 20)".
  */
+/**
+ * v0.9.5 — the ONE display rule for a measured pace delta (all three faces
+ * below read through it): a CLAMPED value is the model's opinion, never
+ * the measurement — when `rawDelta` exists the UI shows THE RAW value
+ * marked "discarded"; an unclamped entry shows `delta` (which IS the raw
+ * measurement) exactly as before. Engine untouched — `rawDelta` has been
+ * on the record since v0.6.1.
+ */
+const displayMeasured = (m: PaceMeasuredEntry | null) =>
+  m == null ? null : { delta: m.rawDelta ?? m.delta, discarded: m.rawDelta != null };
+
 function InventoryAggList({ rows }: { rows: InventoryCompoundAgg[] }) {
   const t = useTranslations('tyres');
   const span = (r: [number, number] | null, suffix = ''): string => {
@@ -275,12 +286,19 @@ export function TyreLabView({
                 {(['M', 'H'] as const).map((c) => {
                   const m = tyre!.data.paceMeasured[c];
                   if (!m) return null;
+                  /* v0.9.5 — a clamped measurement shows its RAW value,
+                     marked discarded — the clamped number never renders as
+                     if it were the reading (no mid-practice save exists to
+                     verify this live; component-tested) */
+                  const d = displayMeasured(m)!;
                   return (
                     <span
                       key={c}
                       className="flex items-center gap-1.5 rounded bg-panel px-2.5 py-1 font-mono text-xs text-ink"
                     >
-                      {c} +{m.delta.toFixed(2)}s
+                      {`${c} +${d.delta.toFixed(2)}s${
+                        d.discarded ? (locale === 'vi' ? ' (bị loại)' : ' (discarded)') : ''
+                      }`}
                       <span className="rounded bg-raised px-1.5 py-0.5 font-mono text-[9px] uppercase text-ink-faint">
                         {m.source === 'cross-session' ? t('source.cross-session') : t('source.practice')}
                       </span>
@@ -642,6 +660,9 @@ export function TyreLabView({
               {(['S', 'M', 'H'] as CompoundKey[]).map((c) => {
                 const src = tyre.data.paceSource[c];
                 const measured = c === 'S' ? null : tyre.data.paceMeasured[c as 'M' | 'H'];
+                /* v0.9.5 — the chip shows the RAW measurement when the entry
+                   was clamped (rawDelta on record), never the clamped value */
+                const d = displayMeasured(measured);
                 return (
                   <div key={c} className="flex items-center gap-1.5 rounded bg-panel px-2.5 py-1.5">
                     <CompoundBadge compound={c} size="sm" />
@@ -653,7 +674,9 @@ export function TyreLabView({
                     </span>
                     {measured && src === 'model' ? (
                       <span className="font-mono text-[10px] text-amber">
-                        {t('clock.measuredBut', { delta: measured.delta.toFixed(2) })}
+                        {d!.discarded
+                          ? t('clock.measuredButDiscarded', { delta: d!.delta.toFixed(2) })
+                          : t('clock.measuredBut', { delta: d!.delta.toFixed(2) })}
                       </span>
                     ) : null}
                     {/* v0.6.1: a forced delta is never silent — the chip shows
@@ -693,32 +716,58 @@ export function TyreLabView({
               /* 0.5.3 wording fix: the same-tier rule ranks model constants
                * for BOTH M and H when only one is measured — the old text
                * claimed the measured compound was "not measured", fighting
-               * the evidence clock. paceMeasured keeps the real values. */
+               * the evidence clock. paceMeasured keeps the real values.
+               * v0.9.5 — split the model-ranked sides by WHY they rank on
+               * the model: a CLAMPED side has its rawDelta on record and is
+               * "measured but discarded", never "not measured"; the reason
+               * per side stays in the engine assumption (the "nhiễu" label
+               * here is the shared one, no new reason is invented). */
               const modelRanked = (['M', 'H'] as const).filter(
                 (c) => tyre.data.paceSource[c] === 'model',
               );
               if (modelRanked.length === 0) return null;
+              const joiner = locale === 'vi' ? ' và ' : ' and ';
+              const clampedSides = modelRanked
+                .filter((c) => tyre.data.paceMeasured[c]?.rawDelta != null)
+                .map((c) => `${c} (+${tyre.data.paceMeasured[c]!.rawDelta!.toFixed(2)}s)`);
+              const usableMeasured = modelRanked
+                .filter(
+                  (c) =>
+                    tyre.data.paceMeasured[c] != null &&
+                    tyre.data.paceMeasured[c]!.rawDelta == null,
+                )
+                .map((c) => `${c} +${tyre.data.paceMeasured[c]!.delta.toFixed(2)}s`);
+              if (clampedSides.length > 0) {
+                return (
+                  <p
+                    className="mt-2 rounded border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger"
+                    data-testid="evidence-warning"
+                    data-warn="clamped"
+                  >
+                    {t('clock.clampedWarn', {
+                      compounds: modelRanked.join(joiner),
+                      clamped: clampedSides.join(joiner),
+                      measured:
+                        usableMeasured.length > 0 ? usableMeasured.join(', ') : '—',
+                    })}
+                  </p>
+                );
+              }
               const unmeasured = modelRanked.filter(
                 (c) => tyre.data.paceMeasured[c] == null,
               );
-              const measured = modelRanked
-                .filter((c) => tyre.data.paceMeasured[c] != null)
-                .map(
-                  (c) =>
-                    `${c} +${(tyre.data.paceMeasured[c] as { delta: number }).delta.toFixed(2)}s`,
-                );
-              const joiner = locale === 'vi' ? ' và ' : ' and ';
               return (
                 <p
                   className="mt-2 rounded border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger"
                   data-testid="evidence-warning"
+                  data-warn="unmeasured"
                 >
                   {t('clock.unmeasuredWarn', {
                     compounds: modelRanked.join(joiner),
                     unmeasured:
                       unmeasured.length > 0 ? unmeasured.join(', ') : '—',
                     measured:
-                      measured.length > 0 ? measured.join(', ') : '—',
+                      usableMeasured.length > 0 ? usableMeasured.join(', ') : '—',
                   })}
                 </p>
               );
