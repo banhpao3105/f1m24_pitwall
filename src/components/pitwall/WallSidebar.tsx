@@ -29,6 +29,7 @@ import {
   FileHeart,
   KeyRound,
   RefreshCw,
+  Database,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -47,11 +48,13 @@ interface NavItemDef {
 }
 
 interface NavGroupDef {
-  mode: 'A' | 'B' | 'N';
+  mode: 'A' | 'B' | 'N' | 'S';
   items: NavItemDef[];
 }
 
-/** Same order + shortcuts as CommandPalette (1–9). */
+/** Same order + shortcuts as CommandPalette (1–9). v0.9.8: the save
+ *  library joins as mode S (DATA) — NO number shortcut, 1–9 stay with the
+ *  original nine views. */
 const GROUPS: NavGroupDef[] = [
   {
     mode: 'A',
@@ -72,10 +75,11 @@ const GROUPS: NavGroupDef[] = [
     ],
   },
   { mode: 'N', items: [{ key: 'gazette', icon: Newspaper, shortcut: '9' }] },
+  { mode: 'S', items: [{ key: 'saves', icon: Database, shortcut: '' }] },
 ];
 
 const PRIMARY_MOBILE: WallView[] = ['wall', 'tyres', 'race', 'season', 'gazette'];
-const SHEET_MOBILE: WallView[] = ['cars', 'drivers', 'strategy', 'research'];
+const SHEET_MOBILE: WallView[] = ['cars', 'drivers', 'strategy', 'research', 'saves'];
 
 const ICONS: Record<WallView, LucideIcon> = {
   wall: Gauge,
@@ -87,6 +91,7 @@ const ICONS: Record<WallView, LucideIcon> = {
   strategy: Briefcase,
   research: FlaskConical,
   gazette: Newspaper,
+  saves: Database,
 };
 
 /** `wall` view label lives at wall.nav.home — the rest match 1:1. */
@@ -100,12 +105,14 @@ const LABEL_KEY: Record<WallView, string> = {
   strategy: 'strategy',
   research: 'research',
   gazette: 'gazette',
+  saves: 'saves',
 };
 
-const MODE_ACCENT: Record<'A' | 'B' | 'N', string> = {
+const MODE_ACCENT: Record<'A' | 'B' | 'N' | 'S', string> = {
   A: 'text-teal',
   B: 'text-amber',
   N: 'text-gold',
+  S: 'text-info',
 };
 
 export function WallSidebar() {
@@ -199,23 +206,27 @@ export function WallSidebar() {
         />
         <Icon className={cn('h-4 w-4 shrink-0', active ? MODE_ACCENT[groupOf(item.key)] : 'text-ink-faint')} aria-hidden="true" />
         <span className="truncate">{tNav(LABEL_KEY[item.key])}</span>
-        <kbd
-          className={cn(
-            'ml-auto rounded border px-1.5 py-0.5 font-mono text-[10px] leading-none',
-            active ? 'border-line-strong bg-surface text-ink-soft' : 'border-line bg-surface text-ink-faint',
-          )}
-        >
-          {item.shortcut}
-        </kbd>
+        {/* v0.9.8 — shortcut '' (the saves tab has no number key) renders
+            NO badge at all, never an empty one. */}
+        {item.shortcut !== '' ? (
+          <kbd
+            className={cn(
+              'ml-auto rounded border px-1.5 py-0.5 font-mono text-[10px] leading-none',
+              active ? 'border-line-strong bg-surface text-ink-soft' : 'border-line bg-surface text-ink-faint',
+            )}
+          >
+            {item.shortcut}
+          </kbd>
+        ) : null}
       </button>
     );
   };
 
-  const groupOf = (key: WallView): 'A' | 'B' | 'N' =>
+  const groupOf = (key: WallView): 'A' | 'B' | 'N' | 'S' =>
     GROUPS.find((g) => g.items.some((i) => i.key === key))?.mode ?? 'A';
 
-  const groupTitle = (mode: 'A' | 'B' | 'N') =>
-    mode === 'A' ? t('modeA') : mode === 'B' ? t('modeB') : t('modeN');
+  const groupTitle = (mode: 'A' | 'B' | 'N' | 'S') =>
+    mode === 'A' ? t('modeA') : mode === 'B' ? t('modeB') : mode === 'S' ? t('modeS') : t('modeN');
 
   return (
     <>

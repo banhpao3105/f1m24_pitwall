@@ -23,7 +23,8 @@ export type WallView =
   | 'season'
   | 'strategy'
   | 'research'
-  | 'gazette';
+  | 'gazette'
+  | 'saves';
 
 export function useWallNav() {
   const router = useRouter();

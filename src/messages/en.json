@@ -48,13 +48,23 @@
   },
   "library": {
     "title": "Save library (this device)",
-    "subtitle": "Parsed models live in IndexedDB — the raw .sav is never stored.",
+    "subtitle": "Parsed models + the original .sav bytes live in IndexedDB on this device — nothing leaves it. Saves uploaded before v0.9.8 are model-only and cannot be downloaded.",
     "empty": "No saves stored in this browser yet.",
     "open": "Open",
     "delete": "Delete",
     "savedOn": "Saved",
     "confirmDelete": "Delete this save from the browser?",
     "active": "open",
+    "download": "Download",
+    "downloadNoRaw": "This save stores the model only (uploaded before v0.9.8) — re-upload the file to enable download",
+    "hasRaw": "original file kept",
+    "modelOnly": "model only",
+    "selectAll": "Select all",
+    "selectRow": "Select {fileName}",
+    "selectedCount": "{count} selected",
+    "deleteSelected": "Delete selected ({count})",
+    "confirmDeleteMany": "Delete {count} selected saves from the browser?",
+    "totalSize": "{count} saves · {size} total",
     "restoredTitle": "Save restored",
     "restoredDesc": "Reopened {name} from browser storage — no re-upload needed.",
     "reloadedTitle": "Save re-read from disk",
@@ -217,7 +227,8 @@
       "season": "Season",
       "strategy": "Strategy",
       "research": "Research",
-      "gazette": "Gazette"
+      "gazette": "Gazette",
+      "saves": "Save library"
     },
     "modeA": "RACE WEEKEND",
     "modeB": "FACTORY / SEASON",
@@ -270,6 +281,7 @@
       "contractExpiry": "{name}'s contract expires in {days} days — open renewal talks."
     },
     "modeN": "NARRATIVE",
+    "modeS": "DATA",
     "header": {
       "gameDay": "Day {day} · Season {season} · {done}/{total}",
       "gameDayTitle": "In-game day",

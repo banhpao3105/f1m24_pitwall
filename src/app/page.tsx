@@ -33,6 +33,7 @@ import { SaveLibrary } from '@/components/pitwall/SaveLibrary';
 import { SaveAutoRestore } from '@/components/pitwall/SaveAutoRestore';
 import { WallSidebar } from '@/components/pitwall/WallSidebar';
 import { WallViews } from '@/components/pitwall/WallViews';
+import { useWallNav } from '@/components/pitwall/WallNav';
 import { WallHomeView } from '@/components/pitwall/WallHomeView';
 import { TyreLabView } from '@/components/pitwall/TyreLabView';
 import { RaceWeekendView } from '@/components/pitwall/RaceWeekendView';
@@ -185,8 +186,12 @@ function PitWallSurface() {
                   onRetry={() => useSaveStore.getState().reset()}
                 />
               ) : null}
-              <SaveDropzone />
-              <PrivacyNote />
+              {/* v0.9.8 — the saves tab is reachable even with NO open save
+                  (the library needs no model); every other idle view keeps
+                  the dropzone. useSearchParams needs the Suspense boundary. */}
+              <Suspense fallback={null}>
+                <IdleMain />
+              </Suspense>
             </motion.div>
           ) : null}
 
@@ -209,10 +214,8 @@ function PitWallSurface() {
               <Suspense fallback={null}>
                 <WallViews />
               </Suspense>
-
-              <div className="print:hidden">
-                <SaveLibrary />
-              </div>
+              {/* v0.9.8 — the SaveLibrary left the wall footer: it is now a
+                  real tab (/?view=saves) rendered through WallViews. */}
             </motion.div>
           ) : null}
         </main>
@@ -227,5 +230,25 @@ function PitWallSurface() {
         </footer>
       </div>
     </div>
+  );
+}
+
+/**
+ * v0.9.8 — the idle main content: the saves tab (/?view=saves) is the one
+ * view that works with NO open save (the library reads IndexedDB directly),
+ * so it renders even in the idle state; every other idle view keeps the
+ * dropzone exactly as before. Lives inside a Suspense boundary because of
+ * useSearchParams (deep-link contract docs/02 §3.4).
+ */
+function IdleMain() {
+  const { view } = useWallNav();
+  if (view === 'saves') {
+    return <SaveLibrary />;
+  }
+  return (
+    <>
+      <SaveDropzone />
+      <PrivacyNote />
+    </>
   );
 }

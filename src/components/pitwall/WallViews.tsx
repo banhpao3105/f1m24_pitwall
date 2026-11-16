@@ -19,6 +19,7 @@ import { SeasonView } from './SeasonView';
 import { StrategyView } from './StrategyView';
 import { ResearchView } from './ResearchView';
 import { GazetteView } from './GazetteView';
+import { SaveLibrary } from './SaveLibrary';
 
 export function WallViews() {
   const model = useSaveStore((s) => s.model);
@@ -32,6 +33,9 @@ export function WallViews() {
     <ViewShell viewKey={shellKey}>
       {(() => {
         switch (view) {
+          case 'saves':
+            /* v0.9.8 — the save library is a real tab; it needs no model. */
+            return <SaveLibrary />;
           case 'tyres':
             return <TyreLabView model={model} raceId={raceId} />;
           case 'race':

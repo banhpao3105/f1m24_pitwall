@@ -14,6 +14,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import {
   Car,
   CalendarDays,
+  Database,
   Flag,
   FlaskConical,
   Gauge,
@@ -43,10 +44,13 @@ interface PaletteModule {
   key: WallView;
   labelKey: string;
   icon: LucideIcon;
-  mode: 'A' | 'B' | 'N';
+  mode: 'A' | 'B' | 'N' | 'S';
   shortcut: string;
 }
 
+/* v0.9.8: the save library joins with NO number shortcut — the 1–9 keys
+   stay with the original nine views (the handler below still maps n-1 →
+   MODULES[n-1], and saves sits at index 9, unreachable by 1..9). */
 const MODULES: PaletteModule[] = [
   { key: 'wall', labelKey: 'nav.home', icon: Gauge, mode: 'A', shortcut: '1' },
   { key: 'tyres', labelKey: 'nav.tyres', icon: Waves, mode: 'A', shortcut: '2' },
@@ -57,6 +61,7 @@ const MODULES: PaletteModule[] = [
   { key: 'strategy', labelKey: 'nav.strategy', icon: Briefcase, mode: 'B', shortcut: '7' },
   { key: 'research', labelKey: 'nav.research', icon: FlaskConical, mode: 'B', shortcut: '8' },
   { key: 'gazette', labelKey: 'nav.gazette', icon: Newspaper, mode: 'N', shortcut: '9' },
+  { key: 'saves', labelKey: 'nav.saves', icon: Database, mode: 'S', shortcut: '' },
 ];
 
 /** Editable-target guard for the bare-number shortcuts. */
@@ -120,7 +125,7 @@ export function CommandPalette({ races }: { races: Race[] }) {
   };
 
   const modeBadge = (m: PaletteModule['mode']): string =>
-    m === 'A' ? t('modeA') : m === 'B' ? t('modeB') : t('modeN');
+    m === 'A' ? t('modeA') : m === 'B' ? t('modeB') : m === 'S' ? t('modeS') : t('modeN');
 
   return (
     <CommandDialog
@@ -152,9 +157,12 @@ export function CommandPalette({ races }: { races: Race[] }) {
                 <span className="hidden font-mono text-[10px] text-ink-faint sm:inline">
                   {modeBadge(m.mode)}
                 </span>
-                <span className="rounded border border-line px-1 font-mono text-[10px] text-ink-faint">
-                  {m.shortcut}
-                </span>
+                {/* v0.9.8 — shortcut '' renders NO badge, never an empty one. */}
+                {m.shortcut !== '' ? (
+                  <span className="rounded border border-line px-1 font-mono text-[10px] text-ink-faint">
+                    {m.shortcut}
+                  </span>
+                ) : null}
               </CommandItem>
             );
           })}

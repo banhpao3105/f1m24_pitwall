@@ -48,13 +48,23 @@
   },
   "library": {
     "title": "Thư viện save (trên máy này)",
-    "subtitle": "Lưu model đã parse trong IndexedDB — không lưu file .sav gốc.",
+    "subtitle": "Lưu model đã parse + file .sav gốc trong IndexedDB trên máy này — không rời khỏi thiết bị. Save nạp trước v0.9.8 chỉ có model, không tải xuống được.",
     "empty": "Chưa có save nào được lưu trên trình duyệt này.",
     "open": "Mở",
     "delete": "Xoá",
     "savedOn": "Lưu lúc",
     "confirmDelete": "Xoá save này khỏi trình duyệt?",
     "active": "đang mở",
+    "download": "Tải xuống",
+    "downloadNoRaw": "Save này chỉ lưu model (nạp trước v0.9.8) — nạp lại file để bật tải xuống",
+    "hasRaw": "có file gốc",
+    "modelOnly": "chỉ model",
+    "selectAll": "Chọn tất cả",
+    "selectRow": "Chọn {fileName}",
+    "selectedCount": "Đã chọn {count}",
+    "deleteSelected": "Xóa đã chọn ({count})",
+    "confirmDeleteMany": "Xoá {count} save đã chọn khỏi trình duyệt?",
+    "totalSize": "{count} save · tổng {size}",
     "restoredTitle": "Đã khôi phục save",
     "restoredDesc": "Mở lại {name} từ bộ nhớ trình duyệt — không cần nạp lại file.",
     "reloadedTitle": "Save đã được đọc lại",
@@ -217,7 +227,8 @@
       "season": "Season",
       "strategy": "Strategy",
       "research": "Research",
-      "gazette": "Gazette"
+      "gazette": "Gazette",
+      "saves": "Kho save"
     },
     "modeA": "RACE WEEKEND",
     "modeB": "FACTORY / SEASON",
@@ -311,7 +322,8 @@
       "gained": "Vị trí leo được từng chặng",
       "gainedVerdict": "Tổng {total} vị trí sau {races} chặng; tốt nhất {best} ở {track}."
     },
-    "modeN": "TẠP CHÍ"
+    "modeN": "TẠP CHÍ",
+    "modeS": "DỮ LIỆU"
   },
   "tyres": {
     "title": "Tyre Lab",
