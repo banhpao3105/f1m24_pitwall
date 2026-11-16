@@ -109,10 +109,13 @@ export function median(values: number[]): number | null {
     : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-/** Deg-formula constants — injectable so backtests can grid-search. */
+/** Deg-formula constants — injectable so backtests can grid-search.
+ * v0.9.7: the keys gain OPTIONAL I/W slots so the free-form simulator can
+ * carry its labelled wet-deg assumption (SIM_DEG) through the SAME
+ * DegConstants shape — the oracle values below are untouched. */
 export interface DegConstants {
-  final: Record<Compound, number>;
-  cliff: Record<Compound, number>;
+  final: Record<Compound, number> & Partial<Record<'I' | 'W', number>>;
+  cliff: Record<Compound, number> & Partial<Record<'I' | 'W', number>>;
   cliffThreshold: number;
 }
 
@@ -129,16 +132,20 @@ export const ORACLE_DEG: DegConstants = {
  */
 export function stintDegPenaltyWith(
   deg: DegConstants,
-  compound: Compound,
+  compound: Compound | 'I' | 'W',
   stintLaps: number,
   life: number,
 ): number {
   if (!life || life <= 0 || stintLaps <= 0) return 0;
+  /* v0.9.7 — the I/W keys exist only on SIM_DEG; the `?? 0` keeps the
+     oracle path byte-identical (S/M/H keys are always defined). */
+  const fin = deg.final[compound] ?? 0;
+  const cl = deg.cliff[compound] ?? 0;
   const frac = Math.min(1, stintLaps / life);
   const base =
-    deg.final[compound] * (stintLaps / (DEG_EXP + 1)) * Math.pow(frac, DEG_EXP);
+    fin * (stintLaps / (DEG_EXP + 1)) * Math.pow(frac, DEG_EXP);
   const overflow = stintLaps - deg.cliffThreshold * life;
-  const cliff = overflow > 0 ? deg.cliff[compound] * overflow * overflow : 0;
+  const cliff = overflow > 0 ? cl * overflow * overflow : 0;
   return base + cliff;
 }
 
@@ -181,13 +188,13 @@ export interface WearCorrectionResult {
  */
 export function wearCorrection(
   stints: ReadonlyArray<{
-    compound: Compound;
+    compound: Compound | 'I' | 'W';
     laps: number;
     setUsed?: { tyreSetId: number; life: number } | null;
   }>,
   sets: InventorySet[],
   allocPace: AllocationPace | null,
-  pricedLives: Record<Compound, number>,
+  pricedLives: Record<Compound, number> & Partial<Record<'I' | 'W', number>>,
   deg: DegConstants = ORACLE_DEG,
 ): WearCorrectionResult {
   const perStint = stints.map((st) => {
@@ -198,11 +205,16 @@ export function wearCorrection(
       set?.estimatedLapTime != null &&
       allocPace != null &&
       allocPace.lapTime[st.compound] != null
-        ? (set.estimatedLapTime - allocPace.lapTime[st.compound]) * st.laps
+        ? (set.estimatedLapTime - allocPace.lapTime[st.compound]!) * st.laps
         : 0;
+    /* v0.9.7 — a compound with no priced life (I/W without wet allocation)
+       contributes 0 deg correction; the S/M/H path is unchanged. */
+    const priced = pricedLives[st.compound];
     const degPart =
-      stintDegPenaltyWith(deg, st.compound, st.laps, used.life) -
-      stintDegPenaltyWith(deg, st.compound, st.laps, pricedLives[st.compound]);
+      priced == null
+        ? 0
+        : stintDegPenaltyWith(deg, st.compound, st.laps, used.life) -
+          stintDegPenaltyWith(deg, st.compound, st.laps, priced);
     return Math.round((pace + degPart) * 10) / 10;
   });
   return {
@@ -500,8 +512,10 @@ export function getCompoundCaps(model: SaveModel): Record<Compound, number> | nu
 /* ── allocation pace cross-check (v0.6.1) ────────────────────────────────── */
 
 export interface AllocationPace {
-  /** Median EstimatedLapTime per compound (seconds, fresh sets). */
-  lapTime: Record<Compound, number>;
+  /** Median EstimatedLapTime per compound (seconds, fresh sets).
+   *  v0.9.7: optional I/W slots — the simulator merges the wet medians in
+   *  so `wearCorrection` prices wet sets on the same basis. */
+  lapTime: Record<Compound, number> & Partial<Record<'I' | 'W', number>>;
   /** Deltas vs Soft derived from the game's own estimates. */
   deltas: Record<Compound, number>;
   /** Fresh sets with an EstimatedLapTime, per compound (median inputs). */
@@ -2381,4 +2395,461 @@ export function buildTyreLab(
     recommendations,
     warnings,
   };
+}
+
+/* ── v0.9.7 — the free-form simulator (Strategy Builder + wet pace) ──────── */
+
+export type SimCompound = 'S' | 'M' | 'H' | 'I' | 'W';
+
+/** One user-assembled stint of the Strategy Builder. */
+export interface SimStintInput {
+  compound: SimCompound;
+  laps: number;
+}
+
+/** A user-drawn rain window (1-based laps, inclusive start..start+laps-1). */
+export interface RainWindow {
+  startLap: number;
+  laps: number;
+}
+
+/**
+ * Deg constants for the simulator: S/M/H keep the oracle values; I/W BORROW
+ * the Medium curve — the save carries no deg constants for wet tyres, so
+ * this is a LABELLED assumption (surfaced verbatim by priceManualPlan), not
+ * a measurement. No invented wet pace: pace comes only from the game's own
+ * EstimatedLapTime via `wetPace`.
+ */
+export const SIM_DEG: DegConstants = {
+  final: { ...ORACLE_DEG.final, I: 2.0, W: 2.0 },
+  cliff: { ...ORACLE_DEG.cliff, I: 0.02, W: 0.02 },
+  cliffThreshold: ORACLE_DEG.cliffThreshold,
+};
+
+/** The game's own wet pace, measured on the WHOLE FIELD's fresh I/W sets. */
+export interface WetPace {
+  /** ELT median I/W − ELT median S, rounded 2dp (the sim's wet deltas). */
+  deltas: { I: number; W: number };
+  /** The raw fresh-set medians (S anchor + I/W when present). */
+  elt: { S: number; I: number | null; W: number | null };
+  /** Fresh-set life medians per wet compound (the priced lives for I/W). */
+  lives: { I: number | null; W: number | null };
+  /** Fresh-set sample counts. */
+  samples: { I: number; W: number };
+}
+
+/**
+ * v0.9.7 — the game CARRIES wet pace: every fresh Inter/Wet set of
+ * Save_CarTyreAllocation prices its own EstimatedLapTime on a wet track.
+ * Same fresh rule as `getAllocationPace` (FrontLeftWear >= 0.99, ELT > 0),
+ * whole field. Measured on the real saves (prompt v0.9.7 §0):
+ * Shanghai S 94.24 → I +7.33 / W +18.10 (lives 84/109); Vegas
+ * S 97.86 → I +8.63 / W +20.35 (lives 99/128). Returns null when the save
+ * has no fresh S anchor or neither wet compound — the builder then refuses
+ * I/W with an explicit error instead of inventing a number.
+ */
+export function wetPace(model: SaveModel): WetPace | null {
+  const freshOf = (
+    type: number,
+  ): { elt: number[]; life: number[] } => {
+    const elt: number[] = [];
+    const life: number[] = [];
+    for (const t of model.tyres) {
+      if (
+        t.weekendTyreType === type &&
+        t.frontLeftWear >= 0.99 &&
+        t.estimatedLapTimeS != null &&
+        t.estimatedLapTimeS > 0
+      ) {
+        elt.push(t.estimatedLapTimeS);
+        if (t.estimatedLapLifeRemaining != null) {
+          life.push(t.estimatedLapLifeRemaining);
+        }
+      }
+    }
+    return { elt, life };
+  };
+  const sMedian = median(freshOf(2).elt);
+  if (sMedian == null) return null;
+  const round2 = (x: number): number => Math.round(x * 100) / 100;
+  const wetOf = (type: number): { elt: number | null; life: number | null; n: number } => {
+    const f = freshOf(type);
+    const e = median(f.elt);
+    const l = median(f.life);
+    return {
+      elt: e,
+      life: l != null ? Math.round(l) : null,
+      n: f.elt.length,
+    };
+  };
+  const i = wetOf(3);
+  const w = wetOf(4);
+  if (i.elt == null && w.elt == null) return null;
+  return {
+    deltas: {
+      I: i.elt != null ? round2(i.elt - sMedian) : 0,
+      W: w.elt != null ? round2(w.elt - sMedian) : 0,
+    },
+    elt: { S: sMedian, I: i.elt, W: w.elt },
+    lives: { I: i.life, W: w.life },
+    samples: { I: i.n, W: w.n },
+  };
+}
+
+/** One priced stint of a FIXED plan (no re-optimization — unlike
+ *  `evaluateStrategy`, the laps are the user's input, never re-split). */
+export interface FixedStint {
+  compound: SimCompound;
+  laps: number;
+  fromLap: number;
+  toLap: number;
+  /** Fresh-pace delta s/lap vs Soft for this stint's compound. */
+  deltaS: number;
+  /** Wear seconds priced at the priced life (the caller's deg curve). */
+  degS: number;
+}
+
+/**
+ * Prices a FIXED stint list: Σ(delta × laps + deg(laps, pricedLife)) plus
+ * every pit priced through `pitCostAt` (green or an SC/VSC window). The
+ * total is rounded to 0.1s. The caller owns validation (total laps, minimum
+ * stint, set feasibility) — this function only does arithmetic.
+ */
+export function priceFixedStints(
+  stints: ReadonlyArray<{ compound: SimCompound; laps: number }>,
+  pricedLives: Record<SimCompound, number>,
+  deltas: Record<SimCompound, number>,
+  pitCostAt: (lap: number) => number,
+  deg: DegConstants = SIM_DEG,
+): { timeS: number; stints: FixedStint[]; pitLaps: number[] } {
+  const out: FixedStint[] = [];
+  let total = 0;
+  let lap = 0;
+  for (const st of stints) {
+    const from = lap + 1;
+    const to = lap + st.laps;
+    lap = to;
+    const deltaS = deltas[st.compound];
+    const degS = stintDegPenaltyWith(deg, st.compound, st.laps, pricedLives[st.compound]);
+    total += deltaS * st.laps + degS;
+    out.push({ compound: st.compound, laps: st.laps, fromLap: from, toLap: to, deltaS, degS });
+  }
+  const pitLaps = out.slice(0, -1).map((st) => st.toLap);
+  for (const pl of pitLaps) total += pitCostAt(pl);
+  return { timeS: Math.round(total * 10) / 10, stints: out, pitLaps };
+}
+
+/**
+ * The pit cost at ONE lap under an SC/VSC event timeline — the cheapest
+ * covering window wins (an overlap never stacks two discounts; the overlap
+ * itself is surfaced as a labelled assumption by the callers). Same ratios
+ * as the v0.9.2 single-window what-if, verified on real columns:
+ * SC = green × clamp(SC/Pit, 0, 1); VSC = the green↔SC midpoint. No
+ * covering window → the green cost, unchanged.
+ */
+export function pitCostAtLap(
+  lap: number,
+  green: number,
+  trackCols: { pitLaneS: number; scS: number },
+  events: SCVSCScenario[],
+): number {
+  const ratio =
+    trackCols.pitLaneS > 0 ? clamp(trackCols.scS / trackCols.pitLaneS, 0, 1) : 0;
+  let best = green;
+  for (const ev of events) {
+    if (lap >= ev.startLap && lap < ev.startLap + ev.laps) {
+      const cost =
+        ev.mode === 'sc' ? green * ratio : green * (1 - (1 - ratio) / 2);
+      if (cost < best) best = cost;
+    }
+  }
+  return best;
+}
+
+export interface ManualPlanOpts {
+  /** SC/VSC windows — pits inside price at the window's cost. */
+  events?: SCVSCScenario[];
+  /** Rain windows — slick stints overlapping one are rejected. */
+  rain?: RainWindow[];
+}
+
+/** The priced manual plan (Strategy Builder output, ok branch). */
+export interface ManualPlan {
+  order: SimCompound[];
+  stops: number;
+  timeS: number;
+  /** Total wear correction — ABSENT when 0 (never a masquerading zero). */
+  wearS?: number;
+  stints: Array<
+    FixedStint & {
+      setUsed?: { tyreSetId: number; fresh: boolean; life: number };
+      /** Per-stint wear correction — absent when 0. */
+      wearS?: number;
+    }
+  >;
+  pitLaps: number[];
+  /** Execution gap vs the lab's best (the trail re-base of v0.9.4). */
+  vsBestS: number | null;
+  /** The price BEFORE the wear correction (pace + deg + pits). */
+  baseTimeS: number;
+}
+
+export type ManualPlanResult =
+  | { ok: true; plan: ManualPlan; carLabel: string; assumptions: string[] }
+  | { ok: false; errors: string[] };
+
+/**
+ * One lap span of a manual plan (1-based, inclusive end).
+ */
+interface ManualSpan {
+  compound: SimCompound;
+  laps: number;
+  from: number;
+  to: number;
+}
+
+/**
+ * The single assignment-shortfall diagnostic (v0.9.1 law, one error naming
+ * the first failing compound): a compound used more times than the car owns
+ * available sets, or a stint longer than the k-th best set's life.
+ */
+function manualAssignmentError(
+  sets: InventorySet[],
+  spans: ManualSpan[],
+): string {
+  for (const c of ['S', 'M', 'H', 'I', 'W'] as const) {
+    const stints = spans.filter((sp) => sp.compound === c).map((sp) => sp.laps);
+    if (stints.length === 0) continue;
+    const usable = sets
+      .filter(
+        (s) =>
+          s.compound === c &&
+          s.available &&
+          (s.lifeRemaining ?? 0) > 0,
+      )
+      .map((s) => s.lifeRemaining as number)
+      .sort((a, b) => b - a);
+    const ordered = [...stints].sort((a, b) => b - a);
+    if (ordered.length > usable.length) {
+      return `cần ${ordered.length} stint ${c} nhưng xe chỉ có ${usable.length} bộ ${c} khả dụng`;
+    }
+    for (let k = 0; k < ordered.length; k++) {
+      if (ordered[k]! > (usable[k] ?? 0)) {
+        return `stint ${c} dài nhất ${ordered[k]} vòng vượt đời bộ ${c} thứ ${k + 1} (${usable[k]} vòng)`;
+      }
+    }
+  }
+  return 'plan không gán được bộ lốp trên kho xe này';
+}
+
+/**
+ * v0.9.7 — prices a USER-ASSEMBLED plan on ONE car's own garage: the
+ * v0.9.1 set-assignment law, the v0.9.4 wear correction and the cap of
+ * THAT car (execution basis = per-car cap, exactly like `priceOn`), plus
+ * the game's own wet pace (`wetPace`) and an SC/VSC event timeline
+ * (cheapest covering window per pit). NO re-optimization: the stints are
+ * priced exactly as given (a 1-stint no-stop plan and an all-wet plan are
+ * legal — the dry rule of `evaluateStrategy` does NOT apply here).
+ *
+ * Validation collects EVERY error before pricing (no fail-fast); only a
+ * plan with zero validation errors reaches the set assignment, whose
+ * shortfall is reported as a single diagnostic.
+ */
+export function priceManualPlan(
+  model: SaveModel,
+  raceId: number,
+  carIndex: number,
+  stints: ReadonlyArray<SimStintInput>,
+  opts: ManualPlanOpts = {},
+): ManualPlanResult {
+  const race = model.races.find((r) => r.raceId === raceId) ?? null;
+  const lab = race ? buildTyreLab(model, raceId) : null;
+  const d = lab?.data ?? null;
+  if (!race || !d || !d.readiness.ready || !d.inventory) {
+    return { ok: false, errors: ['data gate chưa mở — cần save sau quali'] };
+  }
+  const car = d.inventory.cars[carIndex];
+  if (!car) {
+    return { ok: false, errors: [`không có xe ${carIndex + 1} trong kho`] };
+  }
+
+  const laps = d.laps;
+  const errors: string[] = [];
+
+  /* total laps must equal the race distance */
+  const total = stints.reduce((sum, st) => sum + st.laps, 0);
+  if (total !== laps) {
+    errors.push(`tổng số vòng ${total} ≠ ${laps} vòng của chặng`);
+  }
+  /* minimum stint length (the builder's own floor — 4 laps) */
+  for (const st of stints) {
+    if (st.laps < MIN_STINT_LAPS) {
+      errors.push(
+        `stint ${st.compound} ${st.laps} vòng < tối thiểu ${MIN_STINT_LAPS} vòng`,
+      );
+    }
+  }
+  /* a slick stint may never overlap a rain window (1-based, end inclusive) */
+  const rain = opts.rain ?? [];
+  const spans: ManualSpan[] = [];
+  let cursor = 0;
+  for (const st of stints) {
+    const from = cursor + 1;
+    cursor += st.laps;
+    spans.push({ compound: st.compound, laps: st.laps, from, to: cursor });
+  }
+  for (const sp of spans) {
+    if (sp.compound === 'I' || sp.compound === 'W') continue;
+    for (const rw of rain) {
+      const end = rw.startLap + rw.laps - 1;
+      if (sp.from <= end && sp.to >= rw.startLap) {
+        errors.push(
+          `stint ${sp.compound} vòng ${sp.from}–${sp.to} chạy slick trong mưa (cửa sổ ${rw.startLap}–${end})`,
+        );
+      }
+    }
+  }
+  /* SC/VSC pricing needs the track's real columns */
+  const hasEvents = (opts.events?.length ?? 0) > 0;
+  const trackCols =
+    race.trackPitLaneTimeLossS != null &&
+    race.trackSafetyCarTimeLossS != null &&
+    race.trackPitLaneTimeLossS > 0
+      ? {
+          pitLaneS: race.trackPitLaneTimeLossS,
+          greenFlagS: race.trackGreenFlagTimeLossS ?? 0,
+          scS: race.trackSafetyCarTimeLossS,
+          chance: race.trackSafetyCarChance ?? 0,
+        }
+      : null;
+  if (hasEvents && !trackCols) {
+    errors.push(
+      'thiếu cột SC/pit của track (Races_Tracks) — không định giá được SC/VSC',
+    );
+  }
+  /* wet pricing needs the game's wet allocation */
+  const usesWet = stints.some((st) => st.compound === 'I' || st.compound === 'W');
+  const wet = usesWet ? wetPace(model) : null;
+  if (usesWet && wet == null) {
+    errors.push(
+      'save không có allocation lốp mưa (I/W) — không định giá được Inter/Wet',
+    );
+  }
+  for (const c of ['I', 'W'] as const) {
+    /* the compound-specific refusal fires when wetPace EXISTS but that
+       compound carries no fresh life (e.g. W rows without the save); when
+       wetPace is null outright, the general error above already says why */
+    if (
+      stints.some((st) => st.compound === c) &&
+      wet != null &&
+      wet.lives[c] == null
+    ) {
+      errors.push(
+        `không có đời lốp ${c} trong allocation — không định giá được stint ${c}`,
+      );
+    }
+  }
+  if (errors.length > 0) return { ok: false, errors };
+
+  /* ── pricing (reached only with zero validation errors) ──────────────── */
+  const pricedLives: Record<SimCompound, number> = {
+    ...d.lives,
+    ...d.inventory.perCarMaxStint[car.carId]!,
+    /* a dry plan never reads the I/W slots; a wet plan validated above
+       guarantees both are non-null */
+    I: wet?.lives.I ?? 0,
+    W: wet?.lives.W ?? 0,
+  };
+  const simDeltas: Record<SimCompound, number> = {
+    S: d.deltas.S,
+    M: d.deltas.M,
+    H: d.deltas.H,
+    I: wet?.deltas.I ?? 0,
+    W: wet?.deltas.W ?? 0,
+  };
+  const events = opts.events ?? [];
+  const cols = trackCols ?? { pitLaneS: 1, scS: 0 };
+  const base = priceFixedStints(
+    spans,
+    pricedLives,
+    simDeltas,
+    (pl) => pitCostAtLap(pl, d.pitCostS, cols, events),
+  );
+
+  /* the v0.9.1 set-assignment law on THIS car's own stock */
+  const assigns = assignSetsForCar(car.sets, spans);
+  if (!assigns) {
+    return { ok: false, errors: [manualAssignmentError(car.sets, spans)] };
+  }
+  const planStints: ManualPlan['stints'] = base.stints.map((fst, i) => {
+    const a = assigns.find((x) => x.stintIndex === i)!;
+    return {
+      ...fst,
+      setUsed: { tyreSetId: a.tyreSetId, fresh: a.fresh, life: a.life },
+    };
+  });
+
+  /* the v0.9.4 wear correction on the assigned sets — wet medians merged
+     into the allocPace basis so I/W sets price on the game's own ELT */
+  const allocPace = getAllocationPace(model);
+  const mergedPace: AllocationPace | null = allocPace
+    ? {
+        ...allocPace,
+        lapTime: {
+          ...allocPace.lapTime,
+          I: wet?.elt.I ?? undefined,
+          W: wet?.elt.W ?? undefined,
+        },
+      }
+    : null;
+  const corr = wearCorrection(planStints, car.sets, mergedPace, pricedLives, SIM_DEG);
+
+  const timeS = Math.round((base.timeS + corr.totalS) * 10) / 10;
+  const vsBestS =
+    d.best != null ? Math.round((timeS - d.best.timeS) * 10) / 10 : null;
+
+  /* labelled assumptions — rendered verbatim by the UI */
+  const assumptions: string[] = [];
+  if (usesWet) {
+    assumptions.push(
+      'pace I/W = ELT trung vị toàn trường của game cho lốp mưa (pace trên đường ướt theo game, không phải số đo practice)',
+    );
+    assumptions.push(
+      'deg I/W mượn curve của M (save không có hằng số deg cho lốp mưa — giả định gán nhãn)',
+    );
+    const wetOnDry = spans.some(
+      (sp) =>
+        (sp.compound === 'I' || sp.compound === 'W') &&
+        !rain.some((rw) => sp.from >= rw.startLap && sp.to <= rw.startLap + rw.laps - 1),
+    );
+    if (wetOnDry) {
+      assumptions.push(
+        'stint I/W chạy trên khô: giá dùng delta ELT ướt của game — thực tế còn chậm hơn, số này là cận dưới (lạc quan)',
+      );
+    }
+  }
+  if (events.length > 1) {
+    const overlapped = base.pitLaps.some(
+      (pl) =>
+        events.filter((ev) => pl >= ev.startLap && pl < ev.startLap + ev.laps)
+          .length >= 2,
+    );
+    if (overlapped) {
+      assumptions.push('pit rơi vào 2 cửa sổ chồng lấn lấy giá rẻ nhất');
+    }
+  }
+
+  const plan: ManualPlan = {
+    order: spans.map((sp) => sp.compound),
+    stops: spans.length - 1,
+    timeS,
+    ...(corr.totalS !== 0 ? { wearS: corr.totalS } : {}),
+    stints: planStints.map((st, i) =>
+      corr.perStint[i] !== 0 ? { ...st, wearS: corr.perStint[i] } : st,
+    ),
+    pitLaps: base.pitLaps,
+    vsBestS,
+    baseTimeS: base.timeS,
+  };
+  return { ok: true, plan, carLabel: car.label, assumptions };
 }

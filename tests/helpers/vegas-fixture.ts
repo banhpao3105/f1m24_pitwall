@@ -155,6 +155,13 @@ function vegasAllocation(): TyreAllocation[] {
   const S_USED = 97.87;
   const M_FRESH = 98.24;
   const H_FRESH = 98.68;
+  /* v0.9.7 — the game's own wet pace (prompt §0, measured on save1.sav):
+     every fresh Inter/Wet set prices its own EstimatedLapTime on a wet
+     track — I 106.49 (life 91 fresh per player car / 99 field median),
+     W 118.21 (life 118 per car / 128 field median). No slider, no invented
+     constant — wetPace() reads these medians. */
+  const I_FRESH = 106.49;
+  const W_FRESH = 118.21;
   /* CarID 20 — Xe 1: three FRESH softs (life 20) + two locked used softs. */
   push(20, 2, 20, 0, { lapTime: S_FRESH });
   push(20, 2, 20, 1, { lapTime: S_FRESH });
@@ -163,6 +170,9 @@ function vegasAllocation(): TyreAllocation[] {
   push(20, 2, 18, 7, { state: 2, wear: 0.65, laps: 8, lapTime: S_USED });
   push(20, 1, 31, 8, { lapTime: M_FRESH });
   push(20, 0, 47, 11, { lapTime: H_FRESH });
+  /* v0.9.7 — Xe 1 wet stock: I #13–#17 fresh 91 ×5, W #18–#19 fresh 118 ×2. */
+  for (let k = 0; k < 5; k++) push(20, 3, 91, 13 + k, { lapTime: I_FRESH });
+  for (let k = 0; k < 2; k++) push(20, 4, 118, 18 + k, { lapTime: W_FRESH });
   /* CarID 21 — Xe 2: NO fresh soft. #0/#2/#3 usable but worn; #1 LOCKED.
      The game's own set prices: +0.01s/lap (0.888 / 0.887) and +0.19s/lap
      (0.778). M/H: one fresh set each plus the heavily-worn locked ones. */
@@ -175,15 +185,24 @@ function vegasAllocation(): TyreAllocation[] {
   push(21, 1, 12, 10, { state: 2, wear: 0.394, laps: 5, lapTime: 100.34 });
   push(21, 0, 47, 11, { lapTime: H_FRESH });
   push(21, 0, 22, 12, { state: 2, wear: 0.504, laps: 7, lapTime: 100.18 });
+  /* v0.9.7 — Xe 2 wet stock: same I/W block as Xe 1 (ids #13–#19 free on
+     both cars). */
+  for (let k = 0; k < 5; k++) push(21, 3, 91, 13 + k, { lapTime: I_FRESH });
+  for (let k = 0; k < 2; k++) push(21, 4, 118, 18 + k, { lapTime: W_FRESH });
   /* AI cars 0..19: uniform fresh S 22 / M 34 / H 55 so the field medians
      (getCompoundCaps) come out S 22 / M 33 / H 51 — the model lives — and
      the fresh EstimatedLapTime medians (getAllocationPace) come out
-     S 97.86 / M 98.24 / H 98.68 — the fresh reference of the wear law. */
+     S 97.86 / M 98.24 / H 98.68 — the fresh reference of the wear law.
+     v0.9.7 — AI wet stock I ×5 life 99 / W ×2 life 128: the wet field
+     medians (110 I rows / 44 W rows across 22 cars, exactly the §0 counts)
+     and the wet ELT medians 106.49 / 118.21. */
   for (let carId = 0; carId <= 19; carId++) {
     push(carId, 2, 22, nextAiSetId++, { lapTime: S_FRESH });
     push(carId, 2, 22, nextAiSetId++, { lapTime: S_FRESH });
     push(carId, 1, 34, nextAiSetId++, { lapTime: M_FRESH });
     push(carId, 0, 55, nextAiSetId++, { lapTime: H_FRESH });
+    for (let k = 0; k < 5; k++) push(carId, 3, 99, nextAiSetId++, { lapTime: I_FRESH });
+    for (let k = 0; k < 2; k++) push(carId, 4, 128, nextAiSetId++, { lapTime: W_FRESH });
   }
   return sets;
 }
