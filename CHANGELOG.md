@@ -2,6 +2,79 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.9.6] — Luật trail pit-gap: 3 vòng → không trùng vòng
+
+Quyết định của user (2026-11-16) sau câu hỏi ở Shanghai 2028 (save
+`autosave-5.sav`, Day 46831, race 212, 56 laps): vì sao xe 2 không được chạy
+M→S→S (83.1s, hòa lead) mà phải chạy H→S (88.9s). Câu trả lời cũ: luật split
+v0.7.0 bắt mọi vòng pit của trail phải cách mọi vòng pit của lead ≥ 3 vòng
+(`TRAIL_PIT_GAP = 3`) — MSS pit 18,37 chỉ cách lead (19,38) có 1 vòng nên bị
+loại.
+
+**Luật mới: chỉ pit chung 1 vòng mới là double-stack; pit cách nhau 1 vòng
+đã là 2 lần pit riêng biệt.** Trail chỉ bị cấm khi có vòng pit TRÙNG với
+lead (gap = 0); gap ≥ 1 vòng là được. Đây là bỏ đi một đệm bịa (3 vòng) chứ
+không phải thêm hằng số mới — vẫn CẤM bịa hằng số phạt double-stack, không
+có queue-time constant nào được thêm vào.
+
+### Engine (`a47720e`)
+
+- `TRAIL_PIT_GAP` 3 → 1 — thay đổi logic duy nhất, hằng số vẫn chỉ dùng ở
+  đúng 2 chỗ: `gapOk` (mọi vòng pit của trail phải cách mọi vòng pit của
+  lead) và ngưỡng chấp nhận của fallback pit-shift. **Thứ tự thử shift
+  `[3, -3, 4, -4, 5, -5, 2, -2, 1, -1]` giữ nguyên** — khi phải shift vẫn
+  ưu tiên tách xa nhất trước, chỉ nới ngưỡng chấp nhận từ 3 xuống 1.
+- Giữ nguyên: lead selection, diff-compound preference, tie band 2.0s,
+  `sameTierFallback`, wear/pricing (v0.9.4), per-car feasibility (v0.9.1).
+- Text đi theo luật: spec comment, comment v0.9.4 ("pits never share a lap
+  on the candidate path"), comment fallback ("never reach ≥1"), assumption
+  đổi seat ("2 xe không pit chung vòng nên đổi được") và i18n `reasonPitGap`
+  (vi/en) — không để chữ cũ nói sai luật mới.
+
+### Số trên save thật (đo trên cây gap = 1, trước khi hoàn nguyên)
+
+**Shanghai 2028 — `autosave-5.sav` (Day 46831, race 212, 56 laps):**
+
+- LEAD không đổi: S→S→M (S19/S19/M18) pit 19,38 · **83.1s**.
+- TRAIL mới: **M→S→S (M18/S19/S19) pit 18,37 · 83.1s · wear −1.7 · reason
+  'diff-compound' · vsBestS 0** — đúng plan user hỏi. Sets: M18=#9 mới đời
+  42, S19=#3 mới đời 28, S19=#5 mới đời 28. (wear −1.7: các bộ fresh đời
+  28/42 dài hơn cap 27/41 nên deg thật thấp hơn giá cap — per-stint
+  [−0.1, −0.8, −0.8].)
+- S→M→S (S19/M18/S19) pit 19,37 **vẫn bị loại** — trùng vòng pit 19 với
+  lead: đây chính là trường hợp double-stack mà luật mới vẫn cấm.
+- Note hòa xuất hiện trong assumptions: "Hai plan hòa nhau về tổng thời gian
+  thực thi — tách để tránh dẫm chân + hedge, không phải vì nhanh hơn".
+- Game plan không đổi: M→H pit 27 · **104s**.
+
+**Vegas — `save1.sav` (Day 46712, race 208, 50 laps):**
+
+- LEAD/BEST/Game không đổi (72.2s / 72.7s · −2.8 / 73.4s).
+- TRAIL đổi (cùng thời gian, khác plan): **S→M→S (S13/M24/S13) pit 13,37 ·
+  75.7s · wear +0.2 · reason 'pit-gap' · vsBestS +3.5**. Lý do: SMS xếp
+  trước MSS trong ranked list (cùng 72.7s trên cap đội); sau khi re-base lên
+  giá xe 2, vsBestS = +3.5 > 2.0 nên không vào diện diff-compound, lấy
+  `candidates[0]`. Pit 13 chỉ cách pit 14 của lead đúng 1 vòng — đúng luật
+  mới; pit 37 cách 28 là 9 vòng. Sets không đổi (#0/#3 đã dùng đời 18, #8
+  mới đời 31).
+
+**Hồi quy — không đổi số nào:** MarinaBay lead/trail 97.1s · game 103.7s;
+Monza 57.6s · game 75.0s; Interlagos 93.2s · game 121.5s.
+
+### Tests
+
+- Đúng 3 test rớt trên cây gap = 1 (479/482 → sửa đúng 3) + 3 assertion
+  khóa luật cũ đổi `>= 3` → `>= 1` (khóa LUẬT, không khóa fixture):
+  Vegas TRAIL engine, v094 trail card title, shift-fallback synthetic.
+- Shift-fallback fixture làm lại với **race 18 vòng**: 20 vòng không còn
+  khóa được luật mới (MSS pit 8,14 lọt gap 1 — min gap 2), còn 18 vòng thì
+  mọi plan 2-pit đều (6,6,6) pit **[6,12]** — trùng hệt lead → tất cả rớt
+  vì gap 0 → shift fallback chạy thật. Số đo bằng engine: lead S→S→M
+  53.3s · wearS undefined; trail shift −3 → S5/S4/M9 pit **[5,9]** · 59.6s
+  · reason 'shifted', mang đúng kho xe 2 (#0 fresh 8, #2 worn 6, #1 fresh
+  9), wear +4.0 (bộ worn chạy 4 vòng: pace +0.8×4 = +3.2, deg +0.8).
+- Suite: **482/482**; lint + tsc + build sạch.
+
 ## [0.9.5] — Fixture Interlagos về số thật + giá trị bị clamp không còn hiện như số đo
 
 Hai việc độc lập trong một release, cả hai là hậu kiểm của v0.9.3/v0.9.4 —
