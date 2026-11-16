@@ -2,6 +2,90 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.10.0] — Simulator xài ui-ux-pro-max (mặt tiền + ergonomics + điểm nhấn cyber tiết chế)
+
+v0.9.9 sửa xong tính thân thiện nhưng nhìn vẫn "trần": editor là dãy
+`<select>` + `<input>` trần, kết quả là bảng text, không hình, không chuyển
+động. Version này **CHỈ hoá mỹ section Mô phỏng tự do trong Tyre Lab —
+không đụng engine (`tyre.engine.ts`), không đổi token/palette/font, không
+thêm dependency** (chỉ `framer-motion` + `lucide-react` có sẵn). Skill
+`ui-ux-pro-max`: chấp nhận `cyberpunk-ui` dùng tiết chế (glow chỉ ở số hero,
+texture grid chỉ ở header panel), BÁC BỎ Brutalism (mâu thuẫn hướng cyber
+pit-wall teal của app); motion theo luật skill qua Framer Motion (không port
+GSAP).
+
+### Bước 1 — Timeline thành mặt tiền (`b360111`)
+
+- **SimTimeline** (mở rộng `StintTimeline.tsx`, tái dùng math + màu): draft
+  đang sửa vẽ trên trục vòng thật 0 → tổng vòng — segment màu hợp chất rộng
+  đúng tỉ lệ (19/56 ≈ 33.9%), cờ pit ở mọi biên stint, band amber nét đứt
+  cho từng SC/VSC, band xanh cho từng cửa sổ mưa. Segment là nút bấm được:
+  click → scroll tới + focus dòng stint tương ứng (ring teal 1.5s rồi tắt,
+  tôn trọng reduced motion); hover/focus → **tooltip có chữ** (hợp chất ·
+  khoảng vòng · bộ lốp · mòn) — không bao giờ chỉ màu. Draft lỗi chưa price
+  được → tooltip chỉ hiện hình học (không bịa số bộ từ plan cũ).
+- **Hero row** trong kết quả: số tổng thời gian `text-3xl` mono chạy
+  `NumberTween` (spring < 300ms, render ngay khi reduced motion) + glow teal
+  nhẹ (`text-shadow` — chỗ duy nhất có glow); chip vs-best tô màu theo dấu:
+  nhanh hơn best → `--color-good`, hòa → `--color-teal`, chậm hơn →
+  `--color-danger`.
+- **Sửa lỗi thật trong NumberTween**: reduced motion trước giờ vẫn tween —
+  `mv.jump()` chỉ nhảy nguồn, spring gắn vào vẫn animate qua
+  `attachSpring`. Nay nhảy cả spring → reduced motion render ngay, đúng
+  docs/06 §6.4.
+- Test: 7 case mới (geometry, tooltip, click-through với fake timers, band,
+  màu chip, segment theo draft live, tooltip geometry-only khi lỗi);
+  matchMedia stub khớp đúng query `"(prefers-reduced-motion)"` của
+  motion-dom; 543/543 xanh.
+
+### Bước 2 — Editor hết "trần" (`b10d429`)
+
+- **Compound segmented control** thay `<select>`: 5 nút S/M/H/I/W màu theo
+  hợp chất, nút đang chọn nền màu hợp chất 20% + viền inset màu hợp chất +
+  chữ đậm. `data-testid="sim-stint-{i}-compound"` dời lên GROUP (nút mang
+  `aria-pressed` + `aria-label`).
+- **Laps stepper**: nút −/+ (Lucide `Minus`/`Plus`) hai bên input, mỗi nút
+  **≥ 44×44px**; `−` chặn sỉn tại `MIN_STINT_LAPS = 4` của engine. Nút ×
+  xóa dòng (stint/event/mưa) cũng ≥ 44×44px + `aria-label`. Mọi input
+  height 44px cho touch.
+- **Lỗi inline từng field** (skill: error near field + validate on change):
+  tổng lệch → mỗi ô laps nhận `aria-invalid` + ring đỏ + dòng lỗi ngay dưới
+  ô (`sim-stint-{i}-error`, "stint này làm tổng lệch {delta} vòng"); hết
+  lệch → biến mất ngay lúc gõ.
+- **Error summary có link**: `role="alert"` ở đầu editor liệt kê lỗi engine
+  nguyên văn + link "tới stint 1" focus vào ô stint 1 **chỉ khi bấm**
+  (không tự nhảy lúc đang gõ).
+- **Xe 1/Xe 2** thành segmented control đúng nghĩa (cell đang chọn teal 15%
+  + viền teal + glow inset nhẹ).
+- **Motion đúng luật skill**: thêm/xóa dòng chạy `AnimatePresence` — enter
+  spring ~250ms, **exit 150ms (luôn nhanh hơn enter)**, chỉ `opacity` +
+  `transform`; dòng mang **id ổn định** ('seed-{i}' / row đếm) để exit đúng
+  dòng (engine nhận input đã strip id); kết quả mới fade/slide-in 200ms
+  khi mount; kết quả stale fade về 0.6 qua motion (class giữ cho test).
+  Mọi motion tôn trọng `useReducedMotion`.
+- Test: 8 case mới (segmented + màu, stepper + sàn 4, aria-invalid + lỗi
+  từng dòng, link summary focus, target 44px + aria-label,
+  AnimatePresence thêm/xóa, car segmented, chip xanh khi NHANH hơn best —
+  75.8s / −7.3s); 551/551 xanh.
+
+### Bước 3 — Điểm nhấn cyber tiết chế + release
+
+- **Texture grid mờ** trên panel simulator (CSS gradient 1px, không ảnh,
+  không SVG) + viền teal khi `focus-within`; **stint row mang viền trái
+  3px màu hợp chất đang chọn**; band SC/VSC/mưa có **label chữ** (SC · VSC
+  · MƯA) khi đủ rộng (≥ 8% bar) — không truyền nghĩa bằng màu riêng lẻ.
+- **Hover state** đầy đủ 150–300ms trên mọi nút trong section (add/reset/
+  car/compound/segment/stepper/link).
+- **Mobile 375px**: editor xếp dọc (segmented wrap, stepper không tràn),
+  timeline scroll nội bộ (`pitwall-scroll`), trang không scroll ngang
+  (verify live `scrollWidth <= innerWidth`).
+- Release: version 0.10.0, SW cache `pitwall-v0.10.0`, 553/553 test xanh,
+  lint + tsc + build sạch. Engine hồi quy: không đổi số nào — toàn bộ số
+  DoD v0.9.7/v0.9.9 (Shanghai 83.1/100.4/160.2/93.2…, Vegas
+  72.2/75.7/73.4, MarinaBay 97.1/103.7, Monza 57.6/75.0, Interlagos
+  93.2/121.5, multi-SC 10.9s) vẫn được khoá bằng test engine
+  (`tyre.sim.test.ts`, `tyre.scvsc-multi.test.ts`…) chạy xanh trong suite.
+
 ## [0.9.9] — UI What-if / Mô phỏng tự do thân thiện + drive-by nhiệt độ
 
 v0.9.7 đã verify PASS về engine (mọi số DoD khớp trên save thật) nhưng UI

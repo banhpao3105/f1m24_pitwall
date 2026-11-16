@@ -185,7 +185,7 @@ export function SimTimeline({
 }: {
   stints: TimelineStint[];
   totalLaps: number;
-  events?: Array<{ startLap: number; laps: number }>;
+  events?: Array<{ mode?: 'sc' | 'vsc'; startLap: number; laps: number }>;
   rain?: Array<{ startLap: number; laps: number }>;
   setInfo?: Array<SimTimelineSetInfo | undefined>;
   activeSegment?: number | null;
@@ -200,6 +200,10 @@ export function SimTimeline({
   const pct = (laps: number) => (laps / totalLaps) * 100;
   const axisTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * totalLaps));
   const spring = reduceMotion ? { duration: 0 } : SIM_SPRING;
+  /* v0.10.0 step 3 — bands carry a small text tag (SC / VSC / MƯA) once
+     they are wide enough to hold one (≥ 8% of the bar): the meaning is
+     never colour-only (skill chart rule). */
+  const BAND_TAG_SHARE = 0.08;
 
   /* tooltip target — guarded: a stale index (list shrank while hovered)
      yields undefined, which renders nothing */
@@ -241,7 +245,7 @@ export function SimTimeline({
                 aria-label={tWhat('simTimelineGoTo', { n: i + 1 })}
                 style={{ width: `${pct(stint.laps)}%` }}
                 className={cn(
-                  'relative flex min-w-0 cursor-pointer flex-col items-center justify-center border-r border-line bg-raised last:border-r-0',
+                  'relative flex min-w-0 cursor-pointer flex-col items-center justify-center border-r border-line bg-raised transition-colors last:border-r-0 hover:bg-line/40',
                   'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-teal',
                   activeSegment === i && 'ring-1 ring-inset ring-teal',
                 )}
@@ -286,7 +290,16 @@ export function SimTimeline({
                 className="pointer-events-none absolute inset-y-0 border border-dashed border-amber bg-amber/20"
                 style={{ left: `${pct(ev.startLap - 1)}%`, width: `${pct(ev.laps)}%` }}
                 data-testid={`sim-timeline-event-${i}`}
-              />
+              >
+                {ev.laps / totalLaps >= BAND_TAG_SHARE ? (
+                  <span
+                    className="absolute inset-y-0 left-1 flex items-center font-mono text-[9px] font-bold uppercase tracking-wide text-amber"
+                    data-testid={`sim-timeline-event-tag-${i}`}
+                  >
+                    {ev.mode === 'vsc' ? 'VSC' : 'SC'}
+                  </span>
+                ) : null}
+              </motion.span>
             ),
           )}
           {/* rain window bands — info blue, over the exact window */}
@@ -300,7 +313,16 @@ export function SimTimeline({
                 className="pointer-events-none absolute inset-y-0 border-x border-info bg-info/20"
                 style={{ left: `${pct(rw.startLap - 1)}%`, width: `${pct(rw.laps)}%` }}
                 data-testid={`sim-timeline-rain-${i}`}
-              />
+              >
+                {rw.laps / totalLaps >= BAND_TAG_SHARE ? (
+                  <span
+                    className="absolute inset-y-0 left-1 flex items-center font-mono text-[9px] font-bold uppercase tracking-wide text-info"
+                    data-testid={`sim-timeline-rain-tag-${i}`}
+                  >
+                    {tWhat('simTimelineRainTag')}
+                  </span>
+                ) : null}
+              </motion.span>
             ),
           )}
         </div>

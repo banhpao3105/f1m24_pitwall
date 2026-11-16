@@ -671,4 +671,32 @@ describe('TyreLabView — editor controls + inline errors + motion (v0.10.0 step
     expect(chip.className).toContain('text-good');
     expect(chip.className).not.toContain('text-danger');
   });
+
+  it('step 3: bands carry a text tag (SC / MƯA) once they are ≥ 8% of the bar', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    // default event = 3 laps on 56 (5.4% < 8%) → no tag; widen it to 6
+    fireEvent.click(screen.getByTestId('sim-add-event'));
+    expect(screen.queryByTestId('sim-timeline-event-tag-0')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByTestId('sim-event-0-laps'), { target: { value: '6' } });
+    expect(screen.getByTestId('sim-timeline-event-tag-0').textContent).toBe('SC');
+    // switch the mode to VSC → the tag follows
+    fireEvent.change(screen.getByTestId('sim-event-0-mode'), { target: { value: 'vsc' } });
+    expect(screen.getByTestId('sim-timeline-event-tag-0').textContent).toBe('VSC');
+
+    // the default rain window (10 laps = 17.9%) carries its tag immediately
+    fireEvent.click(screen.getByTestId('sim-add-rain'));
+    expect(screen.getByTestId('sim-timeline-rain-tag-0').textContent).toBe('MƯA');
+  });
+
+  it('step 3: stint rows wear a 3px left border in the selected compound colour', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    const row = screen.getByTestId('sim-stint-row-0');
+    expect(row.getAttribute('style')).toContain('rgb(200, 16, 46)');
+    setCompound(0, 'I');
+    expect(row.getAttribute('style')).toContain('rgb(47, 168, 79)');
+  });
 });

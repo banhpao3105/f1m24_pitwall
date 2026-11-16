@@ -1522,7 +1522,15 @@ export function TyreLabView({
               them). */}
           <section
             aria-label={tWhat('simTitle')}
-            className="rounded-lg border border-line bg-panel p-4"
+            className="rounded-lg border border-line bg-panel p-4 transition-colors focus-within:border-teal/60"
+            style={{
+              /* v0.10.0 step 3 — the cyber accent, restrained: a faint 1px
+                 grid texture on the panel only (pure CSS gradients, no
+                 image/SVG), under the content, over the panel colour. */
+              backgroundImage:
+                'linear-gradient(rgba(34, 48, 65, 0.45) 1px, transparent 1px), linear-gradient(90deg, rgba(34, 48, 65, 0.45) 1px, transparent 1px)',
+              backgroundSize: '24px 24px',
+            }}
             data-testid="tyre-simulator"
           >
             <header className="mb-1.5 flex flex-wrap items-center gap-2">
@@ -1597,7 +1605,7 @@ export function TyreLabView({
                       'min-h-[44px] px-3 text-xs transition-colors',
                       idx === 0 && 'border-r border-line',
                       simCar === idx
-                        ? 'bg-teal/15 font-semibold text-teal'
+                        ? 'bg-teal/15 font-semibold text-teal hover:bg-teal/20'
                         : 'text-ink-soft hover:bg-raised',
                     )}
                     style={
@@ -1703,9 +1711,16 @@ export function TyreLabView({
                           : { type: 'spring', stiffness: 420, damping: 34 }
                       }
                       className={cn(
-                        'flex flex-wrap items-center gap-2 text-xs transition-shadow',
+                        'flex flex-wrap items-center gap-2 rounded-md pl-1.5 text-xs transition-shadow',
                         activeSimSeg === i ? 'ring-1 ring-inset ring-teal' : '',
                       )}
+                      style={{
+                        /* v0.10.0 step 3 — the row carries its compound on
+                           its sleeve: a 3px left border in the SELECTED
+                           compound colour (not colour-only — the segmented
+                           control and the range label still name it). */
+                        borderLeft: `3px solid ${COMPOUND_COLOUR[st.compound] ?? '#1d5f8a'}`,
+                      }}
                       data-testid={`sim-stint-row-${i}`}
                     >
                       <span className="w-8 font-mono text-ink-faint">#{i + 1}</span>
@@ -1734,7 +1749,7 @@ export function TyreLabView({
                               className={cn(
                                 'min-h-[44px] min-w-[40px] border-r border-line px-1.5 font-mono text-xs font-bold transition-colors last:border-r-0',
                                 active
-                                  ? 'text-ink'
+                                  ? 'text-ink hover:opacity-90'
                                   : 'text-ink-faint hover:bg-raised hover:text-ink-soft',
                               )}
                               style={
@@ -1865,7 +1880,7 @@ export function TyreLabView({
                 updateSim({ stints: [...simStints, { id: nextSimId(), compound: 'S', laps: 10 }] })
               }
               className={cn(
-                'mt-2 min-h-[32px] rounded border px-2.5 py-1 text-xs',
+                'mt-2 min-h-[32px] cursor-pointer rounded border px-2.5 py-1 text-xs transition-colors',
                 simStints.length >= 4
                   ? 'cursor-not-allowed border-line text-ink-faint'
                   : 'border-line text-ink-soft hover:bg-raised',
@@ -1984,7 +1999,7 @@ export function TyreLabView({
                       events: [...simEvents, { id: nextSimId(), mode: 'sc', startLap: simFirstPit, laps: 3 }],
                     })
                   }
-                  className="min-h-[32px] rounded border border-line px-2.5 py-1 text-xs text-ink-soft hover:bg-raised"
+                  className="min-h-[32px] cursor-pointer rounded border border-line px-2.5 py-1 text-xs text-ink-soft transition-colors hover:bg-raised"
                   data-testid="sim-add-event"
                 >
                   {tWhat('simAddEvent')}
@@ -2087,7 +2102,7 @@ export function TyreLabView({
                 onClick={() =>
                   updateSim({ rain: [...simRain, { id: nextSimId(), startLap: simFirstPit, laps: 10 }] })
                 }
-                className="mt-2 min-h-[32px] rounded border border-line px-2.5 py-1 text-xs text-ink-soft hover:bg-raised"
+                className="mt-2 min-h-[32px] cursor-pointer rounded border border-line px-2.5 py-1 text-xs text-ink-soft transition-colors hover:bg-raised"
                 data-testid="sim-add-rain"
               >
                 {tWhat('simAddRain')}

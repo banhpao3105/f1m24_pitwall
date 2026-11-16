@@ -457,6 +457,7 @@
     "simTitle": "Mô phỏng tự do",
     "simSubtitle": "Tự ráp chiến thuật, chèn SC/VSC và mưa — chỉ so với plan tốt nhất, không đổi lead/trail.",
     "simTimelineGoTo": "Tới stint {n} trong editor",
+    "simTimelineRainTag": "MƯA",
     "simCompoundGroup": "Hợp chất stint {n}",
     "simErrorSummary": "Lỗi cần sửa:",
     "simLapsField": "Số vòng stint {n}",

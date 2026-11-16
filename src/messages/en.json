@@ -457,6 +457,7 @@
     "simTitle": "Free-form simulator",
     "simSubtitle": "Assemble a strategy, drop in SC/VSC and rain — compared against the best plan only, lead/trail untouched.",
     "simTimelineGoTo": "Go to stint {n} in the editor",
+    "simTimelineRainTag": "RAIN",
     "simCompoundGroup": "Stint {n} compound",
     "simErrorSummary": "Errors to fix:",
     "simLapsField": "Stint {n} laps",
