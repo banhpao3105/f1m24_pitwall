@@ -24,6 +24,7 @@ import {
   type SimStintInput,
   type SCVSCScenario,
   type RainWindow,
+  type ManualPlanResult,
 } from '@/engines/tyre.engine';
 import { RecommendationCard } from './RecommendationCard';
 import { ConfidenceBadge } from './ConfidenceBadge';
@@ -59,6 +60,11 @@ const displayMeasured = (m: PaceMeasuredEntry | null) =>
 
 /** One stint of the user-assembled plan (builder input). */
 type SimCompoundKey = SimCompound;
+
+/** Stable identities for the "unseeded" slices — a fresh [] literal each
+ *  render would churn simResult's memo (and everything derived from it). */
+const SIM_NO_EVENTS: SCVSCScenario[] = [];
+const SIM_NO_RAIN: RainWindow[] = [];
 
 /** v0.9.7 — the simulator's editable draft: the seed key it was edited
  *  under + the three editor slices. Derivation, not an effect. */
@@ -235,16 +241,23 @@ export function TyreLabView({
   const simSeedKey = simSeedPlan
     ? `${race?.raceId ?? ''}@${simSeedPlan.stints.map((s) => `${s.compound}${s.laps}`).join('/')}`
     : '';
-  const simSeedStints: SimStintInput[] = simSeedPlan
-    ? simSeedPlan.stints.map((s) => ({
-        compound: s.compound as SimCompound,
-        laps: s.laps,
-      }))
-    : [];
+  /* the seed copy is memoized: same VALUES as before, but a stable identity
+     so simResult's memo (and the last-good effect below) only re-run when
+     the seed actually changes — not on every unrelated re-render. */
+  const simSeedStints: SimStintInput[] = useMemo(
+    () =>
+      simSeedPlan
+        ? simSeedPlan.stints.map((s) => ({
+            compound: s.compound as SimCompound,
+            laps: s.laps,
+          }))
+        : [],
+    [simSeedPlan],
+  );
   const simSeeded = simSeedKey !== '' && simDraft.seedKey === simSeedKey;
   const simStints = simSeeded ? simDraft.stints : simSeedStints;
-  const simEvents = simSeeded ? simDraft.events : [];
-  const simRain = simSeeded ? simDraft.rain : [];
+  const simEvents = simSeeded ? simDraft.events : SIM_NO_EVENTS;
+  const simRain = simSeeded ? simDraft.rain : SIM_NO_RAIN;
   /** Every edit writes through with the CURRENT seed key — an edit under an
       old seed adopts the new seed so the draft keeps applying. */
   const updateSim = (patch: Partial<Omit<SimDraft, 'seedKey'>>): void =>
@@ -263,12 +276,148 @@ export function TyreLabView({
       rain: simRain,
     });
   }, [model, race, simCar, simStints, simEvents, simRain]);
+  /* v0.9.9 — the last VALID sandbox price. An error draft renders the red
+     banner on top AND this result dimmed — the old behavior (errors
+     replacing the whole result) hid the numbers the user was iterating
+     on. Set DURING RENDER via the documented "adjust state when a value
+     changes" pattern (no effect → no cascading commit): whenever simResult
+     changes identity, remember it if it priced OK. If the seed itself were
+     invalid there is nothing to keep, and only the errors show. */
+  const [lastGoodSim, setLastGoodSim] = useState<
+    Extract<ManualPlanResult, { ok: true }> | null
+  >(null);
+  const [pricedSim, setPricedSim] = useState<ManualPlanResult | null>(null);
+  if (simResult !== pricedSim) {
+    setPricedSim(simResult);
+    if (simResult != null && simResult.ok) setLastGoodSim(simResult);
+  }
+  /* v0.9.9 — derived, stateless: the live draft's cumulative lap ranges
+     (S19/S19/M18 → V1–19 · V20–38 · V39–56), its lap sum (the live total
+     line) and its first pit lap — the sensible default start for a new
+     SC/VSC event or rain window (fallback: mid-race ⌈laps/2⌉ when the
+     draft has no pit at all). No new state — recomputed from simStints. */
+  const simLapsTotal = tyre?.data.laps ?? null;
+  const simSumLaps = simStints.reduce((s, st) => s + st.laps, 0);
+  /* cumulative boundaries, purely derived (≤4 stints, so the O(n²) reduce
+     is free): stint i runs from sum(laps[0..i-1])+1 to sum(laps[0..i]) */
+  const simRanges = simStints.map((_, i) => ({
+    from: simStints.slice(0, i).reduce((s, st) => s + st.laps, 0) + 1,
+    to: simStints.slice(0, i + 1).reduce((s, st) => s + st.laps, 0),
+  }));
+  /* the draft's FIRST pit lap = the first stint boundary (pits sit between
+     stints; a 1-stint draft has no pit → mid-race fallback ⌈laps/2⌉) */
+  const simFirstPit =
+    simStints.length > 1
+      ? Math.max(1, simStints[0]!.laps)
+      : simLapsTotal != null
+        ? Math.max(1, Math.ceil(simLapsTotal / 2))
+        : 1;
   /* the wet preset: buildWetPlan's stints become the builder's starting
      point — only when the save can build one at all */
   const wetPreset = useMemo(() => {
     if (!tyre?.data) return null;
     return buildWetPlan(model, tyre.data.laps, tyre.data.inventory);
   }, [model, tyre]);
+
+  /* v0.9.9 — one renderer for a valid sandbox price, shared verbatim by
+     the fresh face and the dimmed last-good face of the result area. */
+  const renderSimPlan = (res: Extract<ManualPlanResult, { ok: true }>) => (
+    <div className="space-y-2">
+      <p className="font-mono text-sm text-ink" data-testid="sim-plan-line">
+        {res.plan.stints.map((st) => `${st.compound}(${st.laps})`).join(' → ')}
+        {' — '}
+        {res.plan.stops} pit
+        {res.plan.pitLaps.length > 0
+          ? ` (${res.plan.pitLaps.map((p) => `V${p}`).join(', ')})`
+          : ''}
+      </p>
+      <p className="flex flex-wrap items-baseline gap-3">
+        <span className="font-mono text-base font-semibold text-ink" data-testid="sim-total">
+          {res.plan.timeS.toFixed(1)}s
+        </span>
+        {res.plan.wearS != null ? (
+          <span className="font-mono text-[10px] text-ink-faint" data-testid="sim-wear">
+            {t('split.wearCost', {
+              sign: res.plan.wearS > 0 ? '+' : '−',
+              time: Math.abs(res.plan.wearS).toFixed(1),
+            })}
+          </span>
+        ) : null}
+        {res.plan.vsBestS != null ? (
+          /* v0.9.9 — |vsBestS| < 0.05 (the SAME ±0.05 neutral band
+             the pit-shift chip already uses) is a TIE: the old ternary
+             rendered "−0.0s" for exactly zero. Outside the band the
+             signed format stands, unchanged. */
+          Math.abs(res.plan.vsBestS) < 0.05 ? (
+            <span
+              className="font-mono text-xs text-ink-soft"
+              data-testid="sim-vs-best"
+            >
+              {tWhat('simVsBestTie')}
+            </span>
+          ) : (
+            <span
+              className="font-mono text-xs text-amber"
+              data-testid="sim-vs-best"
+            >
+              {tWhat('simVsBest', {
+                delta: `${
+                  res.plan.vsBestS > 0 ? '+' : '−'
+                }${Math.abs(res.plan.vsBestS).toFixed(1)}`,
+              })}
+            </span>
+          )
+        ) : null}
+      </p>
+      <table className="w-full text-left text-xs" data-testid="sim-stint-table">
+        <thead>
+          <tr className="text-[10px] uppercase tracking-wide text-ink-faint">
+            <th className="py-1 pr-2 font-medium">{t('table.stint')}</th>
+            <th className="py-1 pr-2 font-medium">{t('table.compound')}</th>
+            <th className="py-1 pr-2 font-medium">{t('table.laps')}</th>
+            <th className="py-1 pr-2 font-medium">{t('table.range')}</th>
+            <th className="py-1 pr-2 font-medium">{t('inventory.setCol')}</th>
+            <th className="py-1 font-medium">{t('split.wearCost', { sign: '', time: '' }).split(':')[0]}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {res.plan.stints.map((st, i) => (
+            <tr key={i} className="border-t border-line">
+              <td className="py-1.5 pr-2 font-mono text-ink-faint">#{i + 1}</td>
+              <td className="py-1.5 pr-2">
+                <CompoundBadge compound={st.compound as CompoundKey} size="sm" showLabel />
+              </td>
+              <td className="py-1.5 pr-2 font-mono text-ink">{st.laps}</td>
+              <td className="py-1.5 pr-2 font-mono text-ink-soft">
+                {st.fromLap}–{st.toLap}
+              </td>
+              <td className="py-1.5 pr-2 font-mono text-[10px] text-ink-soft">
+                {st.setUsed && st.setUsed.fresh
+                  ? t('inventory.setFresh', { id: st.setUsed.tyreSetId, life: st.setUsed.life })
+                  : st.setUsed
+                    ? t('inventory.setUsed', { id: st.setUsed.tyreSetId, life: st.setUsed.life })
+                    : '—'}
+              </td>
+              <td className="py-1.5 font-mono text-[10px] text-ink-faint">
+                {st.wearS != null
+                  ? `${st.wearS > 0 ? '+' : '−'}${Math.abs(st.wearS).toFixed(1)}s`
+                  : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {res.assumptions.length > 0 ? (
+        <ul className="space-y-1 border-t border-line pt-2" data-testid="sim-assumptions">
+          {res.assumptions.map((a, i) => (
+            <li key={i} className="text-[11px] text-ink-faint">
+              — {a}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
 
   if (!race) {
     return (
@@ -1255,25 +1404,38 @@ export function TyreLabView({
               <SlidersHorizontal className="h-4 w-4 text-teal" aria-hidden="true" />
               <span className="font-mono text-[11px] uppercase tracking-wider text-teal">{tSec('whatif')}</span>
               <h3 className="text-[15px] font-semibold text-ink">{tWhat('simTitle')}</h3>
-              <button
-                type="button"
-                disabled={!wetPreset}
-                onClick={() => {
-                  if (!wetPreset) return;
-                  updateSim({
-                    stints: wetPreset.stints.map((s) => ({ compound: s.compound, laps: s.laps })),
-                  });
-                }}
-                className={cn(
-                  'ml-auto min-h-[32px] rounded border px-2.5 py-1 text-xs',
-                  wetPreset
-                    ? 'border-info bg-info/10 text-info hover:bg-info/20'
-                    : 'cursor-not-allowed border-line text-ink-faint',
-                )}
-                data-testid="sim-wet-preset"
-              >
-                {tWhat('simWetPreset')}
-              </button>
+              <div className="ml-auto flex gap-2">
+                <button
+                  type="button"
+                  disabled={!wetPreset}
+                  onClick={() => {
+                    if (!wetPreset) return;
+                    updateSim({
+                      stints: wetPreset.stints.map((s) => ({ compound: s.compound, laps: s.laps })),
+                    });
+                  }}
+                  className={cn(
+                    'min-h-[32px] rounded border px-2.5 py-1 text-xs',
+                    wetPreset
+                      ? 'border-info bg-info/10 text-info hover:bg-info/20'
+                      : 'cursor-not-allowed border-line text-ink-faint',
+                  )}
+                  data-testid="sim-wet-preset"
+                >
+                  {tWhat('simWetPreset')}
+                </button>
+                {/* v0.9.9 — one way back to the lead plan: re-seed the draft
+                    (seedKey '' makes the seed mechanism fall back to the
+                    fresh copy), events/rain empty. */}
+                <button
+                  type="button"
+                  onClick={() => setSimDraft({ seedKey: '', stints: [], events: [], rain: [] })}
+                  className="min-h-[32px] rounded border border-line px-2.5 py-1 text-xs text-ink-soft hover:bg-raised"
+                  data-testid="sim-reset"
+                >
+                  {tWhat('simReset')}
+                </button>
+              </div>
             </header>
             {!wetPreset ? (
               <p className="mb-3 rounded border border-line bg-surface px-3 py-2 text-[11px] text-ink-faint" data-testid="sim-no-wet-data">
@@ -1351,6 +1513,16 @@ export function TyreLabView({
                     className="min-h-[32px] w-16 rounded border border-line bg-surface px-2 py-1 font-mono text-xs text-ink"
                     data-testid={`sim-stint-${i}-laps`}
                   />
+                  {/* v0.9.9 — the unit + the LIVE lap range of this stint
+                      (cumulative from the draft): what the user must know
+                      before placing an SC/rain window over it. */}
+                  <span className="text-ink-faint">{tWhat('simLapsUnit')}</span>
+                  <span
+                    className="font-mono text-[10px] text-ink-faint"
+                    data-testid={`sim-stint-${i}-range`}
+                  >
+                    {st.laps > 0 ? `V${simRanges[i]!.from}–${simRanges[i]!.to}` : '—'}
+                  </span>
                   <button
                     type="button"
                     aria-label={tWhat('simDelete')}
@@ -1363,6 +1535,20 @@ export function TyreLabView({
                 </li>
               ))}
             </ul>
+            {/* v0.9.9 — the live lap total: updates per keystroke, neutral
+                when the draft sums to the race distance, red (with the
+                engine's own banner below) otherwise. */}
+            {simStints.length > 0 && simLapsTotal != null ? (
+              <p
+                className={cn(
+                  'mt-2 font-mono text-[11px]',
+                  simSumLaps === simLapsTotal ? 'text-ink-soft' : 'text-danger',
+                )}
+                data-testid="sim-total-laps"
+              >
+                {tWhat('simTotalLaps', { sum: simSumLaps, laps: simLapsTotal })}
+              </p>
+            ) : null}
             <button
               type="button"
               disabled={simStints.length >= 4}
@@ -1378,9 +1564,17 @@ export function TyreLabView({
               {tWhat('simAddStint')}
             </button>
 
-            {/* SC/VSC event timeline */}
+            {/* SC/VSC event timeline — v0.9.9: a titled list with visible
+                per-row labels ("từ vòng" / "dài … vòng") so which number is
+                which is no longer a guessing game. */}
             <div className="mt-4">
-              <ul className="space-y-2" data-testid="sim-events">
+              <p className="text-xs font-medium text-ink-soft">{tWhat('simEventsTitle')}</p>
+              {simEvents.length === 0 ? (
+                <p className="mt-1 text-[11px] text-ink-faint" data-testid="sim-events-empty">
+                  {tWhat('simEventsEmpty')}
+                </p>
+              ) : null}
+              <ul className="mt-2 space-y-2" data-testid="sim-events">
                 {simEvents.map((ev, i) => (
                   <li
                     key={i}
@@ -1419,6 +1613,7 @@ export function TyreLabView({
                       className="min-h-[32px] w-16 rounded border border-line bg-surface px-2 py-1 font-mono text-xs text-ink"
                       data-testid={`sim-event-${i}-start`}
                     />
+                    <span className="text-ink-faint">{tWhat('simLapsLong')}</span>
                     <input
                       type="number"
                       min={1}
@@ -1435,6 +1630,7 @@ export function TyreLabView({
                       className="min-h-[32px] w-16 rounded border border-line bg-surface px-2 py-1 font-mono text-xs text-ink"
                       data-testid={`sim-event-${i}-laps`}
                     />
+                    <span className="text-ink-faint">{tWhat('simLapsUnit')}</span>
                     <button
                       type="button"
                       aria-label={tWhat('simDelete')}
@@ -1448,10 +1644,14 @@ export function TyreLabView({
                 ))}
               </ul>
               <div className="mt-2 flex flex-wrap items-center gap-2">
+                {/* v0.9.9 — a new event starts at the draft's FIRST PIT (the
+                    only place a window can change anything), laps = 3. The
+                    old default (lap 1) sat where no pit exists and looked
+                    like a dead button. */}
                 <button
                   type="button"
                   onClick={() =>
-                    updateSim({ events: [...simEvents, { mode: 'sc', startLap: 1, laps: 3 }] })
+                    updateSim({ events: [...simEvents, { mode: 'sc', startLap: simFirstPit, laps: 3 }] })
                   }
                   className="min-h-[32px] rounded border border-line px-2.5 py-1 text-xs text-ink-soft hover:bg-raised"
                   data-testid="sim-add-event"
@@ -1467,9 +1667,16 @@ export function TyreLabView({
               </div>
             </div>
 
-            {/* rain windows */}
+            {/* rain windows — v0.9.9: titled, labelled, capped at the race
+                distance (the UI's own 20-lap cap was never an engine law). */}
             <div className="mt-4">
-              <ul className="space-y-2" data-testid="sim-rains">
+              <p className="text-xs font-medium text-ink-soft">{tWhat('simRainTitle')}</p>
+              {simRain.length === 0 ? (
+                <p className="mt-1 text-[11px] text-ink-faint" data-testid="sim-rain-empty">
+                  {tWhat('simRainEmpty')}
+                </p>
+              ) : null}
+              <ul className="mt-2 space-y-2" data-testid="sim-rains">
                 {simRain.map((rw, i) => (
                   <li
                     key={i}
@@ -1477,6 +1684,7 @@ export function TyreLabView({
                     data-testid={`sim-rain-row-${i}`}
                   >
                     <CloudRain className="h-3.5 w-3.5 text-info" aria-hidden="true" />
+                    <span className="text-ink-faint">{tWhat('simRainFromLap')}</span>
                     <input
                       type="number"
                       min={1}
@@ -1493,10 +1701,11 @@ export function TyreLabView({
                       className="min-h-[32px] w-16 rounded border border-line bg-surface px-2 py-1 font-mono text-xs text-ink"
                       data-testid={`sim-rain-${i}-start`}
                     />
+                    <span className="text-ink-faint">{tWhat('simLapsLong')}</span>
                     <input
                       type="number"
                       min={1}
-                      max={20}
+                      max={tyre?.data.laps ?? 999}
                       value={rw.laps}
                       aria-label={tWhat('scWindow', { laps: rw.laps })}
                       onChange={(e) =>
@@ -1509,6 +1718,7 @@ export function TyreLabView({
                       className="min-h-[32px] w-16 rounded border border-line bg-surface px-2 py-1 font-mono text-xs text-ink"
                       data-testid={`sim-rain-${i}-laps`}
                     />
+                    <span className="text-ink-faint">{tWhat('simLapsUnit')}</span>
                     <button
                       type="button"
                       aria-label={tWhat('simDelete')}
@@ -1521,128 +1731,56 @@ export function TyreLabView({
                   </li>
                 ))}
               </ul>
+              {/* v0.9.9 — a new rain window starts at the draft's first pit
+                  (the old [1,5] broke the untouched plan instantly) and
+                  spans 10 laps. */}
               <button
                 type="button"
-                onClick={() => updateSim({ rain: [...simRain, { startLap: 1, laps: 5 }] })}
+                onClick={() => updateSim({ rain: [...simRain, { startLap: simFirstPit, laps: 10 }] })}
                 className="mt-2 min-h-[32px] rounded border border-line px-2.5 py-1 text-xs text-ink-soft hover:bg-raised"
                 data-testid="sim-add-rain"
               >
                 {tWhat('simAddRain')}
               </button>
+              {simRain.length > 0 ? (
+                <p className="mt-1 text-[11px] text-ink-faint" data-testid="sim-rain-hint">
+                  {tWhat('simRainHint')}
+                </p>
+              ) : null}
             </div>
 
-            {/* the sandbox result — engine strings render verbatim */}
+            {/* the sandbox result — engine strings render verbatim.
+                v0.9.9: an invalid draft shows the red banner on top AND the
+                last valid result dimmed (opacity-60 + simStaleResult) — the
+                old behavior replaced the numbers with the error list, so the
+                user edited blind. */}
             <div className="mt-4 border-t border-line pt-3" data-testid="simulator-result">
               {simResult == null ? null : simResult.ok ? (
-                <div className="space-y-2">
-                  <p className="font-mono text-sm text-ink" data-testid="sim-plan-line">
-                    {simResult.plan.stints
-                      .map((st) => `${st.compound}(${st.laps})`)
-                      .join(' → ')}
-                    {' — '}
-                    {simResult.plan.stops} pit
-                    {simResult.plan.pitLaps.length > 0
-                      ? ` (${simResult.plan.pitLaps.map((p) => `V${p}`).join(', ')})`
-                      : ''}
-                  </p>
-                  <p className="flex flex-wrap items-baseline gap-3">
-                    <span className="font-mono text-base font-semibold text-ink" data-testid="sim-total">
-                      {simResult.plan.timeS.toFixed(1)}s
-                    </span>
-                    {simResult.plan.wearS != null ? (
-                      <span className="font-mono text-[10px] text-ink-faint" data-testid="sim-wear">
-                        {t('split.wearCost', {
-                          sign: simResult.plan.wearS > 0 ? '+' : '−',
-                          time: Math.abs(simResult.plan.wearS).toFixed(1),
-                        })}
-                      </span>
-                    ) : null}
-                    {simResult.plan.vsBestS != null ? (
-                      /* v0.9.9 — |vsBestS| < 0.05 (the SAME ±0.05 neutral band
-                         the pit-shift chip already uses) is a TIE: the old
-                         ternary rendered "−0.0s" for exactly zero. Outside the
-                         band the signed format stands, unchanged. */
-                      Math.abs(simResult.plan.vsBestS) < 0.05 ? (
-                        <span
-                          className="font-mono text-xs text-ink-soft"
-                          data-testid="sim-vs-best"
-                        >
-                          {tWhat('simVsBestTie')}
-                        </span>
-                      ) : (
-                        <span
-                          className="font-mono text-xs text-amber"
-                          data-testid="sim-vs-best"
-                        >
-                          {tWhat('simVsBest', {
-                            delta: `${
-                              simResult.plan.vsBestS > 0 ? '+' : '−'
-                            }${Math.abs(simResult.plan.vsBestS).toFixed(1)}`,
-                          })}
-                        </span>
-                      )
-                    ) : null}
-                  </p>
-                  <table className="w-full text-left text-xs" data-testid="sim-stint-table">
-                    <thead>
-                      <tr className="text-[10px] uppercase tracking-wide text-ink-faint">
-                        <th className="py-1 pr-2 font-medium">{t('table.stint')}</th>
-                        <th className="py-1 pr-2 font-medium">{t('table.compound')}</th>
-                        <th className="py-1 pr-2 font-medium">{t('table.laps')}</th>
-                        <th className="py-1 pr-2 font-medium">{t('table.range')}</th>
-                        <th className="py-1 pr-2 font-medium">{t('inventory.setCol')}</th>
-                        <th className="py-1 font-medium">{t('split.wearCost', { sign: '', time: '' }).split(':')[0]}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {simResult.plan.stints.map((st, i) => (
-                        <tr key={i} className="border-t border-line">
-                          <td className="py-1.5 pr-2 font-mono text-ink-faint">#{i + 1}</td>
-                          <td className="py-1.5 pr-2">
-                            <CompoundBadge compound={st.compound as CompoundKey} size="sm" showLabel />
-                          </td>
-                          <td className="py-1.5 pr-2 font-mono text-ink">{st.laps}</td>
-                          <td className="py-1.5 pr-2 font-mono text-ink-soft">
-                            {st.fromLap}–{st.toLap}
-                          </td>
-                          <td className="py-1.5 pr-2 font-mono text-[10px] text-ink-soft">
-                            {st.setUsed && st.setUsed.fresh
-                              ? t('inventory.setFresh', { id: st.setUsed.tyreSetId, life: st.setUsed.life })
-                              : st.setUsed
-                                ? t('inventory.setUsed', { id: st.setUsed.tyreSetId, life: st.setUsed.life })
-                                : '—'}
-                          </td>
-                          <td className="py-1.5 font-mono text-[10px] text-ink-faint">
-                            {st.wearS != null
-                              ? `${st.wearS > 0 ? '+' : '−'}${Math.abs(st.wearS).toFixed(1)}s`
-                              : '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {simResult.assumptions.length > 0 ? (
-                    <ul className="space-y-1 border-t border-line pt-2" data-testid="sim-assumptions">
-                      {simResult.assumptions.map((a, i) => (
-                        <li key={i} className="text-[11px] text-ink-faint">
-                          — {a}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
+                renderSimPlan(simResult)
               ) : (
-                <ul className="space-y-1" data-testid="sim-errors">
-                  {simResult.errors.map((e, i) => (
-                    <li
-                      key={i}
-                      className="rounded border border-danger/30 bg-danger/5 px-3 py-1.5 text-xs text-danger"
-                      data-testid={`sim-error-${i}`}
-                    >
-                      {e}
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <ul className="space-y-1" data-testid="sim-errors">
+                    {simResult.errors.map((e, i) => (
+                      <li
+                        key={i}
+                        className="rounded border border-danger/30 bg-danger/5 px-3 py-1.5 text-xs text-danger"
+                        data-testid={`sim-error-${i}`}
+                      >
+                        {e}
+                      </li>
+                    ))}
+                  </ul>
+                  {lastGoodSim != null ? (
+                    <div className="mt-3">
+                      <p className="text-[11px] text-amber" data-testid="sim-stale-note">
+                        {tWhat('simStaleResult')}
+                      </p>
+                      <div className="mt-2 opacity-60" data-testid="sim-stale-result">
+                        {renderSimPlan(lastGoodSim)}
+                      </div>
+                    </div>
+                  ) : null}
+                </>
               )}
             </div>
           </section>

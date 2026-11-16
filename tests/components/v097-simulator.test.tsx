@@ -12,6 +12,11 @@
  *   · M18 back over the rain window surfaces BOTH B4 engine errors
  *     verbatim (the UI never re-translates engine strings);
  *   · B1 + an SC[19,21] event reproduces B8: 93.2s.
+ *
+ * v0.9.9 — the editor-friendliness pass (UI only, engine untouched): live
+ * per-stint lap ranges + the live lap total, titled/labelled lists, the
+ * dimmed last-good result while the draft errors, sensible add defaults
+ * (first pit, not lap 1), the reset button, and the race-distance rain cap.
  */
 
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
@@ -207,5 +212,101 @@ describe('TyreLabView — the free-form simulator (v0.9.7, Shanghai save)', () =
     expect(screen.getByTestId('sim-total').textContent).toBe('100.4s');
     expect((screen.getByTestId('sim-stint-0-compound') as HTMLSelectElement).value).toBe('S');
     expect((screen.getByTestId('sim-stint-1-compound') as HTMLSelectElement).value).toBe('M');
+  });
+});
+
+describe('TyreLabView — the simulator editor (v0.9.9, Shanghai save)', () => {
+  const model: SaveModel = buildShanghaiModel();
+
+  it('each stint row shows its live lap range, the total line reads 56/56, and the two lists have titles + empty hints', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    // S19/S19/M18 → V1–19 · V20–38 · V39–56
+    expect(screen.getByTestId('sim-stint-0-range').textContent).toBe('V1–19');
+    expect(screen.getByTestId('sim-stint-1-range').textContent).toBe('V20–38');
+    expect(screen.getByTestId('sim-stint-2-range').textContent).toBe('V39–56');
+    // the live total, neutral at exactly the race distance
+    const total = screen.getByTestId('sim-total-laps');
+    expect(total.textContent).toBe('Tổng: 56/56 vòng');
+    expect(total.className).not.toContain('text-danger');
+    // titled lists with a hint while empty
+    expect(screen.getByText('Sự kiện SC/VSC')).toBeInTheDocument();
+    expect(screen.getByText('Cửa sổ mưa')).toBeInTheDocument();
+    expect(screen.getByTestId('sim-events-empty')).toBeInTheDocument();
+    expect(screen.getByTestId('sim-rain-empty')).toBeInTheDocument();
+    // the tie from step 1 still holds on the default draft
+    expect(screen.getByTestId('sim-vs-best').textContent).toBe('bằng best');
+  });
+
+  it('an invalid total shows the red total + the engine banner AND keeps the last valid result dimmed', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    setLaps(0, 10);
+
+    // the ranges track the draft live: 10/19/18 → V1–10 · V11–29 · V30–47
+    expect(screen.getByTestId('sim-stint-0-range').textContent).toBe('V1–10');
+    expect(screen.getByTestId('sim-stint-1-range').textContent).toBe('V11–29');
+    expect(screen.getByTestId('sim-stint-2-range').textContent).toBe('V30–47');
+
+    // red total + the ENGINE's own error string, verbatim
+    const total = screen.getByTestId('sim-total-laps');
+    expect(total.textContent).toBe('Tổng: 47/56 vòng');
+    expect(total.className).toContain('text-danger');
+    expect(screen.getByTestId('sim-error-0').textContent).toBe(
+      'tổng số vòng 47 ≠ 56 vòng của chặng',
+    );
+
+    // the last valid price survives: dimmed, with the stale note
+    expect(screen.getByTestId('sim-stale-note')).toBeInTheDocument();
+    const stale = screen.getByTestId('sim-stale-result');
+    expect(stale.className).toContain('opacity-60');
+    expect(within(stale).getByTestId('sim-total').textContent).toBe('83.1s');
+    expect(within(stale).getByTestId('sim-plan-line').textContent).toBe(
+      'S(19) → S(19) → M(18) — 2 pit (V19, V38)',
+    );
+  });
+
+  it('a new SC/VSC event defaults to the draft first pit (19, 3 laps); a new rain window to (19, 10 laps) with the race-distance cap', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    fireEvent.click(screen.getByTestId('sim-add-event'));
+    expect((screen.getByTestId('sim-event-0-start') as HTMLInputElement).value).toBe('19');
+    expect((screen.getByTestId('sim-event-0-laps') as HTMLInputElement).value).toBe('3');
+
+    fireEvent.click(screen.getByTestId('sim-add-rain'));
+    expect((screen.getByTestId('sim-rain-0-start') as HTMLInputElement).value).toBe('19');
+    expect((screen.getByTestId('sim-rain-0-laps') as HTMLInputElement).value).toBe('10');
+    // the cap is the race distance (56), NOT the old UI-only 20
+    expect(screen.getByTestId('sim-rain-0-laps').getAttribute('max')).toBe('56');
+    fireEvent.change(screen.getByTestId('sim-rain-0-laps'), { target: { value: '30' } });
+    expect((screen.getByTestId('sim-rain-0-laps') as HTMLInputElement).value).toBe('30');
+    // the wet hint appears with a window on screen
+    expect(screen.getByTestId('sim-rain-hint').textContent).toBe(
+      'Stint slick nào chạy trong cửa sổ mưa sẽ báo lỗi — đổi stint đó sang I hoặc W.',
+    );
+  });
+
+  it('"Về plan lead" re-seeds the draft: lead stints, empty lists, 83.1s', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    // dirty the draft first
+    setLaps(0, 10);
+    fireEvent.click(screen.getByTestId('sim-add-event'));
+    expect(screen.getByTestId('sim-event-0-start')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('sim-reset'));
+
+    expect((screen.getByTestId('sim-stint-0-laps') as HTMLInputElement).value).toBe('19');
+    expect((screen.getByTestId('sim-stint-1-laps') as HTMLInputElement).value).toBe('19');
+    expect((screen.getByTestId('sim-stint-2-laps') as HTMLInputElement).value).toBe('18');
+    expect(screen.queryByTestId('sim-event-0-start')).not.toBeInTheDocument();
+    expect(screen.getByTestId('sim-events-empty')).toBeInTheDocument();
+    expect(screen.getByTestId('sim-total').textContent).toBe('83.1s');
+    expect(screen.getByTestId('sim-vs-best').textContent).toBe('bằng best');
+    expect(screen.getByTestId('sim-total-laps').textContent).toBe('Tổng: 56/56 vòng');
   });
 });
