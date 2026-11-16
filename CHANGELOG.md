@@ -2,6 +2,100 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.9.5] — Fixture Interlagos về số thật + giá trị bị clamp không còn hiện như số đo
+
+Hai việc độc lập trong một release, cả hai là hậu kiểm của v0.9.3/v0.9.4 —
+engine không đổi một dòng (`src/` untouched).
+
+### (A) Fixture Interlagos về số thật: 96.6 → 96.2 (`c414f3d`)
+
+Quyết định (a) của Nguyen (2026-11-16): sửa fixture, không giữ số
+fixture-only. Audit hồi quy v0.9.4 phát hiện plan 4-stint SSMS/SMSS ở
+Interlagos là **96.6s trên fixture** nhưng **96.2s trên save thật**
+(`save2.sav`, Day 46698).
+
+**Nguyên nhân — lỗi fixture, không phải engine:**
+`tests/helpers/interlagos-fixture.ts` hardcode 2 bộ S fresh **đời 26** mà
+trên save thật **không tồn tại**. Số thật (đã đo trên `save2.sav`): Xe 1 có
+4 bộ S mới **#0/#2/#3/#4 tất cả đời 27**, Xe 2 có 3 bộ S mới tất cả đời 27;
+ELT S mới 70.30s. Stint S thứ 3 của plan 4-stint chạy bộ đời 27 = cap 27 →
+deg đúng 96.2s, **wear 0**.
+
+- Fixture: mọi đời 26 → 27; ID bộ S của xe 1 về đúng **#0/#2/#3/#4** — chính
+  là ID mà assignment §4 tên (S20 = #0, S20 = #2). Lưu ý cơ chế: với cả 4 bộ
+  cùng đời 27, nếu pool còn giữ ID #1 (fixture cũ) thì greedy stable sort sẽ
+  giao stint 2 cho #1 và phá invariant khóa "S20 = #0/#2" — ID thật là thứ
+  giữ assignment không đổi một cách tự nhiên. Cặp H dời #4/#5 → **#6/#7**
+  (S chiếm #0–#4 rồi, ID trùng trong 1 xe sẽ làm `wearCorrection` tra nhầm
+  bộ — game plan 121.5s sẽ nổ). M (#8 khóa / #9 mới) giữ nguyên.
+- Test top-6: `timeS [93.2, 93.2, 93.2, 96.2, 96.2, 105.6]`, `vsBestS
+  [0, 0, 0, 3.0, 3.0, 12.4]`, `strategies[3].wearS` undefined (correction 0
+  → field không tồn tại, giống SSH). Tên test bỏ "(wear +0.4)", comment v0.9.4
+  giải thích +0.4 (sai tiền đề) thay bằng note sửa.
+- Mục v0.9.4 dưới đây được sửa lại (đoạn "hiệu chỉnh HONEST +0.4s" sai tiền
+  đề) — gỡ mâu thuẫn nội bộ CHANGELOG (mục 0.9.3 ghi 96.2, mục 0.9.4 ghi
+  con số khác). Grep con số đó trên toàn repo → 0 match.
+- Không đổi engine, không đổi số nào khác (lead/trail/game/SSH giữ nguyên).
+
+### (B) Giá trị bị clamp không còn hiện như số đo (`1259d45`)
+
+Verify v0.9.3 trên Interlagos: engine PASS sạch (lead 93.2, trail 93.2,
+SSH 105.6 hạng #6, game plan 121.5, deltas model +0.55/+1.05, assumption
+clamp đúng chữ) — nhưng **2 mặt luôn hiện trên trang vẫn nói sai**, cùng 1
+mặt thứ 3 chưa đo được live:
+
+1. **Chip delta (evidence clock):** H hiện `đo được +1.12s — xếp hạng bằng
+   model`. +1.12 là giá trị **bị clamp** (M + 0.15), chưa bao giờ được đo;
+   số đo thật **+0.384s** nằm trong `paceMeasured.H.rawDelta` từ v0.6.1 —
+   view không đọc.
+2. **Dòng cảnh báo dưới bảng:** "…vì — chưa đo được ở track này (đã đo được:
+   M +0.97s, H +1.12s)…" — 3 lỗi một câu: dùng cụm cấm cho ca clamp, slot
+   trống gãy ngữ pháp, liệt kê clamp như số đo.
+3. **Bản nháp practice** (chưa có save mid-practice để đo live): chip draft
+   render `paceMeasured.delta` trực tiếp → pre-quali có clamp sẽ hiện
+   "+1.12s PRACTICE".
+
+**Root cause:** `paceMeasured[c].delta` là giá SAU clamp ("the ranking
+delta" thời v0.7.1). Sau v0.9.3, khi fallback kích hoạt thì ranking delta
+là hằng số model — `paceMeasured.delta` không còn là ranking delta, cũng
+không phải số đo thô; nó là giá trị đã bị loại, nhưng view vẫn render với
+nhãn "đo được".
+
+**Fix — view-only, một luật duy nhất** (`displayMeasured`): entry có
+`rawDelta` → hiện **giá trị thô** kèm dấu "bị loại"; entry không clamp →
+hiện `delta` như cũ (delta lúc đó CHÍNH là số đo).
+
+- Chip: key mới `clock.measuredButDiscarded` — H hiện `đo được +0.38s — bị
+  loại vì nhiễu, xếp hạng bằng model`; headline `+1.05s MODEL` không đổi;
+  chip M giữ nguyên (`đo được +0.97s — xếp hạng bằng model`).
+- Dòng cảnh báo: tách 2 nhóm trong các compound đang xếp hạng bằng model —
+  bị clamp (`H (+0.38s)`, rawDelta toFixed(2)) vs đo được thật (`M +0.97s`).
+  Có clamp → key mới `clock.clampedWarn`: *"Xếp hạng đang dùng hằng số model
+  cho cả M và H vì H (+0.38s) đo được nhưng bị loại vì nhiễu — đã đo được:
+  M +0.97s."* Không clamp → `unmeasuredWarn` cũ **nguyên văn** (MarinaBay:
+  cả hai thật sự chưa đo — câu cũ đúng). Nhãn "nhiễu" là nhãn chung; lý do
+  chính xác theo từng phía chỉ nằm trong engine assumption sau nút "Xem
+  bằng chứng" — không bịa lý do mới.
+- Draft: giá trị thô + hậu tố "(bị loại)" / "(discarded)" — kiểm bằng
+  component test (không có save mid-practice thật).
+- Khóa dữ liệu: test fixture Interlagos assert `paceMeasured.H = { delta:
+  1.12, rawDelta: 0.384 }` — engine không được đổi ngầm field mà view dựa vào.
+- Giữ nguyên: nhánh `measuredButForced` (dead code từ v0.9.3 — dọn là việc
+  khác), text `unmeasuredWarn`, behavior khi không có clamp, định dạng
+  toFixed(2) ở view vs toFixed(3) trong assumption (cố ý).
+
+### Số liệu / hồi quy
+
+- Interlagos (save2.sav): chip H "+0.38s … bị loại", dòng warn đúng câu DoD;
+  chuỗi "1.12" **0 match** trên toàn trang (kể cả sau "Xem bằng chứng");
+  "chưa đo được ở track này" biến mất khỏi trang Interlagos; số engine
+  không đổi (93.2 / 93.2 / 121.5 / SSH 105.6 hạng #6).
+- Monza: không có dòng warn (cả hai practice), chip không có dòng phụ.
+- MarinaBay: dòng warn giữ nguyên văn bản cũ (unmeasuredWarn) — khóa bằng
+  component test assert chuỗi nguyên văn.
+- 8 component test mới (ma trận: clamp 1 bên / cả hai / 1 usable + 1 chưa
+  đo / cả hai chưa đo / cả hai usable → không warn; draft; vi/en). 482/482.
+
 ## [0.9.4] — Bộ lốp đúng xe + nhãn mới/đã dùng + giá theo độ mòn
 
 Lỗi do Nguyen bắt trên save Vegas thật (`save1.sav`, Day 46712, chặng 208,
