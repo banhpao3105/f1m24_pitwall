@@ -83,6 +83,18 @@ describe('TyreLabView — the free-form simulator (v0.9.7, Shanghai save)', () =
     expect((screen.getByTestId('sim-stint-2-laps') as HTMLInputElement).value).toBe('18');
   });
 
+  // v0.9.9 step 1 — the lead plan IS the best on this fixture, so vsBestS is
+  // exactly 0: the tie renders "bằng best", and no signed "−0.0s" survives
+  // anywhere inside the simulator section.
+  it('a plan TIED with best renders the tie string — never "−0.0s"', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    const sim = screen.getByTestId('tyre-simulator');
+    expect(screen.getByTestId('sim-vs-best').textContent).toBe('bằng best');
+    expect(within(sim).queryAllByText(/−0\.0s/)).toHaveLength(0);
+  });
+
   it('B1 via the builder: S19/M18/M19 → 100.4s · plan line · #3 fresh / #7 used sets', () => {
     useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
     render(withI18n(<TyreLabView model={model} raceId={212} />));

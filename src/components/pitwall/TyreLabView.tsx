@@ -1558,13 +1558,29 @@ export function TyreLabView({
                       </span>
                     ) : null}
                     {simResult.plan.vsBestS != null ? (
-                      <span className="font-mono text-xs text-amber" data-testid="sim-vs-best">
-                        {tWhat('simVsBest', {
-                          delta: `${
-                            simResult.plan.vsBestS > 0 ? '+' : '−'
-                          }${Math.abs(simResult.plan.vsBestS).toFixed(1)}`,
-                        })}
-                      </span>
+                      /* v0.9.9 — |vsBestS| < 0.05 (the SAME ±0.05 neutral band
+                         the pit-shift chip already uses) is a TIE: the old
+                         ternary rendered "−0.0s" for exactly zero. Outside the
+                         band the signed format stands, unchanged. */
+                      Math.abs(simResult.plan.vsBestS) < 0.05 ? (
+                        <span
+                          className="font-mono text-xs text-ink-soft"
+                          data-testid="sim-vs-best"
+                        >
+                          {tWhat('simVsBestTie')}
+                        </span>
+                      ) : (
+                        <span
+                          className="font-mono text-xs text-amber"
+                          data-testid="sim-vs-best"
+                        >
+                          {tWhat('simVsBest', {
+                            delta: `${
+                              simResult.plan.vsBestS > 0 ? '+' : '−'
+                            }${Math.abs(simResult.plan.vsBestS).toFixed(1)}`,
+                          })}
+                        </span>
+                      )
                     ) : null}
                   </p>
                   <table className="w-full text-left text-xs" data-testid="sim-stint-table">

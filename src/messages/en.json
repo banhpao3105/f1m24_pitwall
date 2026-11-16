@@ -460,6 +460,7 @@
     "simAddRain": "Add rain window",
     "simWetPreset": "Load wet plan (I→W)",
     "simVsBest": "{delta}s vs best",
+    "simVsBestTie": "tied with best",
     "simAssumpRatio": "A pit inside an SC/VSC window prices at the track's real columns (SC = green × SC/pit; VSC = the green↔SC midpoint) — the same law as the SC/VSC what-if card.",
     "simOverlap": "A pit inside two overlapping windows takes the cheapest one (never stacked).",
     "simNoWetData": "The save has no wet allocation (I/W) — no wet plan to load.",
