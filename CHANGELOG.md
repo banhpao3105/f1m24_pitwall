@@ -2,6 +2,140 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.9.7] — Mô phỏng tự do: Strategy Builder + multi-SC/VSC timeline + Inter/rain
+
+Ba món trong một section mới của Tyre Lab ("Mô phỏng tự do", đặt SAU 3
+section what-if cũ — additive only, sandbox riêng không đụng lead/trail/
+best/game). Phát hiện nền tảng (đo trên save thật, không phải giả định):
+**game CÓ pace lốp mưa** — `Save_CarTyreAllocation.EstimatedLapTime` của
+các bộ Inter/Wet fresh mang pace trên đường ướt theo game, nên KHÔNG cần
+slider "Inter chậm hơn Soft bao nhiêu" do user nhập:
+
+- Shanghai 2028 (`autosave-5.sav`): S fresh ELT trung vị **94.24s** (n=38)
+  · I **101.57s** (n=110) → **I +7.33s** · W **112.33s** (n=66) →
+  **W +18.10s** · đời I 84 / W 109. Kho lốp mưa mỗi xe: I #12–#16 fresh
+  đời 82 ×5, W #17–#19 fresh đời 107 ×3, tất cả `AvailabilityState = 0`.
+- Vegas 2027 (`save1.sav`): S **97.86s** (n=39) · I **106.49s** (n=110) →
+  **I +8.63s** · W **118.21s** (n=44) → **W +20.35s** · đời I 99 / W 128.
+  Vegas: I #13–#17 fresh đời 91 ×5, W #18–#19 fresh đời 118 ×2.
+- Trong 1 save, mọi bộ cùng compound có ELT giống hệt nhau (kể cả bộ đã
+  dùng: Shanghai S #1 đã dùng ELT 94.24 = đúng trung vị fresh; M #7 đã
+  dùng ELT 94.63 = đúng trung vị fresh) — phần pace của wear correction
+  bằng 0 với các bộ này.
+
+Cơ sở engine dùng lại, không viết lại: `assignSetsForCar` (v0.9.1, generic
+trên S/M/H/I/W) · `wearCorrection` (v0.9.4) · cap theo xe (`priceOn`
+v0.9.4). `evaluateStrategy`, `buildTyreLab`, lead/trail/best/game, DEG
+constants, `whatIfSCVSC` và 8 test của nó — không đổi một dòng.
+
+### Bước 1 — Strategy Builder + Inter/rain (`f4729d1`)
+
+- `priceManualPlan(model, raceId, carIndex, stints, opts?)`: định giá plan
+  user tự lắp trên **chính kho lốp của xe đó** (cap xe = cơ sở execution y
+  hệt `priceOn`; I/W không có per-car cap → đời trung vị fresh toàn
+  trường). Validate thu thập TẤT CẢ lỗi cùng lúc (tổng vòng ≠ chặng, stint
+  < 4, slick trong mưa, thiếu cột SC/pit, thiếu allocation mưa) rồi mới
+  chạy set assignment (lỗi assignment trả riêng 1 diagnostic).
+- `priceFixedStints`: định giá stint CỐ ĐỊNH (không tối ưu lại split —
+  khác `evaluateStrategy`); plan 1 stint (no-stop) và plan toàn I/W hợp
+  lệ (dry rule không áp dụng).
+- `pitCostAtLap(lap, green, trackCols, events)`: giá pit dưới timeline sự
+  kiện — **cheapest covering window wins** (chồng lấn không cộng dồn,
+  assumption gán nhãn khi thực sự xảy ra); tỉ lệ y hệt v0.9.2: SC = green
+  × clamp(SC/Pit, 0, 1), VSC = trung điểm green↔SC.
+- `wetPace(model)`: trung vị ELT fresh I/W toàn trường (cùng luật fresh
+  với `getAllocationPace`) — pace mưa của game, không bịa số; save thiếu
+  allocation mưa → Inter tắt với lỗi rõ ràng.
+- `SIM_DEG`: deg I/W **mượn curve của M** (save không có hằng số deg cho
+  lốp mưa — giả định gán nhãn, engine trả assumption nguyên văn); KHÔNG
+  bịa hằng số deg riêng, KHÔNG slider pace.
+- Type accommodation, pricing law byte-identical: `DegConstants` /
+  `AllocationPace` thêm slot I/W optional; `stintDegPenaltyWith` nhận I/W
+  (`?? 0` giữ nguyên đường oracle); `wearCorrection` nhận stint I/W.
+
+**DoD Bước 1 — 11 case, tất cả khớp số đo trên save thật:**
+
+| Case | Kết quả |
+|---|---|
+| B1 Shanghai Xe 1: S19/M18/M19 | **100.4s, wear −0.4, vsBest +17.3**, pits [19,37], base 100.8; sets S19=#3f w−0.8, M18=#7u w+0.5, M19=#9f w−0.1 |
+| B2 M13/S13/M13/M17 | INFEASIBLE: `cần 3 stint M nhưng xe chỉ có 2 bộ M khả dụng` |
+| B3 S28/I11/S17 + rain [29,39] | **160.2s, wear −0.9, vsBest +77.1**, base 161.1; đúng 2 assumptions (pace ELT + deg M-curve) |
+| B4 S19/M18/S19 + rain [29,39] | INFEASIBLE, đúng 2 lỗi slick-trong-mưa (stint M 20–37, stint S 38–56) |
+| B5 S19/I18/S19 (không mưa) | **191.6s, wear −1.6, vsBest +108.5**, base 193.2; đúng 3 assumptions (thêm cận-dưới-khô) |
+| B6 H56 (no-stop) | **353.8s, wear ABSENT (0), vsBest +270.7**, pits []; set H56=#10f |
+| B7 S19/M18 | INFEASIBLE: `tổng số vòng 37 ≠ 56 vòng của chặng` |
+| B8 B1 + SC [19,21] | **93.2s, vsBest +10.1** (pit 19 hưởng SC cost 13.455s) |
+| V1 Vegas Xe 2: M24/S13/S13 | **75.7s, wear +0.2, vsBest +3.0, base 75.5 — BẰNG ĐÚNG card trail**; sets M24=#8f, S13=#0u w+0.1, S13=#3u w+0.1 |
+| V2 S19/M15/S16 | INFEASIBLE: `stint S dài nhất 19 vòng vượt đời bộ S thứ 1 (18 vòng)` |
+| V3 M19/I10/M21 + rain [20,29] | **155.9s, wear ABSENT, vsBest +83.2**, pits [19,29]; sets M19=#9f, I10=#13f, M21=#8f |
+
+### Bước 2 — Multi SC/VSC timeline (`dac6aa5`)
+
+- `whatIfSCVSCMulti(model, raceId, scenarios)`: tổng quát hóa v0.9.2 thành
+  danh sách cửa sổ, dùng lại `pitCostAtLap` (cheapest-wins). Re-price đúng
+  top 6 plan, sort theo `scenarioTimeS`; discount từng pit cộng chưa-làm-
+  tròn rồi mới làm tròn tổng (M1: 7.245 + 3.6225 = **10.9**, không phải
+  7.2 + 3.6 = 10.8). Assumptions: `scRatio` chỉ khi có ≥1 SC; `vscMidpoint`
+  chỉ khi có ≥1 VSC; `repricedOnly` + `userWindows {count}` luôn có.
+- **`whatIfSCVSC` (single-window, v0.9.2) giữ nguyên 100%** — function,
+  type, và cả 8 test không động vào; multi với đúng 1 cửa sổ cho rows
+  identical (M3) — chứng minh đây là tổng quát hóa thuần túy.
+
+**DoD Bước 2:** Shanghai SC cost **13.5s** (20.7 × 13/20), VSC **17.1s**
+(20.7 × 0.825); MarinaBay SC 11.4s, VSC 16.1s (như v0.9.2).
+
+| Case | Kết quả |
+|---|---|
+| M1 Shanghai SC[17,19] + VSC[37,39] | SSM/SMS/MSS **72.2** (saved **10.9**, 2 stops); SSH/SHS/HSS **72.6** (10.9, 2) |
+| M2 SC[17,19] + VSC[18,20] (chồng lấn) | mọi row saved **7.2** (pit 19 lấy giá SC rẻ nhất, không cộng dồn); SSM family 75.9, SSH family 76.3 |
+| M3 Shanghai multi [SC 17,19] | rows **identical** với `whatIfSCVSC` single: [75.9×3, 76.3×3] |
+| MB1 MarinaBay single SC[17,19] (hàm cũ) | Lead **87.8s** — không đổi so với v0.9.2 |
+| MB2 MarinaBay multi [SC 17,19] | rows identical với MB1 |
+| MB3 SC[17,19] + VSC[27,44] | SSM **83.2** (13.9, 2) · SMS **83.2** (13.9, 2) · MSS **87.8** (9.3, 2 — CẢ 2 pit nằm trong cửa sổ VSC 27–44: 2 × 4.6397 = 9.2793) · SSMS **92.9** (4.6, 1) · SMSS **92.9** (4.6, 1) · SMH **97.3** (4.6, 1) |
+
+### Bước 3 — UI "Mô phỏng tự do" (`555b1ed`)
+
+- Section mới `data-testid="tyre-simulator"` sau 3 what-if cũ; sandbox
+  riêng: state local (không persist), kết quả không chạm lead/trail/best/
+  game, chỉ so vsBest.
+- Controls: chọn xe (label từ kho, seat verified hiện tên tay đua), stint
+  editor (compound S/M/H/I/W + số vòng, tối đa 4 stint, 1 stint = no-stop
+  hợp lệ), events SC/VSC (mode + vòng bắt đầu + độ dài ≤ 20), rain
+  windows, preset 1 click "Load plan mưa (I→W)" từ `buildWetPlan` (thiếu
+  allocation → nút tắt + `simNoWetData`).
+- Mặc định: xe = Xe 1, stints = copy của lead plan (user sửa từ plan được
+  đề xuất), events/rain rỗng — seed bằng derivation, không dùng effect
+  (draft mang seed key nó được sửa dưới, đổi chặng/plan tự re-seed).
+- Result card: dòng plan `"S(19) → M(18) → M(19) — 2 pit (V19, V37)"`,
+  tổng thời gian, wear (chỉ khi có), vsBest, bảng stint với label bộ
+  (`setFresh`/`setUsed` tái dùng) + wear từng stint, assumptions nguyên
+  văn. Lỗi engine nguyên văn — UI không dịch lại, cả 2 locale.
+- i18n: 11 key mới dưới `whatif` (vi + en).
+- Live UI (Agent Browser): app shell + Tyre Lab tải 0 console error; card
+  trail Vegas SMS 75.7s không đổi (suite khóa); builder Vegas Xe 2
+  M24/S13/S13 → 75.7s (khớp card trail) — locked bởi component test;
+  save thật Shanghai/Vegas không có trên cây build (như các vòng verify
+  trước) — audit script in đúng số khi chạy trên máy có save.
+
+### Tests + hồi quy
+
+- Suite: **518/518** (482 cũ + 21 sim + 10 multi-SC + 5 UI simulator);
+  lint + tsc + build sạch.
+- Fixture mới `tests/helpers/shanghai-2028-fixture.ts` (owner-verified
+  autosave-5.sav): race 212, 56 vòng, pit 20 / green 18 / SC 13 / chance
+  1.00, lives S27/M41/H60, deltas M +1.21 / H +1.25, kho 2 xe đúng bảng
+  §1.5, game plan M→H pit 27 = **104s** (wear −0.4); baseline lab khớp
+  v0.9.6: lead SSM 83.1 (wear −1.7), trail MSS 83.1 diff-compound, tie.
+  Vegas fixture thêm đúng kho mưa thật (I 91 ×5 / W 118 ×2 mỗi xe, AI
+  99/128 → trung vị trường 99/128, n=110/44 đúng §0).
+- Hồi quy không đổi số nào: MarinaBay lead/trail **97.1s** game **103.7s**
+  · Monza **57.6s** game **75.0s** · Interlagos lead/trail **93.2s** game
+  **121.5s** (4-stint 96.2) · Vegas lead **72.2s** trail **75.7s** game
+  **73.4s** · Shanghai lead/trail **83.1s** game **104s**.
+- Một assertion v094 được scope lại vào 2 card per-car: sandbox của
+  simulator seed bảng stint riêng từ lead plan nên #1 xuất hiện HỢP LỆ ở
+  đó — guarantee "khoá S #1 không bao giờ hiện" thuộc về card per-car.
+
 ## [0.9.6] — Luật trail pit-gap: 3 vòng → không trùng vòng
 
 Quyết định của user (2026-11-16) sau câu hỏi ở Shanghai 2028 (save
