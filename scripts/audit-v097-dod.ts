@@ -18,8 +18,15 @@
  */
 import { readFileSync } from 'node:fs';
 import { runParsePipeline } from '../src/parser/pipeline';
-import { buildTyreLab, wetPace, priceManualPlan } from '../src/engines/tyre.engine';
+import {
+  buildTyreLab,
+  wetPace,
+  priceManualPlan,
+  whatIfSCVSC,
+  whatIfSCVSCMulti,
+} from '../src/engines/tyre.engine';
 import type { SaveModel } from '../src/domain/types';
+import type { SCVSCScenario } from '../src/engines/tyre.engine';
 
 const SQL_WASM = '/home/z/my-project/node_modules/sql.js/dist/sql-wasm.wasm';
 
@@ -142,10 +149,54 @@ async function main() {
   ];
   if (cases.length === 0) {
     console.log('  (no §1.5 builder cases mapped for this track)');
-    return;
+  } else {
+    console.log(`  builder cases (${cases.length}):`);
+    for (const c of cases) printCase(model, target.raceId, c.car, c);
   }
-  console.log(`  builder cases (${cases.length}):`);
-  for (const c of cases) printCase(model, target.raceId, c.car, c);
+
+  /* ── §2.4 — the multi-SC/VSC DoD battery ───────────────────────────────── */
+  const multiCases: { name: string; scenarios: SCVSCScenario[] }[] = [];
+  if (track.includes('shanghai')) {
+    multiCases.push(
+      { name: 'M1  SC[17,19]+VSC[37,39]', scenarios: [{ mode: 'sc', startLap: 17, laps: 3 }, { mode: 'vsc', startLap: 37, laps: 3 }] },
+      { name: 'M2  SC[17,19]+VSC[18,20] (overlap)', scenarios: [{ mode: 'sc', startLap: 17, laps: 3 }, { mode: 'vsc', startLap: 18, laps: 3 }] },
+      { name: 'M3  SC[17,19] (single, must equal whatIfSCVSC)', scenarios: [{ mode: 'sc', startLap: 17, laps: 3 }] },
+    );
+  }
+  if (track.includes('marina')) {
+    multiCases.push(
+      { name: 'MB2 SC[17,19] (single, must equal whatIfSCVSC)', scenarios: [{ mode: 'sc', startLap: 17, laps: 3 }] },
+      { name: 'MB3 SC[17,19]+VSC[27,44]', scenarios: [{ mode: 'sc', startLap: 17, laps: 3 }, { mode: 'vsc', startLap: 27, laps: 18 }] },
+    );
+  }
+  for (const mc of multiCases) {
+    const single = whatIfSCVSC(model, target.raceId, mc.scenarios[0]!);
+    const multi = whatIfSCVSCMulti(model, target.raceId, mc.scenarios);
+    if (!multi) {
+      console.log(`  ${mc.name}: null (no track cols / lab not ready)`);
+      continue;
+    }
+    console.log(
+      `  ${mc.name}: pitCosts sc ${multi.pitCosts.sc} / vsc ${multi.pitCosts.vsc}`,
+    );
+    for (const r of multi.rows) {
+      const same =
+        single && mc.scenarios.length === 1
+          ? single.rows.find((s) => s.order.join('→') === r.order.join('→'))
+          : undefined;
+      const ident =
+        same != null &&
+        same.scenarioTimeS === r.scenarioTimeS &&
+        same.savedS === r.savedS &&
+        same.stopsInWindow === r.stopsInWindows
+          ? '  == single'
+          : '';
+      console.log(
+        `      ${r.order.join('→')} ${r.greenTimeS.toFixed(1)} → ${r.scenarioTimeS.toFixed(1)} ` +
+          `(saved ${r.savedS}, ${r.stopsInWindows} in windows)${ident}`,
+      );
+    }
+  }
 }
 
 main().catch((e) => {

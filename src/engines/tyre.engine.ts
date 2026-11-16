@@ -2853,3 +2853,145 @@ export function priceManualPlan(
   };
   return { ok: true, plan, carLabel: car.label, assumptions };
 }
+
+/* ── v0.9.7 — the multi-window SC/VSC what-if (timeline generalization) ──── */
+
+/** One re-priced plan row under a multi-window SC/VSC timeline. */
+export interface SCVSCMultiRow {
+  order: Compound[];
+  stops: number;
+  pitLaps: number[];
+  stints: PlannedStint[];
+  /** The lab's own green-flag number (unchanged). */
+  greenTimeS: number;
+  /** Green time with every in-window stop at its window's pit cost. */
+  scenarioTimeS: number;
+  /** greenTimeS − scenarioTimeS, rounded 0.1 (positive = saved). */
+  savedS: number;
+  /** How many of the plan's pits land in ANY user window. */
+  stopsInWindows: number;
+}
+
+export interface SCVSCMultiWhatIf {
+  scenarios: SCVSCScenario[];
+  laps: number;
+  /** The lab's green pit cost — engine-calibrated, UNCHANGED by this what-if. */
+  pitCostGreenS: number;
+  /** Green cost scaled by the track's real columns (rounded 0.1). */
+  pitCosts: { sc: number; vsc: number };
+  /** The raw Races_Tracks columns the scaling comes from (game seconds). */
+  trackCols: { pitLaneS: number; greenFlagS: number; scS: number; chance: number };
+  /** The lab's surviving plans re-priced, sorted by scenario time. */
+  rows: SCVSCMultiRow[];
+  assumptions: Array<{
+    key: SCVSCAssumptionKey | 'userWindows';
+    params: Record<string, string | number>;
+  }>;
+}
+
+/**
+ * Re-prices the tyre lab's surviving plans under a TIMELINE of SC/VSC
+ * windows — the v0.9.2 single-window what-if generalized to a list, reusing
+ * `pitCostAtLap` (cheapest covering window wins; an overlap never stacks).
+ * Each plan keeps its rank and its v0.9.1 feasibility; only the pit costs
+ * inside the windows move (same law as v0.9.2 — no new plan can appear).
+ *
+ * Rounding follows the single-window function exactly: the per-pit
+ * discounts are summed UNROUNDED and only the totals round (M1 DoD:
+ * 7.245 + 3.6225 = 10.8675 → saved 10.9, never 7.2 + 3.6 = 10.8).
+ *
+ * `whatIfSCVSC` (single window) stays UNTOUCHED — it is verified on a real
+ * save; the multi is an addition, and with exactly one window it produces
+ * identical rows (locked by test M3).
+ *
+ * Returns null when the save lacks the track columns, the lab is not
+ * ready, there is no plan to re-price, or the timeline is empty.
+ */
+export function whatIfSCVSCMulti(
+  model: SaveModel,
+  raceId: number,
+  scenarios: SCVSCScenario[],
+): SCVSCMultiWhatIf | null {
+  if (scenarios.length === 0) return null;
+  const race = model.races.find((r) => r.raceId === raceId) ?? null;
+  if (
+    !race ||
+    race.trackPitLaneTimeLossS == null ||
+    race.trackSafetyCarTimeLossS == null ||
+    race.trackPitLaneTimeLossS <= 0
+  ) {
+    return null;
+  }
+  const lab = buildTyreLab(model, raceId);
+  const d = lab.data;
+  if (!d || !d.readiness.ready || d.strategies.length === 0) return null;
+
+  const trackCols = {
+    pitLaneS: race.trackPitLaneTimeLossS,
+    greenFlagS: race.trackGreenFlagTimeLossS ?? 0,
+    scS: race.trackSafetyCarTimeLossS,
+    chance: race.trackSafetyCarChance ?? 0,
+  };
+  const ratio = clamp(trackCols.scS / trackCols.pitLaneS, 0, 1);
+  const scCost = d.pitCostS * ratio;
+  const vscCost = d.pitCostS * (1 - (1 - ratio) / 2);
+
+  const rows: SCVSCMultiRow[] = d.strategies
+    .map((plan) => {
+      let discountSum = 0;
+      let stopsInWindows = 0;
+      for (const pl of plan.pitLaps) {
+        const cost = pitCostAtLap(pl, d.pitCostS, trackCols, scenarios);
+        if (cost < d.pitCostS) {
+          discountSum += d.pitCostS - cost;
+          stopsInWindows++;
+        }
+      }
+      const scenarioTimeS = plan.timeS - discountSum;
+      return {
+        order: plan.order,
+        stops: plan.stops,
+        pitLaps: plan.pitLaps,
+        stints: plan.stints,
+        greenTimeS: plan.timeS,
+        scenarioTimeS: Math.round(scenarioTimeS * 10) / 10,
+        savedS: Math.round(discountSum * 10) / 10,
+        stopsInWindows,
+      };
+    })
+    .sort((a, b) => a.scenarioTimeS - b.scenarioTimeS);
+
+  const assumptions: SCVSCMultiWhatIf['assumptions'] = [];
+  if (scenarios.some((s) => s.mode === 'sc')) {
+    assumptions.push({
+      key: 'scRatio',
+      params: {
+        sc: trackCols.scS,
+        pit: trackCols.pitLaneS,
+        green: d.pitCostS.toFixed(1),
+        cost: scCost.toFixed(1),
+      },
+    });
+  }
+  if (scenarios.some((s) => s.mode === 'vsc')) {
+    assumptions.push({
+      key: 'vscMidpoint',
+      params: { cost: vscCost.toFixed(1) },
+    });
+  }
+  assumptions.push({ key: 'repricedOnly', params: {} });
+  assumptions.push({ key: 'userWindows', params: { count: scenarios.length } });
+
+  return {
+    scenarios,
+    laps: d.laps,
+    pitCostGreenS: d.pitCostS,
+    pitCosts: {
+      sc: Math.round(scCost * 10) / 10,
+      vsc: Math.round(vscCost * 10) / 10,
+    },
+    trackCols,
+    rows,
+    assumptions,
+  };
+}
