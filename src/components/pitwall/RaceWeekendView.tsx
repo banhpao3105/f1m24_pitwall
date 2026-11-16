@@ -119,7 +119,7 @@ export function RaceWeekendView({
               <span className="mt-1 flex flex-wrap items-center gap-3 font-mono text-[11px] text-ink-soft">
                 <span className="flex items-center gap-1">
                   <Thermometer className="h-3 w-3" aria-hidden="true" />
-                  {race.weather.raceTempC ?? '—'}°C
+                  {race.weather.raceTempC != null ? race.weather.raceTempC.toFixed(1) : '—'}°C
                 </span>
                 <span className={`flex items-center gap-1 ${race.weather.raceRain ? 'text-info' : ''}`}>
                   <CloudRain className="h-3 w-3" aria-hidden="true" />

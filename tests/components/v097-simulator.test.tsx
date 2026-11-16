@@ -235,6 +235,10 @@ describe('TyreLabView — the simulator editor (v0.9.9, Shanghai save)', () => {
     expect(screen.getByText('Cửa sổ mưa')).toBeInTheDocument();
     expect(screen.getByTestId('sim-events-empty')).toBeInTheDocument();
     expect(screen.getByTestId('sim-rain-empty')).toBeInTheDocument();
+    // the sandbox's one-line contract (v0.9.9 step 3)
+    expect(screen.getByTestId('sim-subtitle').textContent).toBe(
+      'Tự ráp chiến thuật, chèn SC/VSC và mưa — chỉ so với plan tốt nhất, không đổi lead/trail.',
+    );
     // the tie from step 1 still holds on the default draft
     expect(screen.getByTestId('sim-vs-best').textContent).toBe('bằng best');
   });
@@ -275,6 +279,10 @@ describe('TyreLabView — the simulator editor (v0.9.9, Shanghai save)', () => {
     fireEvent.click(screen.getByTestId('sim-add-event'));
     expect((screen.getByTestId('sim-event-0-start') as HTMLInputElement).value).toBe('19');
     expect((screen.getByTestId('sim-event-0-laps') as HTMLInputElement).value).toBe('3');
+    // visible row labels (v0.9.9): "từ vòng" before start, "dài … vòng" around laps
+    expect(screen.getByTestId('sim-event-row-0').textContent).toContain('từ vòng');
+    expect(screen.getByTestId('sim-event-row-0').textContent).toContain('dài');
+    expect(screen.getByTestId('sim-event-row-0').textContent).toContain('vòng');
 
     fireEvent.click(screen.getByTestId('sim-add-rain'));
     expect((screen.getByTestId('sim-rain-0-start') as HTMLInputElement).value).toBe('19');

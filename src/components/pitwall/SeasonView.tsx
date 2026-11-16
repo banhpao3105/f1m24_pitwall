@@ -323,7 +323,7 @@ export function SeasonView({ model }: { model: SaveModel }) {
                   </td>
                   <td className="px-2 py-1.5 font-mono text-ink-soft">{r.laps ?? '—'}</td>
                   <td className="px-2 py-1.5 font-mono text-ink-soft">
-                    {r.weather?.raceTempC != null ? `${r.weather.raceTempC}°C` : '—'}
+                    {r.weather?.raceTempC != null ? `${r.weather.raceTempC.toFixed(1)}°C` : '—'}
                   </td>
                   <td className="px-2 py-1.5 text-ink">
                     {r.state === 2 ? winnerOf(r.raceId) : '—'}

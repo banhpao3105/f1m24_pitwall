@@ -129,7 +129,12 @@ function PitWallSurface() {
                     data-testid="header-weather"
                   >
                     <Thermometer className="h-3 w-3 text-amber" aria-hidden="true" />
-                    {nextRace.weather.raceTempC ?? '—'}°C
+                    {/* v0.9.9 — one decimal, like the Gazette's dateline — the
+                        raw float "24.166248321533203°C" was unusable */}
+                    {nextRace.weather.raceTempC != null
+                      ? nextRace.weather.raceTempC.toFixed(1)
+                      : '—'}
+                    °C
                     <span aria-hidden="true">·</span>
                     {nextRace.weather.raceRain ? (
                       <>

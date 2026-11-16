@@ -8,7 +8,7 @@
 
 import { useTranslations, useLocale } from 'next-intl';
 import { useMemo, useState, useEffect, useRef } from 'react';
-import { Waves, SlidersHorizontal, CloudRain, Flag, Activity, Bot, ClipboardCheck, Check, CircleAlert } from 'lucide-react';
+import { Waves, SlidersHorizontal, CloudRain, Flag, Activity, Bot, ClipboardCheck, Check, CircleAlert, ChevronDown } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
 import { getTrackCorrection, putTrackCorrection, TRACK_CORRECTIONS_VERSION } from '@/lib/track-corrections';
@@ -121,6 +121,17 @@ export function TyreLabView({
   // what-if local state (docs/03 §5.3: pit sớm/muộn ±, toggle mưa)
   const [pitShift, setPitShift] = useState(0);
   const [rainOn, setRainOn] = useState(false);
+  /* v0.9.9 — the pit-shift what-if section COLLAPSES when idle: the
+     simulator is the main tool now, and the section's controls (slider,
+     rain toggle) all start neutral. The initial value IS the idle check —
+     state initializers run once at mount, when pitShift/rainOn are still
+     their defaults — so an idle section starts closed, an active one
+     starts open. The header stays visible either way and carries a status
+     summary (whatifSummary). The old sections are NOT deleted — pit-shift
+     (optimal-plan shifting), the SC/VSC card (top-6 ranking under one
+     window) and the rain toggle (quick wet plan) each still do one thing
+     the simulator does not. */
+  const [whatIfOpen, setWhatIfOpen] = useState(pitShift !== 0 || rainOn);
   /* v0.9.2 — SC/VSC what-if state. startLap null = the plan's own first pit. */
   const [scOn, setScOn] = useState(false);
   const [scMode, setScMode] = useState<'sc' | 'vsc'>('sc');
@@ -1118,13 +1129,40 @@ export function TyreLabView({
             <CompoundCompareChart lives={tyre.data.lives} deltas={tyre.data.deltas} />
           </section>
 
-          {/* what-if (Phase 2) */}
+          {/* what-if (Phase 2) — v0.9.9: collapsible, collapsed by default
+              while idle (see the state comment above). */}
           <section aria-label={tWhat('title')} className="rounded-lg border border-line bg-panel p-4" data-testid="tyre-whatif">
             <header className="mb-3 flex flex-wrap items-center gap-2">
-              <SlidersHorizontal className="h-4 w-4 text-teal" aria-hidden="true" />
-              <span className="font-mono text-[11px] uppercase tracking-wider text-teal">{tSec('whatif')}</span>
-              <h3 className="text-[15px] font-semibold text-ink">{tWhat('title')}</h3>
+              <button
+                type="button"
+                onClick={() => setWhatIfOpen((v) => !v)}
+                aria-expanded={whatIfOpen}
+                aria-controls="whatif-body"
+                className="flex min-h-[32px] flex-1 flex-wrap items-center gap-2 text-left"
+                data-testid="whatif-toggle"
+              >
+                <ChevronDown
+                  className={cn(
+                    'h-4 w-4 text-ink-faint transition-transform',
+                    whatIfOpen && 'rotate-180',
+                  )}
+                  aria-hidden="true"
+                />
+                <SlidersHorizontal className="h-4 w-4 text-teal" aria-hidden="true" />
+                <span className="font-mono text-[11px] uppercase tracking-wider text-teal">{tSec('whatif')}</span>
+                <span role="heading" aria-level={3} className="text-[15px] font-semibold text-ink">{tWhat('title')}</span>
+              </button>
+              {/* status summary — visible in BOTH states, so a collapsed
+                  section still says what is switched on */}
+              <span
+                className="font-mono text-[10px] text-ink-faint"
+                data-testid="whatif-summary"
+              >
+                {tWhat('whatifSummary', { shift: pitShift, on: rainOn ? 'on' : 'off' })}
+              </span>
             </header>
+            {whatIfOpen ? (
+            <div id="whatif-body">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="pit-shift" className="text-xs text-ink-soft">
@@ -1216,6 +1254,8 @@ export function TyreLabView({
                   {tWhat('noWetData')}
                 </p>
               )
+            ) : null}
+            </div>
             ) : null}
           </section>
 
@@ -1400,7 +1440,7 @@ export function TyreLabView({
             className="rounded-lg border border-line bg-panel p-4"
             data-testid="tyre-simulator"
           >
-            <header className="mb-3 flex flex-wrap items-center gap-2">
+            <header className="mb-1.5 flex flex-wrap items-center gap-2">
               <SlidersHorizontal className="h-4 w-4 text-teal" aria-hidden="true" />
               <span className="font-mono text-[11px] uppercase tracking-wider text-teal">{tSec('whatif')}</span>
               <h3 className="text-[15px] font-semibold text-ink">{tWhat('simTitle')}</h3>
@@ -1437,6 +1477,10 @@ export function TyreLabView({
                 </button>
               </div>
             </header>
+            {/* v0.9.9 — the one-line contract of this sandbox */}
+            <p className="mb-3 text-[11px] text-ink-faint" data-testid="sim-subtitle">
+              {tWhat('simSubtitle')}
+            </p>
             {!wetPreset ? (
               <p className="mb-3 rounded border border-line bg-surface px-3 py-2 text-[11px] text-ink-faint" data-testid="sim-no-wet-data">
                 {tWhat('simNoWetData')}
@@ -1597,6 +1641,7 @@ export function TyreLabView({
                       <option value="sc">{tWhat('scModeSC')}</option>
                       <option value="vsc">{tWhat('scModeVSC')}</option>
                     </select>
+                    <span className="text-ink-faint">{tWhat('simFromLap')}</span>
                     <input
                       type="number"
                       min={1}

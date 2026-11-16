@@ -2,6 +2,112 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.9.9] — UI What-if / Mô phỏng tự do thân thiện + drive-by nhiệt độ
+
+v0.9.7 đã verify PASS về engine (mọi số DoD khớp trên save thật) nhưng UI
+"Mô phỏng tự do" bị chê "chả thân thiện tí nào". Version này **CHỈ sửa UI —
+không động vào engine (`tyre.engine.ts`), không đổi `vsBestS`, không đổi DEG
+constants**. Các section what-if cũ vẫn giữ nguyên, chỉ thu gọn — chưa xóa
+(pit-shift dời plan tối ưu, card SC/VSC xếp hạng top 6 dưới 1 cửa sổ, toggle
+mưa xem nhanh plan ướt — mỗi cái vẫn làm 1 việc mà simulator không làm).
+
+### Bước 1 — Bug hiển thị −0.0s (`1d846e5`)
+
+- Plan hòa với best từng render `"−0.0s so với best"` (ternary
+  `vsBestS > 0 ? '+' : '−'` rơi nhánh trừ khi đúng 0). Nay `|vsBestS| <
+  0.05` — đúng band trung tính ±0.05 mà chip pit-shift đã dùng, không bịa
+  ngưỡng mới — hiển thị `"bằng best"` (`whatif.simVsBestTie`); ngoài band
+  giữ nguyên format có dấu.
+- Kiểm tra các chỗ render dấu khác trong cùng file, **không đổi gì**: chip
+  mòn (summary + per-stint) — theo luật v0.9.4 `wearS` ABSENT khi 0
+  (`corr.totalS !== 0 ? { wearS } : {}`) và `wearCorrection` round từng
+  stint 0.1 trước khi cộng, nên giá render được không bao giờ là 0 hay
+  làm tròn thành 0.0; delta pit-shift render `"0.0s"` không dấu khi 0
+  (đúng, trung tính).
+
+### Bước 2 — Editor của simulator (`1e3a895`)
+
+- **Nhãn + phạm vi vòng live** trên từng dòng: stint hiện `#1 [S] [19]
+  vòng V1–19` (phạm vi cộng dồn từ draft — derived, không thêm state);
+  dòng SC/VSC có `từ vòng` / `dài … vòng`; dòng mưa có `mưa từ vòng` /
+  `dài … vòng` (không dùng placeholder — nó biến mất khi có giá trị).
+- **Tiêu đề cho 2 list** ("Sự kiện SC/VSC" / "Cửa sổ mưa") + dòng gợi ý
+  khi rỗng — lần đầu mở lên biết chỗ này để làm gì.
+- **Tổng số vòng live**: `"Tổng: 47/56 vòng"` cập nhật theo từng phím gõ —
+  neutral khi đủ, đỏ khi thiếu/thừa, kèm đúng câu lỗi của engine (dùng
+  chung chuỗi, không viết câu khác).
+- **Lỗi không nuốt mất kết quả**: draft lỗi hiển thị banner đỏ trên đầu +
+  kết quả hợp lệ gần nhất còn trên màn hình (mờ, opacity-60, kèm chú
+  `simStaleResult`) — hành vi cũ (lỗi thay thế toàn bộ result) bị xóa.
+  `lastGoodSim` dùng pattern React "adjust state when a value changes"
+  (setState during render — react-hooks lint cấm cả đọc ref trong render
+  lẫn setState trong effect, và variant effect đã loop vì seed-copy khi
+  chưa-seed đổi identity mỗi render; seed slices giờ memoize + mảng rỗng
+  module-level để identity `simResult` ổn định).
+- **Mặc định hợp lý**: "Thêm SC/VSC" → bắt đầu ở **vòng pit đầu tiên của
+  draft** (fallback `⌈laps/2⌉` khi draft không pit — cũ: vòng 1, không pit
+  nào ở đó, tưởng nút hỏng), dài 3 vòng; "Thêm cửa sổ mưa" → vòng pit đầu
+  tiên, dài 10 vòng (cũ: [1,5] phá plan mặc định ngay) + gợi ý
+  `simRainHint` dưới list mưa.
+- **Nút "Về plan lead"** cạnh "Load plan mưa": re-seed draft
+  (`{seedKey:'', stints:[], events:[], rain:[]}`) để cơ chế seed tự nạp lại
+  plan lead — không viết lại cơ chế seed.
+- **Nới cap cửa sổ mưa**: `max={20}` → `max={số vòng của chặng}` (cap 20
+  vòng là giới hạn UI tự đặt, engine không hề chặn); cap SC/VSC giữ 20.
+- i18n `whatif` thêm 13 key: `simVsBestTie`, `simTotalLaps`,
+  `simStaleResult`, `simRainHint`, `simReset`, `simEventsTitle`,
+  `simRainTitle`, `simEventsEmpty`, `simRainEmpty`, `simFromLap`,
+  `simRainFromLap` (1 key ngoài danh sách, để render đúng nhãn "mưa từ
+  vòng"), `simLapsLong`, `simLapsUnit`. Key cũ giữ nguyên hết.
+
+### Bước 3 — Gọn trang + drive-by + script audit
+
+- **Section pit-shift thu gọn được**: nút chevron ở header, mặc định ĐÓNG
+  khi `pitShift === 0 && !rainOn` (giá trị khởi tạo chính là điều kiện
+  idle); bấm header mở/đóng (`aria-expanded` + `aria-controls`); khi đóng,
+  header vẫn hiện tóm tắt `"Dời pit: {shift} · Mưa: {on|tắt}"`
+  (`whatifSummary` — ICU select cho bật/tắt). KHÔNG xóa section cũ —
+  xem dòng mở đầu.
+- **Subtitle cho simulator**: `"Tự ráp chiến thuật, chèn SC/VSC và mưa —
+  chỉ so với plan tốt nhất, không đổi lead/trail."` (`simSubtitle`).
+- **Nhiệt độ header 1 số lẻ** (pattern `GazetteView.tsx` đã có): header
+  wall `page.tsx`, `RaceWeekendView`, `SeasonView` — `raceTempC.toFixed(1)`
+  thay vì float thô `"24.166248321533203°C"`.
+- **Script audit v0.9.7 chọn đúng race** (`scripts/audit-v097-dod.ts`):
+  lọc pending theo **mùa hiện tại** (`seasonId === meta.seasonId`) + ưu
+  tiên `state === 1` trước khi fallback pending đầu tiên của mùa. Trước
+  đây lọc pending trên MỌI mùa nên save Shanghai 2028 vớ phải race 128
+  Shanghai mùa cũ (state 0) và in `"lab NOT ready"`. Chứng minh trên save
+  thật local (season 2027): cũ in `race 127 AlbertPark … lab NOT ready`,
+  mới in `race 193 Bahrain (state 1)` + baseline thật (best 64.0s S→M ·
+  trail 64.0s M→S · game 66.9s); filter không khớp season nào thì báo
+  `"no pending race matching … in season …"` thay vì lụm race mùa cũ.
+- Release: version `0.9.9`, SW cache `pitwall-v0.9.9`.
+
+### DoD
+
+- Component test simulator (fixture Shanghai 2028 — mirror số SQL đã lock
+  của `autosave-5.sav`): mặc định hiện `"bằng best"`, không có `"−0.0s"`
+  nào trong section; B1 vẫn `"+17.3s so với best"`; mỗi dòng stint hiện
+  đúng phạm vi (`V1–19`/`V20–38`/`V39–56`, live 10/19/18 →
+  `V1–10`/`V11–29`/`V30–47`); tổng `"56/56 vòng"` → sửa stint 1 → 10 thành
+  `"47/56 vòng"` đỏ + banner `"tổng số vòng 47 ≠ 56 vòng của chặng"` +
+  kết quả cũ 83.1s còn trên màn hình (mờ + simStaleResult); "Thêm SC/VSC"
+  → [19, 3]; "Thêm cửa sổ mưa" → [19, 10], `max=56`, nhập 30 không bị
+  chặn về 20; "Về plan lead" → S19/S19/M18, list rỗng, 83.1s; subtitle
+  hiện đúng câu.
+- Phase2 test what-if: đóng mặc định — summary `"Dời pit: 0 · Mưa: tắt"`
+  hiện, slider + rain toggle unmount; bấm header mở → slider + toggle về
+  lại; đóng lại → summary còn.
+- Suite: **536/536** (52 file test); lint + tsc + build sạch. Số giữ
+  nguyên như sau bước 2 vì phase2 gộp assertion mới vào test có sẵn.
+- Hồi quy (không đụng engine): toàn bộ số lock trong vitest giữ nguyên —
+  MarinaBay lead/trail **97.1s** game **103.7s** · Monza **57.6s** game
+  **75.0s** · Interlagos lead/trail **93.2s** game **121.5s** · Vegas lead
+  **72.2s** trail **75.7s** game **73.4s** · Shanghai lead/trail **83.1s**
+  game **104s** · builder B1 **100.4s** / B3 **160.2s** / B5 **191.6s** /
+  B6 **353.8s** · multi-SC M1 tiết kiệm **10.9s**.
+
 ## [0.9.8] — Kho save thành tab riêng: mở lại, tải xuống, xóa nhiều
 
 Thư viện save rời đáy wall shell thành tab full-page **`/?view=saves`**

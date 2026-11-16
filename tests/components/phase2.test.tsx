@@ -234,11 +234,28 @@ describe('CarLabView', () => {
 });
 
 describe('TyreLabView — what-if', () => {
-  it('renders the what-if section with slider and rain toggle', () => {
+  // v0.9.9 — the section collapses when idle (pitShift 0 + rain off): the
+  // header carries the status summary, the controls unmount, a header click
+  // expands them again.
+  it('collapses by default, shows the summary, and expands on header click', () => {
     render(withI18n(<TyreLabView model={baseModel} raceId={2} />));
     expect(screen.getByTestId('tyre-whatif')).toBeInTheDocument();
+    // collapsed: summary visible, controls gone
+    expect(screen.getByTestId('whatif-summary').textContent).toBe(
+      'Dời pit: 0 · Mưa: tắt',
+    );
+    expect(screen.queryByTestId('pit-shift-slider')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('rain-toggle')).not.toBeInTheDocument();
+    // expand via the header button
+    fireEvent.click(screen.getByTestId('whatif-toggle'));
+    expect(screen.getByTestId('whatif-toggle').getAttribute('aria-expanded')).toBe('true');
     expect(screen.getByTestId('pit-shift-slider')).toBeInTheDocument();
     expect(screen.getByTestId('rain-toggle')).toBeInTheDocument();
     expect(screen.getByText('Giả lập mưa')).toBeInTheDocument();
+    // collapse again — summary survives
+    fireEvent.click(screen.getByTestId('whatif-toggle'));
+    expect(screen.getByTestId('whatif-toggle').getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByTestId('pit-shift-slider')).not.toBeInTheDocument();
+    expect(screen.getByTestId('whatif-summary')).toBeInTheDocument();
   });
 });

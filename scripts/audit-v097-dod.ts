@@ -100,14 +100,23 @@ async function main() {
 
   console.log(`save: ${path}  season=${model.meta.seasonId} day=${model.meta.day}`);
 
-  const pending = model.races.filter((r) => r.state !== 2);
-  const target =
-    (filter
-      ? pending.find((r) => r.trackName.toLowerCase().includes(filter)) ??
-        model.races.find((r) => r.trackName.toLowerCase().includes(filter))
-      : pending[0]) ?? null;
+  /* v0.9.9 — resolve the audit race within the CURRENT season only, and
+     prefer an in-progress race (state 1). The old selection filtered
+     pending races across EVERY season, so a mid-2028 save matched an
+     old-season copy of the track (race 128 Shanghai, state 0) where the
+     lab gate is closed — printing "lab NOT ready" and auditing nothing.
+     Wrong-race selection is a script bug, not a data problem. */
+  const seasonPending = model.races.filter(
+    (r) => r.seasonId === model.meta.seasonId && r.state !== 2,
+  );
+  const named = filter
+    ? seasonPending.filter((r) => r.trackName.toLowerCase().includes(filter))
+    : seasonPending;
+  const target = named.find((r) => r.state === 1) ?? named[0] ?? null;
   if (!target) {
-    console.log(`no race matching "${filter}" — nothing to audit`);
+    console.log(
+      `no pending race matching "${filter}" in season ${model.meta.seasonId} — nothing to audit`,
+    );
     return;
   }
 
