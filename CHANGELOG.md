@@ -113,10 +113,12 @@ dưới tổng thời gian của thẻ (wear 0 → không hiện dòng).
   **103.7s** — wear 0 khắp nơi (toàn bộ mới, đời = cap).
 - **Monza** (`save4.sav`): lead/trail **57.6s / 57.6s**, game plan **75.0s**.
 - **Interlagos** (`save2.sav`): lead **SSM S20/S20/M31 · 93.2s** của v0.9.3
-  giữ nguyên; trail 93.2 tie; game plan 121.5s. Riêng các plan 4-stint của
-  bảng xếp hạng được hiệu chỉnh HONEST +0.4s (stint S thứ 3 chạy bộ fresh
-  đời 26 < cap 27 → deg thật +0.4): SSMS/SMSS 96.2 → **96.6** — số xếp hạng,
-  không phải số đề xuất per-car.
+  giữ nguyên; trail 93.2 tie; game plan 121.5s; SSMS/SMSS **96.2s** (wear 0).
+  [Sửa v0.9.5] Phát hiện khi audit hồi quy: fixture v0.9.4 hardcode 2 bộ S
+  fresh **đời 26 không tồn tại trên save thật** (mọi bộ S mới đều đời 27 = cap)
+  → engine priced 4-stint +0.4s trên số fixture-only. Sửa fixture về số
+  thật — engine không đổi, số về lại 96.2 như mục v0.9.3 đã ghi (chi tiết ở
+  v0.9.5, Bước 1).
 
 ### Out of scope (không làm trong bản này)
 

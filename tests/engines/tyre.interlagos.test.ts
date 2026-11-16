@@ -195,7 +195,7 @@ describe('v0.9.3 buildTyreLab — Interlagos DoD (prompt §4, save2.sav numbers)
     expect(sms.stints.map((s) => s.laps).sort((a, b) => b - a)).toEqual([31, 20, 20]);
   });
 
-  it('top 6: SSM/MSS/SMS 93.2 · SSMS/SMSS 96.6 (wear +0.4) · SSH 105.6 (+12.4)', () => {
+  it('top 6: SSM/MSS/SMS 93.2 · SSMS/SMSS 96.2 · SSH 105.6 (+12.4)', () => {
     expect(data.strategies.map((s) => s.order.join('→'))).toEqual([
       'S→S→M',
       'M→S→S',
@@ -204,14 +204,15 @@ describe('v0.9.3 buildTyreLab — Interlagos DoD (prompt §4, save2.sav numbers)
       'S→M→S→S',
       'S→S→H',
     ]);
-    /* v0.9.4 — the wear correction moves ONLY the 4-stint plans: their 3rd
-       S stint runs a fresh 26-life set (#1/#3) against the 27 cap, pricing
-       +0.4s of real deg (S16@26 − S16@27 = +0.445 → +0.4). The 2-stint
-       plans and the game-order plan run 27/27/42-life sets = their caps →
-       wear 0 → every v0.9.3 number holds. Rank order is untouched. */
-    expect(data.strategies.map((s) => s.timeS)).toEqual([93.2, 93.2, 93.2, 96.6, 96.6, 105.6]);
-    expect(data.strategies.map((s) => s.vsBestS)).toEqual([0, 0, 0, 3.4, 3.4, 12.4]);
-    expect(data.strategies[3]!.wearS).toBe(0.4);
+    /* v0.9.5 — fixture correction (Nguyen's decision (a), 2026-11-16): the
+       old fixture hard-coded two 26-life fresh softs that DO NOT exist on
+       the real save (save2.sav: every fresh S is life 27). That artifact
+       priced the 4-stint plans' 3rd S stint +0.4s of deg above the real
+       96.2. With every fresh soft at 27 = the cap, ALL assigned sets wear
+       0 → every v0.9.3 number holds verbatim. Engine untouched. */
+    expect(data.strategies.map((s) => s.timeS)).toEqual([93.2, 93.2, 93.2, 96.2, 96.2, 105.6]);
+    expect(data.strategies.map((s) => s.vsBestS)).toEqual([0, 0, 0, 3, 3, 12.4]);
+    expect(data.strategies[3]!.wearS).toBeUndefined();
     expect(data.strategies[5]!.wearS).toBeUndefined();
   });
 

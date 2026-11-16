@@ -147,14 +147,18 @@ export function interlagosAllocation(): TyreAllocation[] {
   const M_LAP = 70.58;
   const H_LAP = 71.01;
   for (const carId of [0, 1]) {
-    // S fresh: the two 27-life sets are #0 and #2 (the §4 assignment) — the
-    // greedy's life-desc sort picks them for the two S20 stints; #1/#3 sit
-    // at 26 (the real save's fresh S lives differ slightly; avg ≈ 27)
-    const sSets = carId === 0 ? [[0, 27], [1, 26], [2, 27], [3, 26]] : [[0, 27], [1, 26], [2, 27]];
+    // S fresh: ALL fresh softs are life 27 on the real save (save2.sav audit,
+    // Nguyen's decision (a) 2026-11-16) and car 1's set ids are #0/#2/#3/#4 —
+    // the ids the §4 assignment names (S20 = #0, S20 = #2). The old fixture's
+    // 26-life sets were fixture-only; with real ids + real lives the greedy
+    // still hands the two S20 stints #0/#2 and every plan prices wear 0.
+    const sSets = carId === 0 ? [[0, 27], [2, 27], [3, 27], [4, 27]] : [[0, 27], [1, 27], [2, 27]];
     for (const [id, life] of sSets) push(carId, 2, life, id, { lapTime: S_LAP });
-    // H — fresh ×2 (life 58)
-    push(carId, 0, 58, 4, { lapTime: H_LAP });
-    push(carId, 0, 58, 5, { lapTime: H_LAP });
+    // H — fresh ×2 (life 58). Ids #6/#7: the real save's S stock occupies
+    // #0–#4, so the H pairs cannot sit on #4/#5 like the pre-audit fixture
+    // had it (a duplicate id within a car would break the wear lookup).
+    push(carId, 0, 58, 6, { lapTime: H_LAP });
+    push(carId, 0, 58, 7, { lapTime: H_LAP });
     // M — locked state 2 (#8) + exactly 1 fresh usable (#9, life 42)
     push(carId, 1, 18, 8, { state: 2, wear: 0.62, laps: 22, session: 2 });
     push(carId, 1, 42, 9, { lapTime: M_LAP });
