@@ -7,11 +7,11 @@ Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Cha
 Hai việc độc lập trong một release, cả hai là hậu kiểm của v0.9.3/v0.9.4 —
 engine không đổi một dòng (`src/` untouched).
 
-### (A) Fixture Interlagos về số thật: 96.6 → 96.2 (`c414f3d`)
+### (A) Fixture Interlagos về số thật: 4-stint về lại 96.2s (`c414f3d`)
 
 Quyết định (a) của Nguyen (2026-11-16): sửa fixture, không giữ số
 fixture-only. Audit hồi quy v0.9.4 phát hiện plan 4-stint SSMS/SMSS ở
-Interlagos là **96.6s trên fixture** nhưng **96.2s trên save thật**
+Interlagos priced **+0.4s trên fixture** so với **96.2s trên save thật**
 (`save2.sav`, Day 46698).
 
 **Nguyên nhân — lỗi fixture, không phải engine:**
