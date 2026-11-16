@@ -83,8 +83,12 @@ describe('TyreLabView — per-car briefing + wear cost (v0.9.4, Vegas save)', ()
     expect(within(trail).getByText('bộ #3 · đã dùng · đời 18')).toBeInTheDocument();
     // no "mới" soft can appear on the trail card — car 2 owns none
     expect(within(trail).queryAllByText(/mới · đời 20/)).toHaveLength(0);
-    // the locked S #1 never shows up anywhere
-    expect(screen.queryAllByText(/bộ #1/)).toHaveLength(1); // the lead's fresh #1 only
+    // the locked S #1 never shows up on the PLAN CARDS — the guarantee is
+    // about the per-car briefings; the v0.9.7 simulator is a sandbox that
+    // seeds its own table from the lead plan, so #1 legitimately appears
+    // THERE and the count stays scoped to the cards
+    expect(within(trail).queryAllByText(/bộ #1/)).toHaveLength(0);
+    expect(within(screen.getByTestId('tyre-stint-table')).queryAllByText(/bộ #1/)).toHaveLength(1);
 
     // the wear cost line on the trail card
     expect(screen.getByTestId('trail-wear-cost').textContent).toBe('mòn lốp: +0.2s');

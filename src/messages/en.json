@@ -440,7 +440,18 @@
     "scAssumpVSC": "Pit under VSC = green↔SC midpoint = {cost}s — the save has no VSC column (labelled assumption).",
     "scAssumpReprice": "Only in-window pit costs are re-priced; deg/deltas unchanged. Every plan already passed the per-car set feasibility law (v0.9.1) — no new plan appears.",
     "scAssumpWindow": "The window is your scenario — the save stores no per-lap SC/VSC history.",
-    "scNoCols": "The save does not carry the track's SC/pit columns (Races_Tracks) — SC/VSC what-if stays off; no numbers invented."
+    "scNoCols": "The save does not carry the track's SC/pit columns (Races_Tracks) — SC/VSC what-if stays off; no numbers invented.",
+    "simTitle": "Free-form simulator",
+    "simCar": "Car",
+    "simAddStint": "Add stint",
+    "simAddEvent": "Add SC/VSC",
+    "simAddRain": "Add rain window",
+    "simWetPreset": "Load wet plan (I→W)",
+    "simVsBest": "{delta}s vs best",
+    "simAssumpRatio": "A pit inside an SC/VSC window prices at the track's real columns (SC = green × SC/pit; VSC = the green↔SC midpoint) — the same law as the SC/VSC what-if card.",
+    "simOverlap": "A pit inside two overlapping windows takes the cheapest one (never stacked).",
+    "simNoWetData": "The save has no wet allocation (I/W) — no wet plan to load.",
+    "simDelete": "Delete row"
   },
   "race": {
     "laps": "laps",

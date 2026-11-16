@@ -440,7 +440,18 @@
     "scAssumpVSC": "Pit trong VSC = trung điểm green↔SC = {cost}s — save không có cột VSC riêng (giả định gán nhãn).",
     "scAssumpReprice": "Chỉ re-price chi phí pit trong cửa sổ; deg/delta giữ nguyên. Mọi plan đều đã qua luật khả thi số bộ lốp của từng xe (v0.9.1) — không có plan mới xuất hiện.",
     "scAssumpWindow": "Cửa sổ do bạn chọn — save không lưu lịch sử SC/VSC theo vòng.",
-    "scNoCols": "Save không mang cột SC/pit của track (Races_Tracks) — what-if SC/VSC tắt, không bịa số."
+    "scNoCols": "Save không mang cột SC/pit của track (Races_Tracks) — what-if SC/VSC tắt, không bịa số.",
+    "simTitle": "Mô phỏng tự do",
+    "simCar": "Xe",
+    "simAddStint": "Thêm stint",
+    "simAddEvent": "Thêm SC/VSC",
+    "simAddRain": "Thêm cửa sổ mưa",
+    "simWetPreset": "Load plan mưa (I→W)",
+    "simVsBest": "{delta}s so với best",
+    "simAssumpRatio": "Pit trong cửa sổ SC/VSC lấy giá theo cột thật của track (SC = green × SC/pit; VSC = trung điểm green↔SC) — cùng luật với card What-if SC/VSC.",
+    "simOverlap": "Pit rơi vào 2 cửa sổ chồng lấn lấy giá rẻ nhất (không cộng dồn).",
+    "simNoWetData": "Thiếu allocation lốp mưa (I/W) trong save — không dựng được plan mưa để load.",
+    "simDelete": "Xóa dòng"
   },
   "race": {
     "laps": "vòng",
