@@ -29,7 +29,9 @@ export interface TimelineStint {
   toLap: number;
 }
 
-const COMPOUND_COLOUR: Record<string, string> = {
+/* v0.10.0 step 2 — exported for the simulator's compound segmented control
+   (same hexes as CompoundBadge / chart-theme — the ONE colour law). */
+export const COMPOUND_COLOUR: Record<string, string> = {
   S: '#c8102e',
   M: '#e3b71e',
   H: '#e9e5dc',

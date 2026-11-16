@@ -84,9 +84,21 @@ afterEach(() => {
 });
 
 function setCompound(index: number, value: string): void {
-  fireEvent.change(screen.getByTestId(`sim-stint-${index}-compound`), {
-    target: { value },
-  });
+  // v0.10.0 step 2 — the compound select became a segmented control; the
+  // testid lives on the GROUP and each compound is a pressed button.
+  fireEvent.click(
+    within(screen.getByTestId(`sim-stint-${index}-compound`)).getByRole('button', {
+      name: value,
+    }),
+  );
+}
+
+/** v0.10.0 step 2 — the pressed compound of a row's segmented control. */
+function compoundPressed(index: number, value: string): boolean {
+  return (
+    within(screen.getByTestId(`sim-stint-${index}-compound`)).getByRole('button', { name: value })
+      .getAttribute('aria-pressed') === 'true'
+  );
 }
 
 function setLaps(index: number, value: number): void {
@@ -108,12 +120,12 @@ describe('TyreLabView — the free-form simulator (v0.9.7, Shanghai save)', () =
     expect(screen.getByTestId('sim-car-0').getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByTestId('sim-car-0').textContent).toBe('Xe 1');
     expect(screen.getByTestId('sim-car-1').textContent).toBe('Xe 2');
-    // default stints = the LEAD plan S19/S19/M18
-    expect((screen.getByTestId('sim-stint-0-compound') as HTMLSelectElement).value).toBe('S');
+    // default stints = the LEAD plan S19/S19/M18 (segmented compound)
+    expect(compoundPressed(0, 'S')).toBe(true);
     expect((screen.getByTestId('sim-stint-0-laps') as HTMLInputElement).value).toBe('19');
-    expect((screen.getByTestId('sim-stint-1-compound') as HTMLSelectElement).value).toBe('S');
+    expect(compoundPressed(1, 'S')).toBe(true);
     expect((screen.getByTestId('sim-stint-1-laps') as HTMLInputElement).value).toBe('19');
-    expect((screen.getByTestId('sim-stint-2-compound') as HTMLSelectElement).value).toBe('M');
+    expect(compoundPressed(2, 'M')).toBe(true);
     expect((screen.getByTestId('sim-stint-2-laps') as HTMLInputElement).value).toBe('18');
   });
 
@@ -244,8 +256,8 @@ describe('TyreLabView — the free-form simulator (v0.9.7, Shanghai save)', () =
     expect(screen.getByTestId('sim-car-1').getAttribute('aria-pressed')).toBe('true');
     // same stints, re-priced on car 2's identical garage → identical number
     expect(screen.getByTestId('sim-total').textContent).toBe('100.4s');
-    expect((screen.getByTestId('sim-stint-0-compound') as HTMLSelectElement).value).toBe('S');
-    expect((screen.getByTestId('sim-stint-1-compound') as HTMLSelectElement).value).toBe('M');
+    expect(compoundPressed(0, 'S')).toBe(true);
+    expect(compoundPressed(1, 'M')).toBe(true);
   });
 });
 
@@ -331,7 +343,7 @@ describe('TyreLabView — the simulator editor (v0.9.9, Shanghai save)', () => {
     );
   });
 
-  it('"Về plan lead" re-seeds the draft: lead stints, empty lists, 83.1s', () => {
+  it('"Về plan lead" re-seeds the draft: lead stints, empty lists, 83.1s', async () => {
     useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
     render(withI18n(<TyreLabView model={model} raceId={212} />));
 
@@ -345,7 +357,11 @@ describe('TyreLabView — the simulator editor (v0.9.9, Shanghai save)', () => {
     expect((screen.getByTestId('sim-stint-0-laps') as HTMLInputElement).value).toBe('19');
     expect((screen.getByTestId('sim-stint-1-laps') as HTMLInputElement).value).toBe('19');
     expect((screen.getByTestId('sim-stint-2-laps') as HTMLInputElement).value).toBe('18');
-    expect(screen.queryByTestId('sim-event-0-start')).not.toBeInTheDocument();
+    // the removed row leaves through AnimatePresence's exit cycle (instant
+    // under reduced motion, but still one frame) — waitFor the removal
+    await waitFor(() => {
+      expect(screen.queryByTestId('sim-event-0-start')).not.toBeInTheDocument();
+    });
     expect(screen.getByTestId('sim-events-empty')).toBeInTheDocument();
     expect(screen.getByTestId('sim-total').textContent).toBe('83.1s');
     expect(screen.getByTestId('sim-vs-best').textContent).toBe('bằng best');
@@ -485,5 +501,174 @@ describe('TyreLabView — SimTimeline + hero (v0.10.0 step 1, Shanghai save)', (
     const tip = screen.getByTestId('sim-timeline-tooltip');
     expect(tip.textContent).toContain('S · V1–10');
     expect(tip.textContent).not.toContain('bộ #');
+  });
+});
+
+describe('TyreLabView — editor controls + inline errors + motion (v0.10.0 step 2)', () => {
+  const model: SaveModel = buildShanghaiModel();
+
+  it('the compound select became a coloured segmented control (5 pressed-state buttons)', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    const group = screen.getByTestId('sim-stint-0-compound');
+    expect(within(group).getAllByRole('button')).toHaveLength(5);
+    expect(compoundPressed(0, 'S')).toBe(true);
+    for (const c of ['M', 'H', 'I', 'W']) expect(compoundPressed(0, c)).toBe(false);
+    // the pressed cell is elevated with its own compound colour (inline
+    // style — jsdom normalises the hex to rgba)
+    expect(within(group).getByRole('button', { name: 'S' }).getAttribute('style')).toContain(
+      'rgb(200, 16, 46)',
+    );
+    // switching to M moves the elevation
+    setCompound(0, 'M');
+    expect(compoundPressed(0, 'M')).toBe(true);
+    expect(compoundPressed(0, 'S')).toBe(false);
+    expect(within(group).getByRole('button', { name: 'M' }).getAttribute('style')).toContain(
+      'rgb(227, 183, 30)',
+    );
+    // the pricing followed: S19/M19/M18 is a legal 56-lap plan
+    expect(screen.getByTestId('sim-total-laps').textContent).toBe('Tổng: 56/56 vòng');
+  });
+
+  it('the laps stepper: + lifts 19 → 20 (total 57/56 red), − brings it back, floor is the engine min', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    fireEvent.click(screen.getByTestId('sim-stint-0-inc'));
+    expect((screen.getByTestId('sim-stint-0-laps') as HTMLInputElement).value).toBe('20');
+    const total = screen.getByTestId('sim-total-laps');
+    expect(total.textContent).toBe('Tổng: 57/56 vòng');
+    expect(total.className).toContain('text-danger');
+
+    fireEvent.click(screen.getByTestId('sim-stint-0-dec'));
+    expect((screen.getByTestId('sim-stint-0-laps') as HTMLInputElement).value).toBe('19');
+    expect(screen.getByTestId('sim-total-laps').textContent).toBe('Tổng: 56/56 vòng');
+
+    // the − button honours the engine's MIN_STINT_LAPS floor
+    setLaps(0, 4);
+    fireEvent.click(screen.getByTestId('sim-stint-0-dec'));
+    expect((screen.getByTestId('sim-stint-0-laps') as HTMLInputElement).value).toBe('4');
+    setLaps(0, 19);
+    expect(screen.getByTestId('sim-total-laps').textContent).toBe('Tổng: 56/56 vòng');
+  });
+
+  it('an invalid total marks EVERY laps field aria-invalid with a red ring + a per-row error line, cleared on fix', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    setLaps(0, 10);
+    const laps0 = screen.getByTestId('sim-stint-0-laps');
+    expect(laps0.getAttribute('aria-invalid')).toBe('true');
+    expect(laps0.className).toContain('ring-danger');
+    expect(screen.getByTestId('sim-stint-0-error').textContent).toBe(
+      'stint này làm tổng lệch 9 vòng',
+    );
+    // every stint row carries the same inline error (they share the blame)
+    expect(screen.getByTestId('sim-stint-1-error').textContent).toBe(
+      'stint này làm tổng lệch 9 vòng',
+    );
+    expect(screen.getByTestId('sim-stint-2-error').textContent).toBe(
+      'stint này làm tổng lệch 9 vòng',
+    );
+
+    // fixing the total clears ring + message instantly (validate on change)
+    setLaps(2, 27);
+    expect(screen.getByTestId('sim-stint-0-laps').getAttribute('aria-invalid')).toBeNull();
+    expect(screen.queryByTestId('sim-stint-0-error')).not.toBeInTheDocument();
+    expect(screen.getByTestId('sim-total-laps').textContent).toBe('Tổng: 56/56 vòng');
+  });
+
+  it('the error summary is a role=alert list; its goto link focuses stint 1 ONLY on click', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    setLaps(0, 10);
+    const summary = screen.getByTestId('sim-error-summary');
+    expect(summary.getAttribute('role')).toBe('alert');
+    // the engine's own error, verbatim (the UI never re-translates)
+    expect(screen.getByTestId('sim-summary-item-0').textContent).toContain(
+      'tổng số vòng 47 ≠ 56 vòng của chặng',
+    );
+    // focus did NOT jump while typing
+    expect(document.activeElement).not.toBe(screen.getByTestId('sim-stint-0-laps'));
+
+    fireEvent.click(screen.getByTestId('sim-summary-goto'));
+    expect(document.activeElement).toBe(screen.getByTestId('sim-stint-0-laps'));
+    // the click-through also rings the row (the timeline's own affordance)
+    expect(screen.getByTestId('sim-stint-row-0').className).toContain('ring-teal');
+  });
+
+  it('delete + stepper targets are ≥ 44×44px and every icon-only button has an aria-label', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    for (const i of [0, 1, 2]) {
+      for (const kind of ['delete', 'inc', 'dec']) {
+        const el = screen.getByTestId(`sim-stint-${i}-${kind}`);
+        expect(el.className).toContain('min-h-[44px]');
+        expect(el.className).toContain('min-w-[44px]');
+        expect(el.getAttribute('aria-label')).not.toBeNull();
+      }
+    }
+    expect(screen.getByTestId('sim-stint-0-delete').getAttribute('aria-label')).toBe('Xóa dòng');
+    expect(screen.getByTestId('sim-stint-0-inc').getAttribute('aria-label')).toBe(
+      'Tăng số vòng stint 1',
+    );
+    expect(screen.getByTestId('sim-stint-0-dec').getAttribute('aria-label')).toBe(
+      'Giảm số vòng stint 1',
+    );
+  });
+
+  it('adding and removing the 4th stint flows through AnimatePresence without breaking the draft', async () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    fireEvent.click(screen.getByTestId('sim-add-stint'));
+    expect(screen.getByTestId('sim-stint-row-3')).toBeInTheDocument();
+    expect((screen.getByTestId('sim-stint-3-laps') as HTMLInputElement).value).toBe('10');
+    // S19/S19/M18/S10 sums to 66 → the summary + per-row errors appear
+    expect(screen.getByTestId('sim-error-summary')).toBeInTheDocument();
+    expect(screen.getByTestId('sim-stint-3-error')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('sim-stint-3-delete'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('sim-stint-row-3')).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId('sim-total-laps').textContent).toBe('Tổng: 56/56 vòng');
+    expect(screen.getByTestId('sim-total').textContent).toBe('83.1s');
+    expect(screen.getByTestId('sim-vs-best').textContent).toBe('bằng best');
+  });
+
+  it('the car picker is a joined segmented control with the active cell teal', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    expect(screen.getByTestId('sim-car-0').className).toContain('bg-teal/15');
+    expect(screen.getByTestId('sim-car-0').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('sim-car-1').className).not.toContain('bg-teal/15');
+    fireEvent.click(screen.getByTestId('sim-car-1'));
+    expect(screen.getByTestId('sim-car-1').className).toContain('bg-teal/15');
+    expect(screen.getByTestId('sim-car-0').className).not.toContain('bg-teal/15');
+    // the draft survived the switch
+    expect(screen.getByTestId('sim-total').textContent).toBe('83.1s');
+  });
+
+  it('a plan FASTER than best renders the vs-best chip in good green (negative delta)', async () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    // the lead draft with an SC window over its first pit prices below best
+    fireEvent.click(screen.getByTestId('sim-add-event'));
+    // the event lands on the draft's first pit (19) for 3 laps — the SC pit
+    // cost (13.455s on this track) undercuts the green 20.7s pit. The hero
+    // text flows through framer-motion's frame loop — waitFor it.
+    await waitFor(() => {
+      expect(screen.getByTestId('sim-total').textContent).toBe('75.8s');
+    });
+    const chip = screen.getByTestId('sim-vs-best');
+    expect(chip.textContent).toBe('−7.3s so với best');
+    expect(chip.className).toContain('text-good');
+    expect(chip.className).not.toContain('text-danger');
   });
 });
