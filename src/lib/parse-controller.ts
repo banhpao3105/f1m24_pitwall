@@ -63,7 +63,11 @@ export async function startParseFlow(
     // Model transferred out of the worker — free the WASM heap.
     worker.terminate();
     try {
-      await putSave(model, file.lastModified);
+      /* v0.9.8 — the raw .sav bytes ride along (a File IS a Blob): the
+         library can hand the exact bytes back to the same user. Same
+         best-effort try/catch — a raw-store failure (quota/private mode)
+         must never fail the parse. */
+      await putSave(model, file.lastModified, file);
       await setLastActiveSaveId(model.meta.id);
       if (handle) {
         await setLastActiveHandle({

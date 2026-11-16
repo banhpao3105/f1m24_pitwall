@@ -1,8 +1,15 @@
 /**
  * IndexedDB persistence for parsed saves — Phase 0 (docs/01-AUDIT-DATA.md
  * §4.6). Stores the Normalized SaveModel keyed by the save's SHA-256 hash.
- * The raw .sav file is NEVER persisted (local-first privacy contract).
- * "Local data only" — deleting an entry here removes all traces.
+ *
+ * v0.9.8 — AT THE USER'S EXPLICIT REQUEST, the raw .sav bytes are ALSO
+ * stored from this version on: they live in IndexedDB on the user's device
+ * NEXT TO the parsed model and NEVER leave the device (the download button
+ * hands the same bytes back to the same user). Records written before
+ * v0.9.8 carry no raw bytes (model only — they cannot be downloaded until
+ * the file is re-uploaded); deleting a record deletes BOTH the model and
+ * the raw bytes. "Local data only" — deleting an entry here removes all
+ * traces.
  */
 
 import { createStore, set, get, del, entries } from 'idb-keyval';
@@ -18,10 +25,11 @@ const LAST_ACTIVE_KEY = 'pitwall:last-active';
  * v0.8.1: FileSystemFileHandle of the file the user last picked via
  * `showOpenFilePicker` (Chromium only), so a plain F5 can re-read the file
  * from disk. The handle is structured-clonable in Chromium — it stays in
- * IndexedDB on the user's device; the raw .sav is STILL never persisted.
- * `saveId` ties the handle to the save it belongs to: when the user later
- * opens a different save (e.g. drag-dropped, no handle), the boot check
- * must NOT re-read this handle's file into the wrong session.
+ * IndexedDB on the user's device. (v0.9.8: the raw bytes of the CURRENT
+ * save are stored too — see StoredSave.raw; the handle contract itself is
+ * unchanged.) `saveId` ties the handle to the save it belongs to: when the
+ * user later opens a different save (e.g. drag-dropped, no handle), the
+ * boot check must NOT re-read this handle's file into the wrong session.
  */
 const LAST_HANDLE_KEY = 'pitwall:last-active-handle';
 
@@ -39,16 +47,24 @@ export interface StoredSave {
   /** v0.8.1: File.lastModified at parse time — disk-change detector.
    * Legacy records (pre-0.8.1) lack it: treated as "unknown". */
   fileLastModified?: number;
+  /** v0.9.8: the ORIGINAL .sav bytes (a Blob, structured-cloned by
+   * idb-keyval — no manual serialization). Present only on records written
+   * from v0.9.8 on; legacy records keep model-only and cannot be
+   * downloaded until the file is re-uploaded. Local-only, never leaves
+   * the device. */
+  raw?: Blob;
 }
 
 export async function putSave(
   model: SaveModel,
   fileLastModified?: number,
+  raw?: Blob,
 ): Promise<void> {
   const value: StoredSave = {
     model,
     savedAt: new Date().toISOString(),
     ...(fileLastModified != null ? { fileLastModified } : {}),
+    ...(raw != null ? { raw } : {}),
   };
   await set(model.meta.id, value, store);
 }
