@@ -346,7 +346,7 @@
       "lead": "{car} — {name} (P{pos})",
       "trailTitle": "{car} — {name} (P{pos}): {plan}",
       "reasonDiffCompound": "Offset vs the lead: starts on a different compound ({compound}) to hedge — the two cars do not share one strategy.",
-      "reasonPitGap": "Offset vs the lead: same starting compound but every pit lap stays ≥ 3 laps clear of the lead's (double-stack avoidance).",
+      "reasonPitGap": "Offset vs the lead: same starting compound but no pit lap shared with the lead (double-stack avoidance).",
       "reasonShifted": "Could not fully separate — pit laps moved only {laps} laps away from the lead.",
       "tieNote": "Tied on execution time — split to avoid traffic + hedge, not because it is faster.",
       "wearCost": "tyre wear: {sign}{time}s",

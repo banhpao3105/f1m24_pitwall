@@ -214,8 +214,8 @@ describe('buildTyreLab — MarinaBay autosave-4.sav (Day 46663, race 204, 62 lap
     expect(trail.plan.timeS).toBeCloseTo(97.1, 1);
     expect(trail.reason).toBe('diff-compound');
     expect(data.carPlans!.tie).toBe(true);
-    // pits stay ≥ 3 laps clear: 27 vs 17 = 10, 44 vs 35 = 9
-    expect(trail.plan.pitLaps.every((p) => data.carPlans!.lead.plan.pitLaps.every((l) => Math.abs(p - l) >= 3))).toBe(true);
+    // pits never share a lap with the lead: 27 vs 17 = 10, 44 vs 35 = 9
+    expect(trail.plan.pitLaps.every((p) => data.carPlans!.lead.plan.pitLaps.every((l) => Math.abs(p - l) >= 1))).toBe(true);
     expect(lab.assumptions.some((a) => a.text.includes('tách để tránh dẫm chân + hedge'))).toBe(true);
   });
 

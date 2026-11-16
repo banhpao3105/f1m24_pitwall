@@ -1962,15 +1962,16 @@ export function buildTyreLab(
   /* ── v0.7.0 step 4: the two-car split (spec bước 4) ────────────────────
      Lead = the higher-grid player driver, running the optimizer's plan
      (already feasibility-gated + re-priced by the inventory cap in step 3).
-     Trail = the best feasible plan whose EVERY pit lap stays ≥ 3 laps
-     clear of every lead pit lap — the offset rule IS the double-stack
-     handling (the model has no queue-time constant and none may be
-     invented). A different starting compound (a) is preferred when the
+     Trail = the best feasible plan where no pit lap is shared with the
+     lead (every trail pit lap ≥ 1 lap clear of every lead pit lap) —
+     the offset rule IS the double-stack handling (the model has no
+     queue-time constant and none may be invented). A different starting
+     compound (a) is preferred when the
      plan sits within the repo's 2.0s "tie" band of the optimal plan; a
      same-compound plan qualifies through the pit gap alone (b). Without
      any qualifying plan the lead's pits shift as far as the tyres allow
      and the shortfall is stated. CẤM bịa hằng số phạt double-stack. */
-  const TRAIL_PIT_GAP = 3;
+  const TRAIL_PIT_GAP = 1;
   const playerDriverIds = new Set(
     model.drivers.filter((d) => d.teamId === model.player.teamId).map((d) => d.staffId),
   );
@@ -2094,12 +2095,12 @@ export function buildTyreLab(
     }
     /* v0.9.4 — the split cards are per-car briefings; while at least one
        seat is unverified the mapping card↔car is the garage order, and the
-       user can swap the two plans safely (pits stay ≥ 3 laps apart on the
+       user can swap the two plans safely (pits never share a lap on the
        candidate path — the offset rule). */
     if (inventory && inventory.cars.some((c) => !c.seatVerified)) {
       assumptions.push({
         text:
-          'Ghế lái chưa xác minh — plan Xe 1 / Xe 2 theo thứ tự xe trong kho, không theo tên tay đua; nếu tay đua xếp trên của bạn ngồi xe 2, đổi 2 plan cho nhau (pit đã tách ≥ 3 vòng nên đổi được)',
+          'Ghế lái chưa xác minh — plan Xe 1 / Xe 2 theo thứ tự xe trong kho, không theo tên tay đua; nếu tay đua xếp trên của bạn ngồi xe 2, đổi 2 plan cho nhau (2 xe không pit chung vòng nên đổi được)',
       });
     }
     const gapOk = (p: StrategyResult): boolean =>
@@ -2139,7 +2140,7 @@ export function buildTyreLab(
       reason = trailPlan === diffCompound[0] ? 'diff-compound' : 'pit-gap';
     } else {
       /* fallback: keep the optimal plan but push its pits as far from the
-         lead's as the tyres allow — never reach ≥3 is stated, not hidden.
+         lead's as the tyres allow — never reach ≥1 is stated, not hidden.
          v0.7.1: the shift runs on the TRAIL car's own cap. v0.9.1: and on
          the TRAIL car's own sets. */
       const trailCap = trailGarage.cap;

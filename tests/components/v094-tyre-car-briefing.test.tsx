@@ -67,17 +67,17 @@ describe('TyreLabView — per-car briefing + wear cost (v0.9.4, Vegas save)', ()
     expect(screen.queryByTestId('hero-wear-cost')).not.toBeInTheDocument();
   });
 
-  it('the trail card reads "Xe 2 — Ricciardo (P19): M(24) → S(13) → S(13)" with the worn sets', () => {
+  it('the trail card reads "Xe 2 — Ricciardo (P19): S(13) → M(24) → S(13)" with the worn sets', () => {
     useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
     render(withI18n(<TyreLabView model={model} raceId={208} />));
 
     const trailSection = screen.getByTestId('trail-plan');
     expect(trailSection.querySelector('h3')!.textContent).toBe(
-      'Xe 2 — Ricciardo (P19): M(24) → S(13) → S(13)',
+      'Xe 2 — Ricciardo (P19): S(13) → M(24) → S(13)',
     );
 
     const trail = screen.getByTestId('trail-stint-table');
-    // the trail car's OWN stock: the M stint fresh #8, the S stints WORN #0/#3
+    // the trail car's OWN stock: the S stints WORN #0/#3, the M stint fresh #8
     expect(within(trail).getByText('bộ #8 · mới · đời 31')).toBeInTheDocument();
     expect(within(trail).getByText('bộ #0 · đã dùng · đời 18')).toBeInTheDocument();
     expect(within(trail).getByText('bộ #3 · đã dùng · đời 18')).toBeInTheDocument();

@@ -614,9 +614,9 @@ describe('buildTyreInventory v0.7.1 — player scope + per-car caps', () => {
     expect(split.trail!.driverId).toBe(13);
     expect(split.trail!.plan.stints.map((s) => s.compound)).toEqual(['M', 'S']);
     expect(split.trail!.plan.stints[0]!.laps).toBeLessThanOrEqual(30);
-    // every trail pit stays ≥ 3 laps clear of the lead's pits
+    // every trail pit stays ≥ 1 lap clear of the lead's pits (never shared)
     const leadPits = split.lead.plan.pitLaps;
-    expect(split.trail!.plan.pitLaps.every((p) => leadPits.every((l) => Math.abs(p - l) >= 3))).toBe(true);
+    expect(split.trail!.plan.pitLaps.every((p) => leadPits.every((l) => Math.abs(p - l) >= 1))).toBe(true);
   });
 
   it('prices the game plan on the garage cap: M→H pit 25 = 75.0s, not the model-lives 72.5s', () => {
@@ -878,8 +878,8 @@ describe('buildTyreLab — inventory re-pricing (Monza 53 laps, spec bước 3)'
  * apart. The 2-pit M→S→M (54.5s on the cap — FASTER on paper) is GONE
  * entirely since v0.9.1: two M stints need two usable M sets per car and
  * each car owns exactly one (before that, the pit-gap rule alone kept it
- * off the trail slot). No invented queue constant — the ≥3-lap offset rule
- * IS the handling. */
+ * off the trail slot). No invented queue constant — the no-shared-lap
+ * offset rule (v0.9.6: gap ≥ 1) IS the handling. */
 
 describe('buildTyreLab carPlans — lead/trail split on the Monza grid', () => {
   it('REAL pre-race grid: lead O\'Ward P21, trail Ricciardo P22 (quali order — no pending penalty in this save)', () => {
@@ -926,7 +926,7 @@ describe('buildTyreLab carPlans — lead/trail split on the Monza grid', () => {
     // …and the trail is still the tied 1-stop on the trail car's own garage
     expect(split.trail!.plan.order.join('→')).toBe('M→S');
     expect(split.trail!.plan.stints.map((s) => `${s.compound}(${s.laps})`)).toEqual(['M(34)', 'S(19)']);
-    expect(split.trail!.plan.pitLaps.every((p) => Math.abs(p - 19) >= 3)).toBe(true);
+    expect(split.trail!.plan.pitLaps.every((p) => Math.abs(p - 19) >= 1)).toBe(true);
   });
 
   it('flags the tie: same multiset, hedge not speed — and records the model limitation', () => {

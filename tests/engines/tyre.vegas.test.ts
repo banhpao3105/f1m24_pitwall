@@ -75,25 +75,34 @@ describe('buildTyreLab — Vegas save1.sav (Day 46712, race 208, 50 laps)', () =
     ]);
   });
 
-  it('TRAIL (Xe 2): M→S→S (M24/S13/S13) pit 24,37 · 75.7s · wear +0.2 · pit-gap', () => {
+  it('TRAIL (Xe 2): S→M→S (S13/M24/S13) pit 13,37 · 75.7s · wear +0.2 · pit-gap', () => {
     const trail = data.carPlans!.trail!;
     expect(trail.driverId).toBe(RICCIARDO_ID);
     expect(trail.gridPos).toBe(19);
     expect(trail.carLabel).toBe('Xe 2');
     expect(trail.reason).toBe('pit-gap');
-    expect(trail.plan.order.join('→')).toBe('M→S→S');
+    // v0.9.6 — SMS ranks ahead of MSS in the ranked list (same 72.7s on the
+    // team cap); re-based on car 2's price its vsBestS is +3.5 > 2.0, so it
+    // is NOT a diff-compound pick and the first gap-clearing candidate wins.
+    // With the new law (gap ≥ 1) SMS clears: pit 13 sits 1 lap from the
+    // lead's pit 14, pit 37 is 9 laps from pit 28.
+    expect(trail.plan.order.join('→')).toBe('S→M→S');
     expect(trail.plan.stints.map((s) => [s.compound, s.laps])).toEqual([
-      ['M', 24], ['S', 13], ['S', 13],
+      ['S', 13], ['M', 24], ['S', 13],
     ]);
-    expect(trail.plan.pitLaps).toEqual([24, 37]);
+    expect(trail.plan.pitLaps).toEqual([13, 37]);
     expect(trail.plan.timeS).toBe(75.7);
     expect(trail.plan.wearS).toBe(0.2);
-    // M #8 mới (đời 31); hai S là bộ ĐÃ DÙNG #0/#3 (đời 18) của xe 2
-    expect(trail.plan.stints[0]!.setUsed).toEqual({ tyreSetId: 8, fresh: true, life: 31 });
-    expect(trail.plan.stints[1]!.setUsed).toEqual({ tyreSetId: 0, fresh: false, life: 18 });
+    // S #0 ĐÃ DÙNG (đời 18) mở đầu, M #8 mới (đời 31) ở giữa,
+    // S #3 ĐÃ DÙNG (đời 18) kết thúc — toàn bộ kho xe 2
+    expect(trail.plan.stints[0]!.setUsed).toEqual({ tyreSetId: 0, fresh: false, life: 18 });
+    expect(trail.plan.stints[1]!.setUsed).toEqual({ tyreSetId: 8, fresh: true, life: 31 });
     expect(trail.plan.stints[2]!.setUsed).toEqual({ tyreSetId: 3, fresh: false, life: 18 });
-    // +0.01s/lap × 13 vòng = +0.1 từng stint (làm tròn 0.1 trước, tổng 0.2)
-    expect(trail.plan.stints.map((s) => s.wearS)).toEqual([undefined, 0.1, 0.1]);
+    // +0.01s/lap × 13 vòng = +0.1 từng S stint (làm tròn 0.1 trước, tổng 0.2)
+    expect(trail.plan.stints.map((s) => s.wearS)).toEqual([0.1, undefined, 0.1]);
+    // re-based on the trail car's own price (v0.9.4): 75.7 − 72.2 = +3.5
+    // — outside the 2.0s band, so the pick is 'pit-gap', not diff-compound
+    expect(trail.plan.vsBestS).toBe(3.5);
   });
 
   it('no plan assigned to car 2 ever touches its LOCKED S #1', () => {
@@ -305,20 +314,23 @@ describe('garageFor — unverified seats brief per CAR; verified seats win', () 
 
 describe('trail fallback (pit shift) — the shifted plan runs the trail car stock', () => {
   /**
-   * A 20-lap synthetic whose ranked list CANNOT clear the lead's pits: the
-   * lead S→S→M split pits at 6/12, blocking every 2-pit candidate's window
-   * and every 1-pit lap, and the trail car owns no H at all (no H plan can
-   * even be priced on it). Every candidate drops on gapOk/feasibility →
-   * the engine must fall back to the pit shift — and the shifted plan must
-   * CARRY the trail car's real sets (longest-S on the fresh #0, the second
-   * S on the worn 6-life #2) and price their wear.
+   * An 18-lap synthetic whose ranked list CANNOT clear the lead's pits: the
+   * lead S→S→M splits (6,6,6) and pits at 6/12 — and on 18 laps EVERY
+   * 2-pit plan is (6,6,6) with the same pits, so every candidate drops on
+   * a SHARED lap (the v0.9.6 law bans only gap 0; a 20-lap race would leak
+   * an M8/S6/S6 plan through pits 8/14, min gap 2 ≥ 1). The trail car owns
+   * no H at all (no H plan can even be priced on it). Every candidate
+   * drops on gapOk/feasibility → the engine must fall back to the pit
+   * shift — and the shifted plan must CARRY the trail car's real sets
+   * (longest-S on the fresh #0, the second S on the worn 6-life #2) and
+   * price their wear.
    */
   const buildShiftModel = (): SaveModel => {
     const model: SaveModel = buildVegasModel();
     model.races = [{
       ...model.races[0]!,
       raceId: 999,
-      laps: 20,
+      laps: 18,
       trackName: 'Shift Test',
       playerStrategy: undefined,
     } as unknown as Race];
@@ -371,26 +383,35 @@ describe('trail fallback (pit shift) — the shifted plan runs the trail car sto
     const data = lab.data;
     const split = data.carPlans!;
     // the lead runs the optimum S→S→M on its own stock, wear 0 (all fresh
-    // at cap) — its pits block the whole 2-pit window
+    // at cap) — on 18 laps its pits 6/12 ARE the whole 2-pit window
     expect(split.lead.plan.order.join('→')).toBe('S→S→M');
+    expect(split.lead.plan.stints.map((s) => [s.compound, s.laps])).toEqual([
+      ['S', 6], ['S', 6], ['M', 6],
+    ]);
+    expect(split.lead.plan.pitLaps).toEqual([6, 12]);
+    expect(split.lead.plan.timeS).toBe(53.3);
     expect(split.lead.plan.wearS).toBeUndefined();
     expect(split.lead.reason).toBeNull();
     // the trail could not take any ranked candidate → the pit shift fired
     const trail = split.trail!;
     expect(trail.reason).toBe('shifted');
-    expect(trail.shiftedBy).toBe(2);
+    expect(trail.shiftedBy).toBe(-3);
     // the shifted plan keeps the lead's compound ORDER but moves the pits
+    // out of the shared window (first pit clamps to the lap-5 pit window)
     expect(trail.plan.order.join('→')).toBe('S→S→M');
-    expect(trail.plan.pitLaps).not.toEqual(split.lead.plan.pitLaps);
+    expect(trail.plan.stints.map((s) => [s.compound, s.laps])).toEqual([
+      ['S', 5], ['S', 4], ['M', 9],
+    ]);
+    expect(trail.plan.pitLaps).toEqual([5, 9]);
+    expect(trail.plan.timeS).toBe(59.6);
     // NO empty setUsed: every stint names a physical set of XE 2
     expect(trail.plan.stints.map((s) => s.setUsed)).toEqual([
       { tyreSetId: 0, fresh: true, life: 8 },
       { tyreSetId: 2, fresh: false, life: 6 },
       { tyreSetId: 1, fresh: true, life: 9 },
     ]);
-    // the worn #2 prices its pace (+0.8s/lap × 6 laps = +4.8) + its deg
-    // (life 6 vs the 8 cap: deg(6,6) − deg(6,8) = +2.8) → +7.6 on that stint
-    expect(trail.plan.stints.map((s) => s.wearS)).toEqual([undefined, 7.6, undefined]);
-    expect(trail.plan.wearS).toBe(7.6);
+    // the worn #2 runs 4 laps: pace +0.8s/lap × 4 = +3.2, deg +0.8 → +4.0
+    expect(trail.plan.stints.map((s) => s.wearS)).toEqual([undefined, 4, undefined]);
+    expect(trail.plan.wearS).toBe(4);
   });
 });
