@@ -8,6 +8,7 @@
 
 import { useTranslations, useLocale } from 'next-intl';
 import { useMemo, useState, useEffect, useRef } from 'react';
+import { useReducedMotion } from 'framer-motion';
 import { Waves, SlidersHorizontal, CloudRain, Flag, Activity, Bot, ClipboardCheck, Check, CircleAlert, ChevronDown } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
@@ -28,7 +29,8 @@ import {
 } from '@/engines/tyre.engine';
 import { RecommendationCard } from './RecommendationCard';
 import { ConfidenceBadge } from './ConfidenceBadge';
-import { StintTimeline } from './StintTimeline';
+import { StintTimeline, SimTimeline, type TimelineStint } from './StintTimeline';
+import { NumberTween } from './NumberTween';
 import { PitWindowBar } from './PitWindowBar';
 import { DegCurveChart } from './charts/DegCurveChart';
 import { CompoundCompareChart } from './charts/CompoundCompareChart';
@@ -323,6 +325,44 @@ export function TyreLabView({
       : simLapsTotal != null
         ? Math.max(1, Math.ceil(simLapsTotal / 2))
         : 1;
+  /* v0.10.0 step 1 — the timeline's inputs, derived like simRanges:
+     geometry from the live draft; set/wear info ONLY when the current draft
+     is priced (a last-good plan under an error draft prices DIFFERENT
+     stints, so its set numbers would lie about the draft's segments — the
+     tooltip falls back to geometry-only). */
+  const simTimelineStints: TimelineStint[] = simStints.map((st, i) => ({
+    compound: st.compound as CompoundKey,
+    laps: st.laps,
+    fromLap: simRanges[i]!.from,
+    toLap: simRanges[i]!.to,
+  }));
+  const simPricedPlan = simResult != null && simResult.ok ? simResult.plan : null;
+  const simSetInfo = simStints.map((_, i) => ({
+    setUsed: simPricedPlan?.stints[i]?.setUsed ?? undefined,
+    wearS: simPricedPlan?.stints[i]?.wearS,
+  }));
+  /* v0.10.0 step 1 — segment click-through: clicking a timeline segment
+     scrolls to and focuses that stint row in the editor, with a teal ring
+     that switches off after 1.5s. Smooth scroll honours reduced motion. */
+  const [activeSimSeg, setActiveSimSeg] = useState<number | null>(null);
+  const simStintRowRefs = useRef<Array<HTMLLIElement | null>>([]);
+  const activeSegTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const simReduceMotion = useReducedMotion();
+  useEffect(() => {
+    return () => {
+      if (activeSegTimer.current != null) clearTimeout(activeSegTimer.current);
+    };
+  }, []);
+  const focusSimStint = (i: number): void => {
+    const row = simStintRowRefs.current[i];
+    if (!row) return;
+    row.scrollIntoView?.({ block: 'nearest', behavior: simReduceMotion ? 'auto' : 'smooth' });
+    const input = row.querySelector('input[type="number"]');
+    (input as HTMLElement | null)?.focus({ preventScroll: true });
+    setActiveSimSeg(i);
+    if (activeSegTimer.current != null) clearTimeout(activeSegTimer.current);
+    activeSegTimer.current = setTimeout(() => setActiveSimSeg(null), 1500);
+  };
   /* the wet preset: buildWetPlan's stints become the builder's starting
      point — only when the save can build one at all */
   const wetPreset = useMemo(() => {
@@ -342,9 +382,18 @@ export function TyreLabView({
           ? ` (${res.plan.pitLaps.map((p) => `V${p}`).join(', ')})`
           : ''}
       </p>
-      <p className="flex flex-wrap items-baseline gap-3">
-        <span className="font-mono text-base font-semibold text-ink" data-testid="sim-total">
-          {res.plan.timeS.toFixed(1)}s
+      {/* v0.10.0 step 1 — the hero row: the total is THE number of this
+          sandbox (big mono, teal glow — the only glow in the section) and
+          it tweens via NumberTween (instant under reduced motion). The
+          vs-best chip is coloured by its sign: faster than best → good,
+          tie → teal, slower → danger. The wear chip keeps its v0.9.9 face. */}
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span
+          className="font-mono text-3xl font-semibold leading-none text-ink"
+          style={{ textShadow: '0 0 14px rgba(46, 230, 200, 0.35)' }}
+          data-testid="sim-total"
+        >
+          <NumberTween value={res.plan.timeS} format={(n) => `${n.toFixed(1)}s`} />
         </span>
         {res.plan.wearS != null ? (
           <span className="font-mono text-[10px] text-ink-faint" data-testid="sim-wear">
@@ -361,14 +410,17 @@ export function TyreLabView({
              signed format stands, unchanged. */
           Math.abs(res.plan.vsBestS) < 0.05 ? (
             <span
-              className="font-mono text-xs text-ink-soft"
+              className="font-mono text-xs text-teal"
               data-testid="sim-vs-best"
             >
               {tWhat('simVsBestTie')}
             </span>
           ) : (
             <span
-              className="font-mono text-xs text-amber"
+              className={cn(
+                'font-mono text-xs',
+                res.plan.vsBestS < 0 ? 'text-good' : 'text-danger',
+              )}
               data-testid="sim-vs-best"
             >
               {tWhat('simVsBest', {
@@ -379,7 +431,7 @@ export function TyreLabView({
             </span>
           )
         ) : null}
-      </p>
+      </div>
       <table className="w-full text-left text-xs" data-testid="sim-stint-table">
         <thead>
           <tr className="text-[10px] uppercase tracking-wide text-ink-faint">
@@ -1512,13 +1564,36 @@ export function TyreLabView({
               </div>
             </div>
 
+            {/* v0.10.0 step 1 — the draft's face: the edited plan redrawn
+                over the real lap axis (segments = stints, amber dashed
+                bands = SC/VSC, blue bands = rain). It re-renders on every
+                keystroke, and its segments are buttons that focus their
+                editor row. */}
+            <div className="mt-3">
+              <SimTimeline
+                stints={simTimelineStints}
+                totalLaps={simLapsTotal ?? 0}
+                events={simEvents}
+                rain={simRain}
+                setInfo={simSetInfo}
+                activeSegment={activeSimSeg}
+                onSegmentClick={focusSimStint}
+              />
+            </div>
+
             {/* stint editor (max 4 stints — the optimizer's own cap; a
                 single stint = a legal no-stop plan) */}
             <ul className="mt-3 space-y-2" data-testid="sim-stints">
               {simStints.map((st, i) => (
                 <li
                   key={i}
-                  className="flex flex-wrap items-center gap-2 text-xs"
+                  ref={(el) => {
+                    simStintRowRefs.current[i] = el;
+                  }}
+                  className={cn(
+                    'flex flex-wrap items-center gap-2 text-xs transition-shadow',
+                    activeSimSeg === i ? 'ring-1 ring-inset ring-teal' : '',
+                  )}
                   data-testid={`sim-stint-row-${i}`}
                 >
                   <span className="w-8 font-mono text-ink-faint">#{i + 1}</span>

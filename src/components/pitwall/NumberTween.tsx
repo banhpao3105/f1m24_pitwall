@@ -46,11 +46,17 @@ export function NumberTween({
       return;
     }
     if (reduceMotion) {
+      // v0.10.0 — jumping the SOURCE is not enough: the attached spring
+      // reacts to the change event through value.set(), which routes into
+      // its own spring animation (motion-dom attachSpring) and still tweens
+      // over real frames. Reduced motion must render immediately (docs/06
+      // §6.4), so the spring value jumps too, bypassing its attach.
       mv.jump(value);
+      spring.jump(value);
       return;
     }
     mv.set(value);
-  }, [value, reduceMotion, mv]);
+  }, [value, reduceMotion, mv, spring]);
 
   return (
     <motion.span className={className} data-testid="number-tween">

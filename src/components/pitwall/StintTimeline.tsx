@@ -16,9 +16,11 @@
  * pit lap survives truncation on mobile (min-w-[300px] scroll).
  */
 
-import { motion } from 'framer-motion';
+import { useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 import { CompoundBadge, type CompoundKey } from './CompoundBadge';
+import { cn } from '@/lib/utils';
 
 export interface TimelineStint {
   compound: CompoundKey;
@@ -37,6 +39,12 @@ const COMPOUND_COLOUR: Record<string, string> = {
 
 /** Below this share of the bar a segment switches to the compact labels. */
 const COMPACT_WIDTH_SHARE = 0.12;
+
+/** v0.10.0 step 1 — the simulator's motion law (skill motion rules): layout
+ *  springs (stiffness/damping tuned like NumberTween for a < 300 ms settle),
+ *  never CSS width transitions; under prefers-reduced-motion everything
+ *  renders its final state immediately. */
+const SIM_SPRING = { type: 'spring' as const, stiffness: 320, damping: 30 };
 
 export function StintTimeline({
   stints,
@@ -134,6 +142,196 @@ export function StintTimeline({
           <CompoundBadge key={c} compound={c} size="sm" showLabel />
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * v0.10.0 step 1 — SimTimeline: the free-form simulator's face.
+ *
+ * Same math and colours as StintTimeline above (real lap axis 0 →
+ * totalLaps, compound colours, compact labels under 12%), extended with the
+ * EDITOR's overlays and interactions:
+ *
+ *  · amber dashed bands for each SC/VSC event, blue bands for each rain
+ *    window — both absolutely positioned over the same lap axis;
+ *  · segments are BUTTONS that focus their stint row in the editor (the
+ *    click-through is wired by TyreLabView via `onSegmentClick`);
+ *  · hover/focus shows a TEXT tooltip (compound, lap range, assigned set,
+ *    wear) — never colour-only (skill chart rule). Set/wear info arrives
+ *    only when the CURRENT draft is priced: under an error draft the
+ *    last-good plan prices DIFFERENT stints, so only geometry is truthful;
+ *  · segments and bands animate with framer-motion `layout` springs —
+ *    never CSS width transitions, instant under prefers-reduced-motion.
+ *
+ * Pure presentational; every number comes from the live draft (simStints /
+ * simRanges / simEvents / simRain) — no engine call of its own.
+ */
+export interface SimTimelineSetInfo {
+  setUsed?: { tyreSetId: number; fresh: boolean; life: number } | null;
+  wearS?: number;
+}
+
+export function SimTimeline({
+  stints,
+  totalLaps,
+  events = [],
+  rain = [],
+  setInfo,
+  activeSegment = null,
+  onSegmentClick,
+}: {
+  stints: TimelineStint[];
+  totalLaps: number;
+  events?: Array<{ startLap: number; laps: number }>;
+  rain?: Array<{ startLap: number; laps: number }>;
+  setInfo?: Array<SimTimelineSetInfo | undefined>;
+  activeSegment?: number | null;
+  onSegmentClick?: (i: number) => void;
+}) {
+  const tTyres = useTranslations('tyres');
+  const tWhat = useTranslations('whatif');
+  const reduceMotion = useReducedMotion();
+  const [tipSeg, setTipSeg] = useState<number | null>(null);
+  if (stints.length === 0 || totalLaps <= 0) return null;
+
+  const pct = (laps: number) => (laps / totalLaps) * 100;
+  const axisTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * totalLaps));
+  const spring = reduceMotion ? { duration: 0 } : SIM_SPRING;
+
+  /* tooltip target — guarded: a stale index (list shrank while hovered)
+     yields undefined, which renders nothing */
+  const tip = tipSeg != null ? stints[tipSeg] : undefined;
+  const tipInfo = tipSeg != null ? setInfo?.[tipSeg] : undefined;
+  const tipLeft =
+    tip != null
+      ? Math.min(
+          92,
+          Math.max(
+            8,
+            pct(stints.slice(0, tipSeg!).reduce((s, st) => s + st.laps, 0) + tip.laps / 2),
+          ),
+        )
+      : 0;
+
+  return (
+    <div className="relative">
+      <div className="overflow-x-auto pitwall-scroll">
+        {/* the bar — one flex row over the real lap axis; overlays sit on
+            top, pointer-events-none so segment clicks pass through */}
+        <div
+          className="relative flex h-11 min-w-[300px] w-full overflow-hidden rounded border border-line bg-surface"
+          data-testid="sim-timeline"
+        >
+          {stints.map((stint, i) => {
+            const narrow = stint.laps / totalLaps < COMPACT_WIDTH_SHARE;
+            return (
+              <motion.button
+                key={i}
+                type="button"
+                layout
+                transition={spring}
+                onClick={() => onSegmentClick?.(i)}
+                onMouseEnter={() => setTipSeg(i)}
+                onMouseLeave={() => setTipSeg((s) => (s === i ? null : s))}
+                onFocus={() => setTipSeg(i)}
+                onBlur={() => setTipSeg((s) => (s === i ? null : s))}
+                aria-label={tWhat('simTimelineGoTo', { n: i + 1 })}
+                style={{ width: `${pct(stint.laps)}%` }}
+                className={cn(
+                  'relative flex min-w-0 cursor-pointer flex-col items-center justify-center border-r border-line bg-raised last:border-r-0',
+                  'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-teal',
+                  activeSegment === i && 'ring-1 ring-inset ring-teal',
+                )}
+                data-testid={`sim-timeline-seg-${i}`}
+              >
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-0 top-0 h-0.5"
+                  style={{ background: COMPOUND_COLOUR[stint.compound] ?? '#1d5f8a' }}
+                />
+                <span
+                  className={`font-mono text-[10px] leading-[13px] text-ink ${narrow ? 'max-w-full truncate px-0.5' : ''}`}
+                >
+                  {`${stint.compound}·${stint.laps}`}
+                </span>
+                {!narrow ? (
+                  <span className="font-mono text-[9px] leading-[12px] text-ink-faint">
+                    {`V${stint.fromLap}–${stint.toLap}`}
+                  </span>
+                ) : null}
+              </motion.button>
+            );
+          })}
+          {/* pit flags at every stint boundary (the draft's own pits) */}
+          {stints.slice(0, -1).map((stint, i) => (
+            <span
+              key={`flag-${i}`}
+              aria-hidden="true"
+              className="pointer-events-none absolute bottom-0 top-0 w-px bg-amber"
+              style={{ left: `${pct(stint.toLap)}%` }}
+              data-testid={`sim-timeline-pit-${stint.toLap}`}
+            />
+          ))}
+          {/* SC/VSC event bands — amber, dashed, over the exact window */}
+          {events.map((ev, i) =>
+            !Number.isFinite(ev.startLap) || !Number.isFinite(ev.laps) || ev.laps <= 0 || ev.startLap < 1 ? null : (
+              <motion.span
+                key={`ev-${i}`}
+                layout
+                transition={spring}
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 border border-dashed border-amber bg-amber/20"
+                style={{ left: `${pct(ev.startLap - 1)}%`, width: `${pct(ev.laps)}%` }}
+                data-testid={`sim-timeline-event-${i}`}
+              />
+            ),
+          )}
+          {/* rain window bands — info blue, over the exact window */}
+          {rain.map((rw, i) =>
+            !Number.isFinite(rw.startLap) || !Number.isFinite(rw.laps) || rw.laps <= 0 || rw.startLap < 1 ? null : (
+              <motion.span
+                key={`rain-${i}`}
+                layout
+                transition={spring}
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 border-x border-info bg-info/20"
+                style={{ left: `${pct(rw.startLap - 1)}%`, width: `${pct(rw.laps)}%` }}
+                data-testid={`sim-timeline-rain-${i}`}
+              />
+            ),
+          )}
+        </div>
+        {/* lap axis — the same shared x scale as StintTimeline */}
+        <div className="mt-1 flex justify-between font-mono text-[10px] text-ink-faint" aria-hidden="true">
+          {axisTicks.map((lap, i) => (
+            <span key={i}>{i === 0 ? 'L0' : `L${lap}`}</span>
+          ))}
+        </div>
+      </div>
+      {/* the text tooltip (skill chart rule: never colour-only). Absolute —
+          no layout shift, floats under the bar. */}
+      {tip != null ? (
+        <p
+          className="pointer-events-none absolute top-full z-10 mt-1 max-w-[92%] -translate-x-1/2 truncate rounded border border-line-strong bg-raised px-2 py-1 font-mono text-[10px] text-ink"
+          style={{ left: `${tipLeft}%` }}
+          data-testid="sim-timeline-tooltip"
+        >
+          {[
+            `${tip.compound} · V${tip.fromLap}–${tip.toLap}`,
+            ...(tipInfo?.setUsed
+              ? [
+                  tipInfo.setUsed.fresh
+                    ? tTyres('inventory.setFresh', { id: tipInfo.setUsed.tyreSetId, life: tipInfo.setUsed.life })
+                    : tTyres('inventory.setUsed', { id: tipInfo.setUsed.tyreSetId, life: tipInfo.setUsed.life }),
+                ]
+              : []),
+            ...(tipInfo?.wearS != null
+              ? [tTyres('split.wearCost', { sign: tipInfo.wearS > 0 ? '+' : '−', time: Math.abs(tipInfo.wearS).toFixed(1) })]
+              : []),
+          ].join(' · ')}
+        </p>
+      ) : null}
     </div>
   );
 }

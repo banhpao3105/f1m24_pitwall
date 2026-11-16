@@ -456,6 +456,7 @@
     "scNoCols": "Save không mang cột SC/pit của track (Races_Tracks) — what-if SC/VSC tắt, không bịa số.",
     "simTitle": "Mô phỏng tự do",
     "simSubtitle": "Tự ráp chiến thuật, chèn SC/VSC và mưa — chỉ so với plan tốt nhất, không đổi lead/trail.",
+    "simTimelineGoTo": "Tới stint {n} trong editor",
     "simCar": "Xe",
     "simAddStint": "Thêm stint",
     "simAddEvent": "Thêm SC/VSC",

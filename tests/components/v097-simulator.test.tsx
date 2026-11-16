@@ -17,10 +17,16 @@
  * per-stint lap ranges + the live lap total, titled/labelled lists, the
  * dimmed last-good result while the draft errors, sensible add defaults
  * (first pit, not lap 1), the reset button, and the race-distance rain cap.
+ *
+ * v0.10.0 step 1 — the simulator's face (UI only, engine untouched): the
+ * SimTimeline (draft stints over the real lap axis with SC/VSC + rain
+ * bands, clickable segments, text tooltip) and the hero total (NumberTween
+ * + sign-coloured vs-best chip). Motion runs reduced (stubbed here) so
+ * every spring takes its instant-jump branch in jsdom.
  */
 
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { render, screen, within, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, within, cleanup, fireEvent, act, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { NextIntlClientProvider } from 'next-intl';
 import { messages } from '@/lib/i18n/config';
@@ -48,6 +54,29 @@ beforeEach(() => {
       disconnect() {}
     },
   );
+  // v0.10.0 step 1 — the hero total now tweens via NumberTween and the
+  // SimTimeline segments use layout springs; springs settle over real time
+  // (rAF), which jsdom never reaches. Stub matchMedia to reduced-motion so
+  // every motion path takes its instant-jump branch (mv.jump / duration 0)
+  // — deterministic assertions, same branch real reduced-motion users get.
+  // NOTE: motion-dom queries window.matchMedia("(prefers-reduced-motion)")
+  // (no ": reduce" suffix) — match the family, not the exact media query.
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+  // jsdom does not implement scrollIntoView (the timeline's click-through
+  // scrolls the editor row into view).
+  window.HTMLElement.prototype.scrollIntoView = vi.fn();
 });
 
 afterEach(() => {
@@ -174,7 +203,7 @@ describe('TyreLabView — the free-form simulator (v0.9.7, Shanghai save)', () =
     );
   });
 
-  it('B8 via the builder: B1 + an SC[19,21] event → 93.2s', () => {
+  it('B8 via the builder: B1 + an SC[19,21] event → 93.2s', async () => {
     useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
     render(withI18n(<TyreLabView model={model} raceId={212} />));
 
@@ -192,7 +221,12 @@ describe('TyreLabView — the free-form simulator (v0.9.7, Shanghai save)', () =
     fireEvent.change(screen.getByTestId('sim-event-0-start'), { target: { value: '19' } });
     fireEvent.change(screen.getByTestId('sim-event-0-laps'), { target: { value: '3' } });
 
-    expect(screen.getByTestId('sim-total').textContent).toBe('93.2s');
+    // this transition re-prices a PERSISTING result (no remount in between),
+    // so the hero text flows through framer-motion's frame loop even in the
+    // instant-jump path — waitFor it (same pattern as phase3-motion).
+    await waitFor(() => {
+      expect(screen.getByTestId('sim-total').textContent).toBe('93.2s');
+    });
     expect(screen.getByTestId('sim-vs-best').textContent).toBe('+10.1s so với best');
   });
 
@@ -316,5 +350,140 @@ describe('TyreLabView — the simulator editor (v0.9.9, Shanghai save)', () => {
     expect(screen.getByTestId('sim-total').textContent).toBe('83.1s');
     expect(screen.getByTestId('sim-vs-best').textContent).toBe('bằng best');
     expect(screen.getByTestId('sim-total-laps').textContent).toBe('Tổng: 56/56 vòng');
+  });
+});
+
+describe('TyreLabView — SimTimeline + hero (v0.10.0 step 1, Shanghai save)', () => {
+  const model: SaveModel = buildShanghaiModel();
+
+  /* framer-motion renders % style values rounded to 4 decimals (e.g.
+     17.8571%); the geometry assertions compare parsed numbers at 2-decimal
+     precision — the visual difference is sub-thousandth of a percent. */
+  const pctOf = (el: HTMLElement, prop: 'width' | 'left') => parseFloat(el.style[prop]);
+
+  it('the draft timeline renders 3 segments at 19/19/18 of 56 with pit flags at V19/V38', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    const bar = screen.getByTestId('sim-timeline');
+    expect(bar).toBeInTheDocument();
+    const segs = [0, 1, 2].map((i) => screen.getByTestId(`sim-timeline-seg-${i}`));
+    // widths exactly the laps share of the real axis: 19/19/18 of 56
+    expect(pctOf(segs[0]!, 'width')).toBeCloseTo((19 / 56) * 100, 2);
+    expect(pctOf(segs[1]!, 'width')).toBeCloseTo((19 / 56) * 100, 2);
+    expect(pctOf(segs[2]!, 'width')).toBeCloseTo((18 / 56) * 100, 2);
+    // in-segment labels: compound + length on line 1, lap range on line 2
+    expect(segs[0]!.textContent).toContain('S·19');
+    expect(segs[0]!.textContent).toContain('V1–19');
+    expect(segs[2]!.textContent).toContain('V39–56');
+    // pit flags at the two stint boundaries
+    expect(screen.getByTestId('sim-timeline-pit-19')).toBeInTheDocument();
+    expect(screen.getByTestId('sim-timeline-pit-38')).toBeInTheDocument();
+  });
+
+  it('hovering a priced segment shows a TEXT tooltip: compound, range, set, wear', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    const seg0 = screen.getByTestId('sim-timeline-seg-0');
+    fireEvent.mouseEnter(seg0);
+    const tip = screen.getByTestId('sim-timeline-tooltip');
+    expect(tip.textContent).toContain('S · V1–19');
+    expect(tip.textContent).toContain('bộ #3');
+    expect(tip.textContent).toContain('mới');
+    expect(tip.textContent).toContain('đời 28');
+    fireEvent.mouseLeave(seg0);
+    expect(screen.queryByTestId('sim-timeline-tooltip')).not.toBeInTheDocument();
+    // focusing the segment (keyboard path) shows the same tooltip
+    fireEvent.focus(seg0);
+    expect(screen.getByTestId('sim-timeline-tooltip')).toBeInTheDocument();
+    fireEvent.blur(seg0);
+    expect(screen.queryByTestId('sim-timeline-tooltip')).not.toBeInTheDocument();
+  });
+
+  it('clicking a segment focuses that stint row in the editor and rings it', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+      render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+      fireEvent.click(screen.getByTestId('sim-timeline-seg-1'));
+
+      // the row's laps input carries focus (keyboard users land in the editor)
+      const laps1 = screen.getByTestId('sim-stint-1-laps');
+      expect(document.activeElement).toBe(laps1);
+      // the row shows the teal highlight ring…
+      const row = screen.getByTestId('sim-stint-row-1');
+      expect(row.className).toContain('ring-teal');
+      // …and it switches off after 1.5s
+      act(() => {
+        vi.advanceTimersByTime(1600);
+      });
+      expect(row.className).not.toContain('ring-teal');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('an SC event and a rain window appear as bands over their exact lap ranges', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    // defaults from v0.9.9: SC at the draft's first pit (19) for 3 laps;
+    // rain at 19 for 10 laps
+    fireEvent.click(screen.getByTestId('sim-add-event'));
+    const ev = screen.getByTestId('sim-timeline-event-0');
+    expect(pctOf(ev, 'left')).toBeCloseTo((18 / 56) * 100, 2);
+    expect(pctOf(ev, 'width')).toBeCloseTo((3 / 56) * 100, 2);
+
+    fireEvent.click(screen.getByTestId('sim-add-rain'));
+    const rw = screen.getByTestId('sim-timeline-rain-0');
+    expect(pctOf(rw, 'left')).toBeCloseTo((18 / 56) * 100, 2);
+    expect(pctOf(rw, 'width')).toBeCloseTo((10 / 56) * 100, 2);
+  });
+
+  it('the hero total is a tweened number and the vs-best chip is coloured by its sign', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    // the default draft TIES the best → teal chip, hero 83.1s
+    expect(screen.getByTestId('sim-total').textContent).toBe('83.1s');
+    expect(screen.getByTestId('sim-vs-best').className).toContain('text-teal');
+    // hero glow — the one text-shadow in the section
+    expect(screen.getByTestId('sim-total').getAttribute('style')).toContain('text-shadow');
+
+    // B1 (100.4s) is slower than best → danger chip
+    setCompound(1, 'M');
+    setLaps(1, 18);
+    setCompound(2, 'M');
+    setLaps(2, 19);
+    expect(screen.getByTestId('sim-total').textContent).toBe('100.4s');
+    const chip = screen.getByTestId('sim-vs-best');
+    expect(chip.textContent).toBe('+17.3s so với best');
+    expect(chip.className).toContain('text-danger');
+  });
+
+  it('segments track the draft live when stint lengths change', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    setLaps(0, 10);
+    // 10/19/18 on the same 56-lap axis; the boundaries move to V10 + V29
+    expect(pctOf(screen.getByTestId('sim-timeline-seg-0'), 'width')).toBeCloseTo((10 / 56) * 100, 2);
+    expect(screen.getByTestId('sim-timeline-pit-10')).toBeInTheDocument();
+    expect(screen.queryByTestId('sim-timeline-pit-19')).not.toBeInTheDocument();
+    expect(screen.getByTestId('sim-timeline-pit-29')).toBeInTheDocument();
+  });
+
+  it('under an error draft the tooltip falls back to geometry-only (no lying set numbers)', () => {
+    useSaveStore.setState({ status: 'ready', model, error: null, progress: null });
+    render(withI18n(<TyreLabView model={model} raceId={212} />));
+
+    // break the total → the last-good plan prices DIFFERENT stints
+    setLaps(0, 10);
+    fireEvent.mouseEnter(screen.getByTestId('sim-timeline-seg-0'));
+    const tip = screen.getByTestId('sim-timeline-tooltip');
+    expect(tip.textContent).toContain('S · V1–10');
+    expect(tip.textContent).not.toContain('bộ #');
   });
 });

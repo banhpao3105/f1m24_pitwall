@@ -456,6 +456,7 @@
     "scNoCols": "The save does not carry the track's SC/pit columns (Races_Tracks) — SC/VSC what-if stays off; no numbers invented.",
     "simTitle": "Free-form simulator",
     "simSubtitle": "Assemble a strategy, drop in SC/VSC and rain — compared against the best plan only, lead/trail untouched.",
+    "simTimelineGoTo": "Go to stint {n} in the editor",
     "simCar": "Car",
     "simAddStint": "Add stint",
     "simAddEvent": "Add SC/VSC",
