@@ -183,10 +183,21 @@ describe('SimTimeline drag — scenario bands (v0.11.0 step 3, Shanghai)', () =>
     await waitFor(() => {
       expect(screen.getByTestId('sim-total').textContent).toBe('83.1s');
     });
-    // the committed-scenario card does NOT re-run per keyboard step — the
-    // search waits for the commit; here the band moved without a commit,
-    // so the card still answers the ORIGINAL [19,21] question
-    expect(screen.getByTestId('tyre-scenario-recommendation')).toBeInTheDocument();
+    /* v0.11.1 B2 law — mid-gesture the card still answers the COMMITTED
+       [19,21] question: keyboard steps update the draft, never the search */
+    expect(within(screen.getByTestId('tyre-scenario-recommendation')).getByTestId('scenario-time').textContent).toBe('75.8s');
+
+    /* the blur ENDS the keyboard gesture → the search runs ONCE now and
+       the card switches to the [25,27] answer (the v0.11.0 Step 3 DoD) */
+    fireEvent.blur(move);
+    await waitFor(() => {
+      const card = screen.getByTestId('tyre-scenario-recommendation');
+      expect(within(card).getByTestId('scenario-time').textContent).toBe('80.2s');
+      expect(within(card).getByTestId('scenario-verdict').textContent).toContain(
+        'Đổi sang S→M→S',
+      );
+      expect(within(card).getByTestId('scenario-delta').textContent).toBe('−2.9s');
+    });
   });
 
   it('keyboard-resizing the band end [19,21]→[19,38] prices both pits inside the window (68.6s)', async () => {
@@ -261,9 +272,20 @@ describe('SimTimeline drag — rain band (v0.11.0 step 3, Shanghai)', () => {
     expect(screen.getByTestId('sim-error-0').textContent).toContain(
       'stint M vòng 39–56 chạy slick trong mưa (cửa sổ 47–56)',
     );
-    // the card still answers the COMMITTED [19,28] question — a live band
-    // drag never re-runs the search (that is Step 2's committed-changes law)
-    expect(within(card).getByTestId('scenario-time').textContent).toBe('154.1s');
+
+    /* the blur commits the [47,56] gesture → the card re-runs ONCE and
+       recommends a plan whose wet stint covers V47–56: owner-measured at
+       151.8s (S19/S27/I10 or S27/S19/I10 — same multiset; the assertion
+       pins the TIME + the LAST compound being I + its opening pit V46,
+       never the order of the two S stints) */
+    fireEvent.blur(move);
+    await waitFor(() => {
+      const c = screen.getByTestId('tyre-scenario-recommendation');
+      expect(within(c).getByTestId('scenario-time').textContent).toBe('151.8s');
+      const verdict = within(c).getByTestId('scenario-verdict').textContent ?? '';
+      expect(verdict).toMatch(/→I, pit /);
+      expect(verdict).toContain('V46');
+    });
   });
 
   it('the resize handles shift on keyboard and keep the window ≥ 1 lap', () => {

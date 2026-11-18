@@ -1624,6 +1624,16 @@ export function TyreLabView({
                 onBoundaryChange={onSimBoundaryDrag}
                 onEventChange={onSimEventDrag}
                 onRainChange={onSimRainDrag}
+                /* v0.11.1 B2 — the END of an editing gesture (pointerup with
+                   a moved value, blur/Enter leaving a keyboard-edited
+                   handle) IS the commit point: the scenario search runs
+                   ONCE per gesture, right here. commitScen() without
+                   arguments is correct at this moment — every pointermove
+                   and every keypress already re-rendered the view, so this
+                   closure carries the latest events/rain (the stale-closure
+                   note on commitScen below). The other commit paths (input
+                   blur/Enter, mode change, add/delete) are untouched. */
+                onDragEnd={() => commitScen()}
               />
             </div>
 

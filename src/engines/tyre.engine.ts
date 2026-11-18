@@ -3544,12 +3544,29 @@ function rainVariantsFromSplit(
     }
     const stints: RainVariantStint[] = [];
     /* pre part — original compounds + internal pits, truncated at the
-       first window's first lap */
+       first window's first lap.
+       v0.11.1 — the TRUNCATED head (the touching stint's dry remainder
+       before the window) FOLDS INTO THE PREVIOUS STINT instead of living
+       as its own segment: one fewer stint and one fewer pit than a
+       separate head. Owner-measured on Shanghai rain [47,56] (the window
+       starts mid-M18 of the S19/S19/M18 lead): the reference engine
+       answers S19/S27/I10 at 151.8s — the head laps [39..46] run on the
+       previous stint's compound — while a separate head gives
+       S19/S19/M8/I10 at 163s. No previous stint → the head keeps its own
+       compound (the [19,28] lead case) — every locked number unchanged,
+       re-verified by the full suite. */
     let cursor2 = 0;
     for (const st of splitStints) {
       const stStart = cursor2 + 1;
       if (stStart >= wetIvs[0]!.start) break;
-      stints.push({ compound: st.compound, laps: Math.min(st.laps, wetIvs[0]!.start - stStart) });
+      const headLaps = Math.min(st.laps, wetIvs[0]!.start - stStart);
+      const truncated = headLaps < st.laps;
+      const prev = stints[stints.length - 1];
+      if (truncated && prev) {
+        prev.laps += headLaps;
+      } else {
+        stints.push({ compound: st.compound, laps: headLaps });
+      }
       cursor2 += st.laps;
     }
     /* wet stints + the dry gaps between/after them (one compound) */

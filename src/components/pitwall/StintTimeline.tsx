@@ -185,6 +185,7 @@ export function SimTimeline({
   onBoundaryChange,
   onEventChange,
   onRainChange,
+  onDragEnd,
 }: {
   stints: TimelineStint[];
   totalLaps: number;
@@ -200,6 +201,17 @@ export function SimTimeline({
   onBoundaryChange?: (boundaryIndex: number, lap: number) => void;
   onEventChange?: (i: number, next: { startLap: number; laps: number }) => void;
   onRainChange?: (i: number, next: { startLap: number; laps: number }) => void;
+  /**
+   * v0.11.1 B2 — the END of an editing gesture: pointerup after a drag
+   * that actually moved a value, or blur/Enter leaving a keyboard-edited
+   * handle. The owner commits the committed-scenario ONCE here — never
+   * per pointermove, never per keypress (the scenario search is far more
+   * expensive than a draft re-price). One shared flag guards it: set when
+   * a change is actually applied, cleared on focus and on every commit,
+   * so a no-change pointerup/blur/Enter never commits and one gesture
+   * never commits twice.
+   */
+  onDragEnd?: () => void;
 }) {
   const tTyres = useTranslations('tyres');
   const tWhat = useTranslations('whatif');
@@ -220,6 +232,13 @@ export function SimTimeline({
       }
   >(null);
   const [dragTip, setDragTip] = useState<{ text: string; left: number } | null>(null);
+  /* v0.11.1 B2 — the ONE commit guard (see the onDragEnd doc above). */
+  const pendingCommitRef = useRef(false);
+  const commitIfPending = (): void => {
+    if (!pendingCommitRef.current) return;
+    pendingCommitRef.current = false;
+    onDragEnd?.();
+  };
   if (stints.length === 0 || totalLaps <= 0) return null;
 
   const pct = (laps: number) => (laps / totalLaps) * 100;
@@ -279,7 +298,10 @@ export function SimTimeline({
       const { min, max } = boundaryClamp(d.index);
       const next = Math.min(max, Math.max(min, lap));
       setDragTip({ text: `V${d.origin} → V${next}`, left: pct(next) });
-      if (next !== boundaries[d.index]) onBoundaryChange?.(d.index, next);
+      if (next !== boundaries[d.index]) {
+        pendingCommitRef.current = true;
+        onBoundaryChange?.(d.index, next);
+      }
       return;
     }
     const list = d.layer === 'event' ? events : rain;
@@ -291,6 +313,7 @@ export function SimTimeline({
       const next = Math.min(maxStart, Math.max(minStart, lap - d.grabOffset));
       setDragTip({ text: `V${d.origin} → V${next}`, left: pct(next + band.laps / 2) });
       if (next !== band.startLap) {
+        pendingCommitRef.current = true;
         const fn = d.layer === 'event' ? onEventChange : onRainChange;
         fn?.(d.index, { startLap: next, laps: band.laps });
       }
@@ -304,6 +327,7 @@ export function SimTimeline({
         left: pct(next + nextLaps / 2),
       });
       if (next !== band.startLap) {
+        pendingCommitRef.current = true;
         const fn = d.layer === 'event' ? onEventChange : onRainChange;
         fn?.(d.index, { startLap: next, laps: nextLaps });
       }
@@ -317,6 +341,7 @@ export function SimTimeline({
       left: pct(band.startLap + nextLaps / 2),
     });
     if (nextEnd !== end) {
+      pendingCommitRef.current = true;
       const fn = d.layer === 'event' ? onEventChange : onRainChange;
       fn?.(d.index, { startLap: band.startLap, laps: nextLaps });
     }
@@ -328,9 +353,14 @@ export function SimTimeline({
     (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
     dragRef.current = null;
     setDragTip(null);
+    /* v0.11.1 B2 — pointerup ends the gesture: commit ONCE if the drag
+       actually moved a value (the pending flag), never on a bare click. */
+    commitIfPending();
   };
 
-  /* keyboard parity — arrows ±1, Shift ±5, Home/End to the clamp */
+  /* keyboard parity — arrows ±1, Shift ±5, Home/End to the clamp. Every
+     applied change marks the gesture dirty; the commit lands on blur or
+     Enter (the gesture's END), never per keypress. */
   const onHandleKeyDown = (
     e: React.KeyboardEvent,
     apply: (next: number) => void,
@@ -338,6 +368,10 @@ export function SimTimeline({
     max: number,
     current: number,
   ): void => {
+    if (e.key === 'Enter') {
+      commitIfPending();
+      return;
+    }
     const step = e.shiftKey ? 5 : 1;
     let next: number | null = null;
     if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') next = Math.max(min, current - step);
@@ -347,7 +381,16 @@ export function SimTimeline({
     if (next == null) return;
     e.preventDefault();
     e.stopPropagation();
+    if (next !== current) pendingCommitRef.current = true;
     apply(next);
+  };
+  /* the handle-level gesture ends: focus clears the flag (nothing pending
+     at gesture start), blur commits whatever the keyboard changed */
+  const onHandleFocus = (): void => {
+    pendingCommitRef.current = false;
+  };
+  const onHandleBlur = (): void => {
+    commitIfPending();
   };
 
   /* tooltip target — guarded: a stale index (list shrank while hovered)
@@ -439,6 +482,8 @@ export function SimTimeline({
                 onPointerMove={onDragMove}
                 onPointerUp={endDrag}
                 onPointerCancel={endDrag}
+                onFocus={onHandleFocus}
+                onBlur={onHandleBlur}
                 onKeyDown={(e) =>
                   onHandleKeyDown(e, (next) => onBoundaryChange?.(i, next), clamp2.min, clamp2.max, stint.toLap)
                 }
@@ -497,6 +542,8 @@ export function SimTimeline({
                       onPointerMove={onDragMove}
                       onPointerUp={endDrag}
                       onPointerCancel={endDrag}
+                      onFocus={onHandleFocus}
+                      onBlur={onHandleBlur}
                       onKeyDown={(e) =>
                         onHandleKeyDown(
                           e,
@@ -531,6 +578,8 @@ export function SimTimeline({
                       onPointerMove={onDragMove}
                       onPointerUp={endDrag}
                       onPointerCancel={endDrag}
+                      onFocus={onHandleFocus}
+                      onBlur={onHandleBlur}
                       onKeyDown={(e) =>
                         onHandleKeyDown(
                           e,
@@ -559,6 +608,8 @@ export function SimTimeline({
                       onPointerMove={onDragMove}
                       onPointerUp={endDrag}
                       onPointerCancel={endDrag}
+                      onFocus={onHandleFocus}
+                      onBlur={onHandleBlur}
                       onKeyDown={(e) =>
                         onHandleKeyDown(
                           e,
@@ -618,6 +669,8 @@ export function SimTimeline({
                       onPointerMove={onDragMove}
                       onPointerUp={endDrag}
                       onPointerCancel={endDrag}
+                      onFocus={onHandleFocus}
+                      onBlur={onHandleBlur}
                       onKeyDown={(e) =>
                         onHandleKeyDown(
                           e,
@@ -652,6 +705,8 @@ export function SimTimeline({
                       onPointerMove={onDragMove}
                       onPointerUp={endDrag}
                       onPointerCancel={endDrag}
+                      onFocus={onHandleFocus}
+                      onBlur={onHandleBlur}
                       onKeyDown={(e) =>
                         onHandleKeyDown(
                           e,
@@ -680,6 +735,8 @@ export function SimTimeline({
                       onPointerMove={onDragMove}
                       onPointerUp={endDrag}
                       onPointerCancel={endDrag}
+                      onFocus={onHandleFocus}
+                      onBlur={onHandleBlur}
                       onKeyDown={(e) =>
                         onHandleKeyDown(
                           e,
