@@ -369,6 +369,39 @@ export function TyreLabView({
       stints: plan.stints.map((s) => ({ id: nextSimId(), compound: s.compound, laps: s.laps })),
     });
   };
+
+  /* v0.11.0 step 3 — the SimTimeline drag handlers. The TIMELINE clamps
+     geometry (stint ≥ 4, band inside the race) and snaps to whole laps;
+     these handlers just write the draft (every pointermove — the price
+     memo re-prices live, the scenario search does NOT). */
+  const onSimBoundaryDrag = (boundaryIndex: number, lap: number): void => {
+    if (simLapsTotal == null || simSumLaps !== simLapsTotal) return;
+    if (boundaryIndex < 0 || boundaryIndex >= simStints.length - 1) return;
+    const before = simStints
+      .slice(0, boundaryIndex)
+      .reduce((s, st) => s + st.laps, 0);
+    const nextBoundary = simStints
+      .slice(0, boundaryIndex + 2)
+      .reduce((s, st) => s + st.laps, 0);
+    const firstLaps = lap - before;
+    const secondLaps = nextBoundary - lap;
+    if (firstLaps < 4 || secondLaps < 4) return;
+    updateSim({
+      stints: simStints.map((r, k) =>
+        k === boundaryIndex ? { ...r, laps: firstLaps } : k === boundaryIndex + 1 ? { ...r, laps: secondLaps } : r,
+      ),
+    });
+  };
+  const onSimEventDrag = (i: number, next: { startLap: number; laps: number }): void => {
+    updateSim({
+      events: simEvents.map((r, k) => (k === i ? { ...r, startLap: next.startLap, laps: next.laps } : r)),
+    });
+  };
+  const onSimRainDrag = (i: number, next: { startLap: number; laps: number }): void => {
+    updateSim({
+      rain: simRain.map((r, k) => (k === i ? { ...r, startLap: next.startLap, laps: next.laps } : r)),
+    });
+  };
   const simCars = tyre?.data.inventory?.cars ?? [];
   const simResult = useMemo(() => {
     if (!race || simStints.length === 0) return null;
@@ -1573,7 +1606,12 @@ export function TyreLabView({
                 over the real lap axis (segments = stints, amber dashed
                 bands = SC/VSC, blue bands = rain). It re-renders on every
                 keystroke, and its segments are buttons that focus their
-                editor row. */}
+                editor row.
+                v0.11.0 step 3 — the overlays are DRAGGABLE now: boundaries
+                move the stint edge (stint ≥ 4 laps clamp), band bodies
+                move, band edges resize; every pointermove re-prices the
+                draft live (the search does NOT run per move — it waits for
+                a committed scenario change). */}
             <div className="mt-3">
               <SimTimeline
                 stints={simTimelineStints}
@@ -1583,6 +1621,9 @@ export function TyreLabView({
                 setInfo={simSetInfo}
                 activeSegment={activeSimSeg}
                 onSegmentClick={focusSimStint}
+                onBoundaryChange={onSimBoundaryDrag}
+                onEventChange={onSimEventDrag}
+                onRainChange={onSimRainDrag}
               />
             </div>
 

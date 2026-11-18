@@ -482,7 +482,11 @@
     "scenApplyAlt": "Áp dụng",
     "scenEvidence": "Xem bằng chứng",
     "scenCurrent": "plan hiện tại dưới tình huống: {time}s",
-    "scenAssumpWetDeg": "Deg của stint I/W mượn curve của M (save không có hằng số deg cho lốp mưa — giả định gán nhãn)."
+    "scenAssumpWetDeg": "Deg của stint I/W mượn curve của M (save không có hằng số deg cho lốp mưa — giả định gán nhãn).",
+    "simTimelineBoundary": "Ranh giới stint {n} — kéo hoặc dùng phím mũi tên (±1, Shift ±5) để dời pit",
+    "simTimelineBandMove": "Cửa sổ {n} — kéo thân để dời, hoặc phím mũi tên",
+    "simTimelineBandStart": "Mép trái cửa sổ {n} — kéo để co/giãn từ mép trái",
+    "simTimelineBandEnd": "Mép phải cửa sổ {n} — kéo để co/giãn từ mép phải"
   },
   "race": {
     "laps": "vòng",

@@ -482,7 +482,11 @@
     "scenApplyAlt": "Apply",
     "scenEvidence": "Show the evidence",
     "scenCurrent": "current plan under the scenario: {time}s",
-    "scenAssumpWetDeg": "I/W stint deg borrows the M curve (the save carries no wet deg constants — labelled assumption)."
+    "scenAssumpWetDeg": "I/W stint deg borrows the M curve (the save carries no wet deg constants — labelled assumption).",
+    "simTimelineBoundary": "Stint {n} boundary — drag or use arrow keys (±1, Shift ±5) to move the pit",
+    "simTimelineBandMove": "Window {n} — drag the body to move it, or use arrow keys",
+    "simTimelineBandStart": "Window {n} left edge — drag to resize from the start",
+    "simTimelineBandEnd": "Window {n} right edge — drag to resize from the end"
   },
   "race": {
     "laps": "laps",
