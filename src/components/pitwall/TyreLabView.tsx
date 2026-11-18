@@ -9,20 +9,21 @@
 import { useTranslations, useLocale } from 'next-intl';
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Waves, SlidersHorizontal, CloudRain, Flag, Activity, Bot, ClipboardCheck, Check, CircleAlert, ChevronDown, Minus, Plus, X } from 'lucide-react';
+import { Waves, SlidersHorizontal, CloudRain, Lightbulb, Activity, Bot, ClipboardCheck, Check, CircleAlert, Minus, Plus, X } from 'lucide-react';
 import type { SaveModel } from '@/domain/types';
 import { trackDisplay } from '@/lib/track-display';
 import { getTrackCorrection, putTrackCorrection, TRACK_CORRECTIONS_VERSION } from '@/lib/track-corrections';
 import { useTyreLab } from '@/lib/engine-hooks';
 import {
-  whatIfPitShift,
-  whatIfSCVSC,
   buildWetPlan,
   priceManualPlan,
+  recommendUnderScenario,
   type TyreLabPrior,
   type PaceMeasuredEntry,
   type SimCompound,
+  type ManualPlan,
   type ManualPlanResult,
+  type ScenarioRecommendation,
 } from '@/engines/tyre.engine';
 import { RecommendationCard } from './RecommendationCard';
 import { ConfidenceBadge } from './ConfidenceBadge';
@@ -35,7 +36,6 @@ import { CompoundBadge, type CompoundKey } from './CompoundBadge';
 import type { StrategyResult } from '@/engines/tyre.engine';
 import type { InventoryCompoundAgg } from '@/engines/grid.engine';
 import { Slider } from '@/components/ui/slider';
-import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 
 /**
@@ -138,25 +138,20 @@ export function TyreLabView({
   const tSec = useTranslations('sec');
   const locale = useLocale() as 'vi' | 'en';
 
-  // what-if local state (docs/03 §5.3: pit sớm/muộn ±, toggle mưa)
-  const [pitShift, setPitShift] = useState(0);
-  const [rainOn, setRainOn] = useState(false);
-  /* v0.9.9 — the pit-shift what-if section COLLAPSES when idle: the
-     simulator is the main tool now, and the section's controls (slider,
-     rain toggle) all start neutral. The initial value IS the idle check —
-     state initializers run once at mount, when pitShift/rainOn are still
-     their defaults — so an idle section starts closed, an active one
-     starts open. The header stays visible either way and carries a status
-     summary (whatifSummary). The old sections are NOT deleted — pit-shift
-     (optimal-plan shifting), the SC/VSC card (top-6 ranking under one
-     window) and the rain toggle (quick wet plan) each still do one thing
-     the simulator does not. */
-  const [whatIfOpen, setWhatIfOpen] = useState(pitShift !== 0 || rainOn);
-  /* v0.9.2 — SC/VSC what-if state. startLap null = the plan's own first pit. */
-  const [scOn, setScOn] = useState(false);
-  const [scMode, setScMode] = useState<'sc' | 'vsc'>('sc');
-  const [scStart, setScStart] = useState<number | null>(null);
-  const [scLaps, setScLaps] = useState(3);
+  /* v0.11.0 — the three what-if blocks (pit-shift slider, SC/VSC card,
+     free simulator) are ONE workspace now: the simulator carries the
+     scenario editor (events + rain), the old pit-shift slider lives here
+     as a draft control, and the engine's `recommendUnderScenario` answers
+     "what should I run under THIS scenario". The committed-scenario state
+     (below) is what the search runs on — typed input commits on blur/
+     Enter, buttons commit on click, so the 300ms search never runs per
+     keystroke or per pointermove. */
+  const [scenCommitted, setScenCommitted] = useState<{
+    raceId: number;
+    car: number;
+    events: Array<{ mode: 'sc' | 'vsc'; startLap: number; laps: number }>;
+    rain: Array<{ startLap: number; laps: number }>;
+  } | null>(null);
 
   const seasonRaces = model.races.filter((r) => r.seasonId === model.meta.seasonId);
   const race = seasonRaces.find((r) => r.raceId === raceId) ?? seasonRaces.find((r) => r.state !== 2) ?? seasonRaces.at(-1) ?? null;
@@ -220,44 +215,6 @@ export function TyreLabView({
     });
   }, [tyre, race, model]);
 
-  const whatIf = useMemo(() => {
-    if (!tyre?.data.best) return null;
-    return whatIfPitShift(
-      tyre.data.best,
-      tyre.data.laps,
-      tyre.data.lives,
-      tyre.data.deltas,
-      tyre.data.pitCostS,
-      pitShift,
-    );
-  }, [tyre, pitShift]);
-
-  const wetPlan = useMemo(() => {
-    if (!rainOn || !tyre) return null;
-    /* v0.9.1 — the wet plan obeys the same set-assignment law: the I/W
-       stints must be runnable on each car's OWN stock. */
-    return buildWetPlan(model, tyre.data.laps, tyre.data.inventory);
-  }, [model, rainOn, tyre]);
-
-  /* v0.9.2 — SC/VSC what-if: the engine re-prices the lab's surviving
-     plans with the track's real Races_Tracks columns; no plan is invented. */
-  const scWhatIf = useMemo(() => {
-    if (!scOn || !tyre?.data || !race) return null;
-    const startLap = scStart ?? tyre.data.best?.pitLaps[0] ?? 1;
-    return whatIfSCVSC(model, race.raceId, { mode: scMode, startLap, laps: scLaps });
-  }, [model, race, scOn, scMode, scStart, scLaps, tyre]);
-
-  /* Season interruption history from Races_Results (context line only —
-     the counts the save does carry; no per-lap history exists). */
-  const scHistory = useMemo(() => {
-    const done = model.races.filter((r) => r.state === 2 && r.results.length > 0);
-    return {
-      sc: done.filter((r) => (r.results[0]?.safetyCarDeployments ?? 0) > 0).length,
-      vsc: done.filter((r) => (r.results[0]?.vscDeployments ?? 0) > 0).length,
-      total: done.length,
-    };
-  }, [model]);
-
   /* v0.9.7 — the free-form simulator: a self-contained SANDBOX. Local state
      only (never persisted); its results never touch lead/trail/best/game —
      it only ever compares against best via vsBest. Defaults (no effect, no
@@ -299,7 +256,16 @@ export function TyreLabView({
   const nextSimId = (): string => `row-${++simIdSeq.current}`;
   /** Every edit writes through with the CURRENT seed key — an edit under an
       old seed adopts the new seed so the draft keeps applying. */
-  const updateSim = (patch: Partial<Omit<SimDraft, 'seedKey'>>): void =>
+  /* v0.11.0 — the whole-pit-shift slider position (the old pit-shift
+     what-if's surviving feature): every pit lap of the DRAFT moves by the
+     same delta, clamped so every stint keeps ≥ 4 laps inside [1, laps].
+     Applied incrementally (delta between slider positions), so a continuous
+     drag accumulates exactly; middle stint lengths never change — only the
+     first (+δ) and the last (−δ) absorb the move. Every NON-slider edit
+     resets it to 0: the shift is baked into the draft when applied, so the
+     slider always reads "additional shift from the draft as it stands". */
+  const [simPitShift, setSimPitShift] = useState(0);
+  const writeSimDraft = (patch: Partial<Omit<SimDraft, 'seedKey'>>): void =>
     setSimDraft({
       seedKey: simSeedKey,
       stints: simStints,
@@ -307,6 +273,102 @@ export function TyreLabView({
       rain: simRain,
       ...patch,
     });
+  /* v0.11.0 — every NON-slider edit resets the whole-pit-shift slider to 0:
+     the shift is baked into the draft the moment it is applied, so the
+     slider always reads "additional shift from the draft as it stands". */
+  const updateSim = (patch: Partial<Omit<SimDraft, 'seedKey'>>): void => {
+    writeSimDraft(patch);
+    setSimPitShift(0);
+  };
+
+  /* v0.11.0 — the shift mechanics (see the slider state above). */
+  const shiftDraftPits = (
+    rows: SimStintRow[],
+    delta: number,
+    laps: number,
+  ): SimStintRow[] | null => {
+    if (rows.length < 2 || delta === 0) return rows.length < 2 ? null : rows;
+    const total = rows.reduce((s, r) => s + r.laps, 0);
+    if (total !== laps) return null;
+    const pits: number[] = [];
+    let acc = 0;
+    for (const r of rows.slice(0, -1)) {
+      acc += r.laps;
+      pits.push(acc);
+    }
+    let prev = 0;
+    for (const p of pits) {
+      const moved = p + delta;
+      if (moved - prev < 4 || moved > laps - 4) return null;
+      prev = moved;
+    }
+    if (laps - prev < 4) return null;
+    const out: SimStintRow[] = [];
+    let cursor = 0;
+    for (let i = 0; i < rows.length; i++) {
+      const end = i < pits.length ? pits[i]! + delta : laps;
+      out.push({ ...rows[i]!, laps: end - cursor });
+      cursor = end;
+    }
+    return out;
+  };
+  const onSimPitShift = (next: number): void => {
+    if (simLapsTotal == null) return;
+    const shifted = shiftDraftPits(simStints, next - simPitShift, simLapsTotal);
+    if (!shifted) return;
+    setSimPitShift(next);
+    writeSimDraft({ stints: shifted });
+  };
+  /* the slider's room relative to the CURRENT draft (the ≥4-lap law) —
+     computed after simLapsTotal/simSumLaps exist (below) */
+  const simPitsNow: number[] = (() => {
+    const pits: number[] = [];
+    let acc = 0;
+    for (const st of simStints.slice(0, -1)) {
+      acc += st.laps;
+      pits.push(acc);
+    }
+    return pits;
+  })();
+
+  /* v0.11.0 — the scenario recommendation: the engine's bounded search
+     (recommendUnderScenario) runs on the COMMITTED scenario only — typed
+     input commits on blur/Enter, buttons commit on click (Step 3's drag
+     commits on pointerup). While uncommitted edits stay uncommitted the
+     card keeps showing the last committed answer, honestly. The explicit
+     arguments exist because a click handler runs BEFORE the re-render:
+     commitScen(nextEvents) commits what was just written, never the stale
+     closure's copy. */
+  const commitScen = (
+    events: Array<{ mode: 'sc' | 'vsc'; startLap: number; laps: number }> = simEvents.map(
+      ({ mode, startLap, laps }) => ({ mode, startLap, laps }),
+    ),
+    rain: Array<{ startLap: number; laps: number }> = simRain.map(({ startLap, laps }) => ({
+      startLap,
+      laps,
+    })),
+  ): void =>
+    setScenCommitted({
+      raceId: race?.raceId ?? -1,
+      car: simCar,
+      events,
+      rain,
+    });
+  const scenarioRec = useMemo<ScenarioRecommendation | null>(() => {
+    if (!race || !scenCommitted || scenCommitted.raceId !== race.raceId) return null;
+    return recommendUnderScenario(model, race.raceId, scenCommitted.car, {
+      events: scenCommitted.events,
+      rain: scenCommitted.rain,
+    });
+  }, [model, race, scenCommitted]);
+  /* "S→M→S, pit V25/V38" — the card's plan label (1-stint plans have no pit) */
+  const planLabel = (p: ManualPlan): string =>
+    `${p.order.join('→')}${p.pitLaps.length > 0 ? `, pit ${p.pitLaps.map((x) => `V${x}`).join('/')}` : ''}`;
+  const applyScenarioPlan = (plan: ManualPlan): void => {
+    updateSim({
+      stints: plan.stints.map((s) => ({ id: nextSimId(), compound: s.compound, laps: s.laps })),
+    });
+  };
   const simCars = tyre?.data.inventory?.cars ?? [];
   const simResult = useMemo(() => {
     if (!race || simStints.length === 0) return null;
@@ -344,6 +406,16 @@ export function TyreLabView({
      draft has no pit at all). No new state — recomputed from simStints. */
   const simLapsTotal = tyre?.data.laps ?? null;
   const simSumLaps = simStints.reduce((s, st) => s + st.laps, 0);
+  /* the pit-shift slider's room relative to the CURRENT draft: the first
+     stint may shrink to 4 laps (min) and the last may shrink to 4 (max) */
+  const pitShiftMin =
+    simPitsNow.length > 0 && simLapsTotal != null && simSumLaps === simLapsTotal
+      ? 4 - simPitsNow[0]!
+      : 0;
+  const pitShiftMax =
+    simPitsNow.length > 0 && simLapsTotal != null && simSumLaps === simLapsTotal
+      ? simLapsTotal - simPitsNow[simPitsNow.length - 1]! - 4
+      : 0;
   /* cumulative boundaries, purely derived (≤4 stints, so the O(n²) reduce
      is free): stint i runs from sum(laps[0..i-1])+1 to sum(laps[0..i]) */
   const simRanges = simStints.map((_, i) => ({
@@ -1214,312 +1286,16 @@ export function TyreLabView({
             <CompoundCompareChart lives={tyre.data.lives} deltas={tyre.data.deltas} />
           </section>
 
-          {/* what-if (Phase 2) — v0.9.9: collapsible, collapsed by default
-              while idle (see the state comment above). */}
-          <section aria-label={tWhat('title')} className="rounded-lg border border-line bg-panel p-4" data-testid="tyre-whatif">
-            <header className="mb-3 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setWhatIfOpen((v) => !v)}
-                aria-expanded={whatIfOpen}
-                aria-controls="whatif-body"
-                className="flex min-h-[32px] flex-1 flex-wrap items-center gap-2 text-left"
-                data-testid="whatif-toggle"
-              >
-                <ChevronDown
-                  className={cn(
-                    'h-4 w-4 text-ink-faint transition-transform',
-                    whatIfOpen && 'rotate-180',
-                  )}
-                  aria-hidden="true"
-                />
-                <SlidersHorizontal className="h-4 w-4 text-teal" aria-hidden="true" />
-                <span className="font-mono text-[11px] uppercase tracking-wider text-teal">{tSec('whatif')}</span>
-                <span role="heading" aria-level={3} className="text-[15px] font-semibold text-ink">{tWhat('title')}</span>
-              </button>
-              {/* status summary — visible in BOTH states, so a collapsed
-                  section still says what is switched on */}
-              <span
-                className="font-mono text-[10px] text-ink-faint"
-                data-testid="whatif-summary"
-              >
-                {tWhat('whatifSummary', { shift: pitShift, on: rainOn ? 'on' : 'off' })}
-              </span>
-            </header>
-            {whatIfOpen ? (
-            <div id="whatif-body">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="pit-shift" className="text-xs text-ink-soft">
-                  {tWhat('pitShift', { shift: pitShift })}
-                </label>
-                <Slider
-                  id="pit-shift"
-                  className="mt-2"
-                  min={-3}
-                  max={3}
-                  step={1}
-                  value={[pitShift]}
-                  onValueChange={(v) => setPitShift(v[0] ?? 0)}
-                  data-testid="pit-shift-slider"
-                />
-                <p className="mt-1 font-mono text-[10px] text-ink-faint">
-                  {pitShift === 0 ? tWhat('baseline') : pitShift > 0 ? tWhat('later', { laps: pitShift }) : tWhat('earlier', { laps: -pitShift })}
-                </p>
-              </div>
-              <div className="flex items-start gap-2">
-                <Switch
-                  id="rain-toggle"
-                  checked={rainOn}
-                  onCheckedChange={(v) => setRainOn(v)}
-                  data-testid="rain-toggle"
-                />
-                <label htmlFor="rain-toggle" className="flex cursor-pointer items-center gap-1.5 text-xs text-ink-soft">
-                  <CloudRain className="h-3.5 w-3.5 text-info" aria-hidden="true" />
-                  {tWhat('rain')}
-                </label>
-              </div>
-            </div>
-
-            {whatIf && whatIf.shifted ? (
-              <div className="mt-4 space-y-2" data-testid="whatif-result">
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="text-ink-faint">{tWhat('plan')}</span>
-                  <span className="flex flex-wrap gap-1">
-                    {whatIf.shifted.stints.map((st, j) => (
-                      <span key={j} className="inline-flex items-center gap-0.5">
-                        <CompoundBadge compound={st.compound as CompoundKey} size="sm" />
-                        <span className="font-mono text-[10px] text-ink-soft">{st.laps}</span>
-                      </span>
-                    ))}
-                  </span>
-                  <span
-                    className={cn(
-                      'ml-auto rounded px-2 py-0.5 font-mono text-[11px]',
-                      whatIf.deltaS != null && whatIf.deltaS > 0.05
-                        ? 'bg-danger/10 text-danger'
-                        : whatIf.deltaS != null && whatIf.deltaS < -0.05
-                          ? 'bg-good/10 text-good'
-                          : 'bg-raised text-ink-soft',
-                    )}
-                  >
-                    {whatIf.deltaS != null
-                      ? `${whatIf.deltaS > 0 ? '+' : ''}${whatIf.deltaS.toFixed(1)}s`
-                      : tWhat('infeasible')}
-                  </span>
-                </div>
-                {whatIf.clamped ? (
-                  <p className="text-[11px] text-amber">{tWhat('clamped')}</p>
-                ) : null}
-              </div>
-            ) : null}
-
-            {rainOn ? (
-              wetPlan ? (
-                <div className="mt-3 rounded border border-info/30 bg-info/5 p-3" data-testid="wet-plan">
-                  <p className="flex flex-wrap items-center gap-2 text-xs text-info">
-                    <CloudRain className="h-3.5 w-3.5" aria-hidden="true" />
-                    {tWhat('wetPlan')}
-                    <span className="flex flex-wrap gap-1">
-                      {wetPlan.stints.map((st, j) => (
-                        <span key={j} className="inline-flex items-center gap-0.5">
-                          <CompoundBadge compound={st.compound as CompoundKey} size="sm" />
-                          <span className="font-mono text-[10px] text-ink-soft">{st.laps}</span>
-                        </span>
-                      ))}
-                    </span>
-                  </p>
-                  <p className="mt-1 font-mono text-[10px] text-ink-faint">
-                    I {wetPlan.lives.I ?? '—'} / W {wetPlan.lives.W ?? '—'} {t('laps')} · {t(`source.${wetPlan.source === 'allocation' ? 'allocation' : 'model'}`)}
-                  </p>
-                  {wetPlan.note ? <p className="mt-1 text-[11px] text-amber">{wetPlan.note}</p> : null}
-                </div>
-              ) : (
-                <p className="mt-3 rounded border border-line bg-surface px-3 py-2 text-xs text-ink-faint">
-                  {tWhat('noWetData')}
-                </p>
-              )
-            ) : null}
-            </div>
-            ) : null}
-          </section>
-
-          {/* v0.9.2 — the SC/VSC what-if (real Races_Tracks columns, honest pricing) */}
-          <section
-            aria-label={tWhat('scTitle')}
-            className="rounded-lg border border-line bg-panel p-4"
-            data-testid="tyre-whatif-sc"
-          >
-            <header className="mb-3 flex flex-wrap items-center gap-2">
-              <Flag className="h-4 w-4 text-amber" aria-hidden="true" />
-              <span className="font-mono text-[11px] uppercase tracking-wider text-amber">{tSec('whatif')}</span>
-              <h3 className="text-[15px] font-semibold text-ink">{tWhat('scTitle')}</h3>
-              <Switch
-                id="sc-toggle"
-                className="ml-auto"
-                checked={scOn}
-                onCheckedChange={(v) => setScOn(v)}
-                data-testid="sc-toggle"
-              />
-            </header>
-
-            {!scOn ? null : scWhatIf ? (
-              <div className="space-y-3">
-                <p
-                  className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-ink-faint"
-                  data-testid="sc-context"
-                >
-                  <span>{tWhat('scChance', { chance: (scWhatIf.trackCols.chance * 100).toFixed(1) })}</span>
-                  <span>
-                    {tWhat('scGameCols', {
-                      pit: scWhatIf.trackCols.pitLaneS,
-                      green: scWhatIf.trackCols.greenFlagS,
-                      sc: scWhatIf.trackCols.scS,
-                    })}
-                  </span>
-                  <span>
-                    {tWhat('scHistory', { sc: scHistory.sc, vsc: scHistory.vsc, total: scHistory.total })}
-                  </span>
-                </p>
-
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <div>
-                    <p className="text-xs text-ink-soft">{tWhat('scMode')}</p>
-                    <div className="mt-2 flex gap-1" role="group" aria-label={tWhat('scMode')}>
-                      <button
-                        type="button"
-                        aria-pressed={scMode === 'sc'}
-                        onClick={() => setScMode('sc')}
-                        className={cn(
-                          'min-h-[32px] rounded border px-2.5 py-1 text-xs',
-                          scMode === 'sc'
-                            ? 'border-amber bg-amber/10 text-amber'
-                            : 'border-line text-ink-soft hover:bg-raised',
-                        )}
-                        data-testid="sc-mode-sc"
-                      >
-                        {tWhat('scModeSC')}
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={scMode === 'vsc'}
-                        onClick={() => setScMode('vsc')}
-                        className={cn(
-                          'min-h-[32px] rounded border px-2.5 py-1 text-xs',
-                          scMode === 'vsc'
-                            ? 'border-amber bg-amber/10 text-amber'
-                            : 'border-line text-ink-soft hover:bg-raised',
-                        )}
-                        data-testid="sc-mode-vsc"
-                      >
-                        {tWhat('scModeVSC')}
-                      </button>
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="sc-start" className="text-xs text-ink-soft">
-                      {tWhat('scStart', { lap: scWhatIf.scenario.startLap })}
-                    </label>
-                    <Slider
-                      id="sc-start"
-                      className="mt-2"
-                      min={1}
-                      max={Math.max(1, scWhatIf.laps - 3)}
-                      step={1}
-                      value={[scWhatIf.scenario.startLap]}
-                      onValueChange={(v) => setScStart(v[0] ?? 1)}
-                      data-testid="sc-start-slider"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="sc-laps" className="text-xs text-ink-soft">
-                      {tWhat('scWindow', { laps: scWhatIf.scenario.laps })}
-                    </label>
-                    <Slider
-                      id="sc-laps"
-                      className="mt-2"
-                      min={1}
-                      max={20}
-                      step={1}
-                      value={[scWhatIf.scenario.laps]}
-                      onValueChange={(v) => setScLaps(v[0] ?? 3)}
-                      data-testid="sc-laps-slider"
-                    />
-                  </div>
-                </div>
-
-                <ul className="space-y-2" data-testid="sc-rows">
-                  {scWhatIf.rows.map((row, i) => (
-                    <li
-                      key={i}
-                      className="flex flex-wrap items-center gap-2 text-xs"
-                      data-testid={`sc-row-${i}`}
-                    >
-                      <span className="w-10 font-mono text-ink-faint">{row.stops} pit</span>
-                      <span className="flex flex-wrap gap-1">
-                        {row.stints.map((st, j) => (
-                          <span key={j} className="inline-flex items-center gap-0.5">
-                            <CompoundBadge compound={st.compound as CompoundKey} size="sm" />
-                            <span className="font-mono text-[10px] text-ink-soft">{st.laps}</span>
-                          </span>
-                        ))}
-                      </span>
-                      <span className="font-mono text-ink-faint">
-                        {row.greenTimeS.toFixed(1)}s →{' '}
-                        <span className={i === 0 ? 'text-good' : 'text-ink'}>
-                          {row.scenarioTimeS.toFixed(1)}s
-                        </span>
-                      </span>
-                      {row.stopsInWindow > 0 ? (
-                        <span className="rounded bg-amber/10 px-2 py-0.5 font-mono text-[10px] text-amber">
-                          {tWhat('scSaved', { saved: row.savedS.toFixed(1), stops: row.stopsInWindow })}
-                        </span>
-                      ) : (
-                        <span className="rounded bg-raised px-2 py-0.5 font-mono text-[10px] text-ink-faint">
-                          {tWhat('scNone')}
-                        </span>
-                      )}
-                      {i === 0 ? <span className="text-good">{t('fastest')}</span> : null}
-                    </li>
-                  ))}
-                </ul>
-
-                <ul className="space-y-1 border-t border-line pt-2">
-                  {scWhatIf.assumptions.map((a, i) => (
-                    <li key={i} className="text-[11px] text-ink-faint">
-                      •{' '}
-                      {a.key === 'scRatio'
-                        ? tWhat('scAssumpRatio', {
-                            green: String(a.params.green),
-                            sc: String(a.params.sc),
-                            pit: String(a.params.pit),
-                            cost: String(a.params.cost),
-                          })
-                        : a.key === 'vscMidpoint'
-                          ? tWhat('scAssumpVSC', { cost: String(a.params.cost) })
-                          : a.key === 'repricedOnly'
-                            ? tWhat('scAssumpReprice')
-                            : tWhat('scAssumpWindow')}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <p
-                className="rounded border border-line bg-surface px-3 py-2 text-xs text-ink-faint"
-                data-testid="sc-no-data"
-              >
-                {tWhat('scNoCols')}
-              </p>
-            )}
-          </section>
-
-          {/* v0.9.7 — the free-form simulator: a SANDBOX after the three
-              what-if sections. Its results never touch lead/trail/best/game
-              or the alternatives table — it only compares against best via
-              vsBest. Engine errors/assumptions render verbatim (the engine
-              returns complete Vietnamese strings; the UI never re-translates
-              them). */}
+          {/* v0.11.0 — THE one what-if workspace: the old pit-shift slider,
+              SC/VSC card and this free simulator are one tool now. Its
+              results never touch lead/trail/best/game or the alternatives
+              table — it only compares against best via vsBest. Engine
+              errors/assumptions render verbatim (the engine returns
+              complete Vietnamese strings; the UI never re-translates
+              them). At the top sits the scenario recommendation card: add
+              an SC/VSC event or a rain window and the engine SEARCHES for
+              the best plan under that scenario (v0.11.0 step 1), instead
+              of only re-pricing plans it already had. */}
           <section
             aria-label={tWhat('simTitle')}
             className="rounded-lg border border-line bg-panel p-4 transition-colors focus-within:border-teal/60"
@@ -1563,10 +1339,22 @@ export function TyreLabView({
                 </button>
                 {/* v0.9.9 — one way back to the lead plan: re-seed the draft
                     (seedKey '' makes the seed mechanism fall back to the
-                    fresh copy), events/rain empty. */}
+                    fresh copy), events/rain empty. v0.11.0 — the reset also
+                    clears the committed scenario (the card disappears —
+                    there is no scenario left to advise under) and the pit
+                    shift. */}
                 <button
                   type="button"
-                  onClick={() => setSimDraft({ seedKey: '', stints: [], events: [], rain: [] })}
+                  onClick={() => {
+                    setSimDraft({ seedKey: '', stints: [], events: [], rain: [] });
+                    setSimPitShift(0);
+                    setScenCommitted({
+                      raceId: race?.raceId ?? -1,
+                      car: simCar,
+                      events: [],
+                      rain: [],
+                    });
+                  }}
                   className="min-h-[32px] rounded border border-line px-2.5 py-1 text-xs text-ink-soft hover:bg-raised"
                   data-testid="sim-reset"
                 >
@@ -1582,6 +1370,157 @@ export function TyreLabView({
               <p className="mb-3 rounded border border-line bg-surface px-3 py-2 text-[11px] text-ink-faint" data-testid="sim-no-wet-data">
                 {tWhat('simNoWetData')}
               </p>
+            ) : null}
+
+            {/* v0.11.0 — the scenario recommendation card (search result,
+                not a re-price): visible only once the committed scenario
+                has at least one SC/VSC event or rain window. The verdict
+                sentence has three forms: switch to a different plan / keep
+                the plan but pit inside the window / the current plan cannot
+                run at all. Assumptions live behind the evidence toggle —
+                never presented as measured numbers. */}
+            {scenarioRec ? (
+              <div
+                className="mb-3 rounded-md border border-teal/40 bg-teal/5 p-3"
+                data-testid="tyre-scenario-recommendation"
+              >
+                <header className="flex flex-wrap items-center gap-2">
+                  <Lightbulb className="h-4 w-4 text-teal" aria-hidden="true" />
+                  <span className="font-mono text-[11px] uppercase tracking-wider text-teal">
+                    {tSec('whatif')}
+                  </span>
+                  <h4 className="text-[13px] font-semibold text-ink">{tWhat('scenCardTitle')}</h4>
+                  <span className="ml-auto flex flex-wrap gap-1" data-testid="scenario-summary">
+                    {(scenCommitted?.events ?? []).map((ev, i) => (
+                      <span
+                        key={`se-${i}`}
+                        className="rounded bg-amber/10 px-1.5 py-0.5 font-mono text-[10px] text-amber"
+                      >
+                        {ev.mode === 'sc'
+                          ? tWhat('scenEventSC', { start: ev.startLap, end: ev.startLap + ev.laps - 1 })
+                          : tWhat('scenEventVSC', { start: ev.startLap, end: ev.startLap + ev.laps - 1 })}
+                      </span>
+                    ))}
+                    {(scenCommitted?.rain ?? []).map((rw, i) => (
+                      <span
+                        key={`sr-${i}`}
+                        className="rounded bg-info/10 px-1.5 py-0.5 font-mono text-[10px] text-info"
+                      >
+                        {tWhat('scenRain', { start: rw.startLap, end: rw.startLap + rw.laps - 1 })}
+                      </span>
+                    ))}
+                  </span>
+                </header>
+
+                {/* the verdict line — three sentence forms, engine-driven */}
+                <p className="mt-2 text-xs text-ink" data-testid="scenario-verdict">
+                  {scenarioRec.verdict === 'switch' && !scenarioRec.currentUnderScenario.feasible
+                    ? tWhat('scenVerdictInfeasible', { plan: planLabel(scenarioRec.recommendation) })
+                    : scenarioRec.verdict === 'switch' &&
+                        simSeedPlan != null &&
+                        scenarioRec.recommendation.order.join('→') === simSeedPlan.order.join('→')
+                      ? tWhat('scenVerdictKeepPlan', {
+                          pits: (() => {
+                            const inWindow = scenarioRec.recommendation.pitLaps.filter((pl) =>
+                              (scenCommitted?.events ?? []).some(
+                                (ev) => pl >= ev.startLap && pl < ev.startLap + ev.laps,
+                              ),
+                            );
+                            return (inWindow.length > 0 ? inWindow : scenarioRec.recommendation.pitLaps)
+                              .map((x) => `V${x}`)
+                              .join('/');
+                          })(),
+                          saved: scenarioRec.deltaS != null ? Math.abs(scenarioRec.deltaS).toFixed(1) : '0.0',
+                        })
+                      : scenarioRec.verdict === 'switch'
+                        ? tWhat('scenVerdictSwitch', {
+                            plan: planLabel(scenarioRec.recommendation),
+                            saved: scenarioRec.deltaS != null ? Math.abs(scenarioRec.deltaS).toFixed(1) : '0.0',
+                          })
+                        : tWhat('scenVerdictKeep', { time: scenarioRec.recommendation.timeS.toFixed(1) })}
+                </p>
+                <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <span className="font-mono text-lg font-semibold text-ink" data-testid="scenario-time">
+                    {scenarioRec.recommendation.timeS.toFixed(1)}s
+                  </span>
+                  {scenarioRec.currentUnderScenario.feasible && scenarioRec.deltaS != null ? (
+                    <span
+                      className={cn(
+                        'rounded px-2 py-0.5 font-mono text-[11px]',
+                        scenarioRec.deltaS < -0.05
+                          ? 'bg-good/10 text-good'
+                          : scenarioRec.deltaS > 0.05
+                            ? 'bg-amber/10 text-amber'
+                            : 'bg-raised text-ink-soft',
+                      )}
+                      data-testid="scenario-delta"
+                    >
+                      {`${scenarioRec.deltaS > 0 ? '+' : scenarioRec.deltaS < 0 ? '−' : ''}${Math.abs(scenarioRec.deltaS).toFixed(1)}s`}
+                    </span>
+                  ) : null}
+                  {scenarioRec.currentUnderScenario.feasible ? (
+                    <span className="font-mono text-[10px] text-ink-faint" data-testid="scenario-current">
+                      {tWhat('scenCurrent', { time: scenarioRec.currentUnderScenario.plan.timeS.toFixed(1) })}
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => applyScenarioPlan(scenarioRec.recommendation)}
+                    className="min-h-[44px] cursor-pointer rounded border border-teal bg-teal/15 px-3 py-1 text-xs font-semibold text-teal transition-colors hover:bg-teal/25"
+                    data-testid="scenario-apply"
+                  >
+                    {tWhat('scenApply')}
+                  </button>
+                  <details className="text-[11px] text-ink-faint">
+                    <summary className="cursor-pointer select-none text-ink-soft hover:text-ink">
+                      {tWhat('scenEvidence')}
+                    </summary>
+                    <ul className="mt-1 space-y-1" data-testid="scenario-assumptions">
+                      {scenarioRec.assumptions.map((a, i) => (
+                        <li key={i} className="text-[11px] text-ink-faint">
+                          •{' '}
+                          {a.key === 'scRatio'
+                            ? tWhat('scAssumpRatio', {
+                                green: String(a.params.green),
+                                sc: String(a.params.sc),
+                                pit: String(a.params.pit),
+                                cost: String(a.params.cost),
+                              })
+                            : a.key === 'vscMidpoint'
+                              ? tWhat('scAssumpVSC', { cost: String(a.params.cost) })
+                              : tWhat('scenAssumpWetDeg')}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                </div>
+
+                {scenarioRec.alternates.length > 0 ? (
+                  <ul className="mt-2 space-y-1 border-t border-line pt-2" data-testid="scenario-alts">
+                    {scenarioRec.alternates.map((alt, i) => (
+                      <li
+                        key={i}
+                        className="flex flex-wrap items-center gap-2 text-xs"
+                        data-testid={`scenario-alt-${i}`}
+                      >
+                        <span className="font-mono text-[11px] text-ink-soft">{planLabel(alt)}</span>
+                        <span className="font-mono text-[11px] text-ink-faint">{alt.timeS.toFixed(1)}s</span>
+                        <button
+                          type="button"
+                          onClick={() => applyScenarioPlan(alt)}
+                          className="ml-auto min-h-[44px] cursor-pointer rounded border border-line px-2.5 py-1 text-[11px] text-ink-soft transition-colors hover:bg-raised hover:text-ink"
+                          data-testid={`scenario-apply-alt-${i}`}
+                        >
+                          {tWhat('scenApplyAlt')}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             ) : null}
 
             {/* car picker — labels come from the inventory (verified seats
@@ -1600,7 +1539,16 @@ export function TyreLabView({
                     key={idx}
                     type="button"
                     aria-pressed={simCar === idx}
-                    onClick={() => setSimCar(idx)}
+                    onClick={() => {
+                      setSimCar(idx);
+                      /* the search prices on THIS car's stock — commit */
+                      setScenCommitted({
+                        raceId: race?.raceId ?? -1,
+                        car: idx,
+                        events: simEvents.map(({ mode, startLap, laps }) => ({ mode, startLap, laps })),
+                        rain: simRain.map(({ startLap, laps }) => ({ startLap, laps })),
+                      });
+                    }}
                     className={cn(
                       'min-h-[44px] px-3 text-xs transition-colors',
                       idx === 0 && 'border-r border-line',
@@ -1890,6 +1838,40 @@ export function TyreLabView({
               {tWhat('simAddStint')}
             </button>
 
+            {/* v0.11.0 — the whole-pit-shift control: the ONE surviving
+                feature of the old `tyre-whatif` section, now a draft tool.
+                Every pit lap moves by the same delta (clamped so each stint
+                keeps ≥ 4 laps); the recommendation does NOT depend on the
+                draft, so this slider never re-runs the search. */}
+            {simPitsNow.length > 0 && simLapsTotal != null && simSumLaps === simLapsTotal ? (
+              <div className="mt-3 rounded-md border border-line bg-surface p-3" data-testid="sim-pit-shift-block">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <label htmlFor="sim-pit-shift" className="text-xs text-ink-soft">
+                    {tWhat('simPitShift', { shift: simPitShift })}
+                  </label>
+                  <span className="font-mono text-[10px] text-ink-faint">
+                    {simPitShift === 0
+                      ? tWhat('simPitShiftBase')
+                      : tWhat('simPitShiftApplied', {
+                          shift: simPitShift,
+                          pits: simPitsNow.map((p) => `V${p}`).join('/'),
+                        })}
+                  </span>
+                </div>
+                <Slider
+                  id="sim-pit-shift"
+                  className="mt-2"
+                  min={pitShiftMin}
+                  max={pitShiftMax}
+                  step={1}
+                  value={[simPitShift]}
+                  onValueChange={(v) => onSimPitShift(v[0] ?? 0)}
+                  thumbLabel={tWhat('simPitShift', { shift: simPitShift })}
+                  data-testid="sim-pit-shift"
+                />
+              </div>
+            ) : null}
+
             {/* SC/VSC event timeline — v0.9.9: a titled list with visible
                 per-row labels ("từ vòng" / "dài … vòng") so which number is
                 which is no longer a guessing game. */}
@@ -1926,13 +1908,13 @@ export function TyreLabView({
                       <select
                         aria-label={tWhat('scMode')}
                         value={ev.mode}
-                        onChange={(e) =>
-                          updateSim({
-                            events: simEvents.map((r, k) =>
-                              k === i ? { ...r, mode: e.target.value as 'sc' | 'vsc' } : r,
-                            ),
-                          })
-                        }
+                        onChange={(e) => {
+                          const next = simEvents.map((r, k) =>
+                            k === i ? { ...r, mode: e.target.value as 'sc' | 'vsc' } : r,
+                          );
+                          updateSim({ events: next });
+                          commitScen(next.map(({ mode, startLap, laps }) => ({ mode, startLap, laps })));
+                        }}
                         className="min-h-[44px] rounded-md border border-line bg-surface px-2 py-1 font-mono text-xs text-ink"
                         data-testid={`sim-event-${i}-mode`}
                       >
@@ -1953,6 +1935,10 @@ export function TyreLabView({
                             ),
                           })
                         }
+                        onBlur={() => commitScen()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commitScen();
+                        }}
                         className="min-h-[44px] w-16 rounded-md border border-line bg-surface px-2 py-1 font-mono text-xs text-ink"
                         data-testid={`sim-event-${i}-start`}
                       />
@@ -1970,6 +1956,10 @@ export function TyreLabView({
                             ),
                           })
                         }
+                        onBlur={() => commitScen()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commitScen();
+                        }}
                         className="min-h-[44px] w-16 rounded-md border border-line bg-surface px-2 py-1 font-mono text-xs text-ink"
                         data-testid={`sim-event-${i}-laps`}
                       />
@@ -1977,7 +1967,11 @@ export function TyreLabView({
                       <button
                         type="button"
                         aria-label={tWhat('simDelete')}
-                        onClick={() => updateSim({ events: simEvents.filter((r) => r.id !== ev.id) })}
+                        onClick={() => {
+                          const next = simEvents.filter((r) => r.id !== ev.id);
+                          updateSim({ events: next });
+                          commitScen(next.map(({ mode, startLap, laps }) => ({ mode, startLap, laps })));
+                        }}
                         className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md border border-line text-ink-soft transition-colors hover:bg-raised hover:text-ink"
                         data-testid={`sim-event-${i}-delete`}
                       >
@@ -1994,11 +1988,14 @@ export function TyreLabView({
                     like a dead button. */}
                 <button
                   type="button"
-                  onClick={() =>
-                    updateSim({
-                      events: [...simEvents, { id: nextSimId(), mode: 'sc', startLap: simFirstPit, laps: 3 }],
-                    })
-                  }
+                  onClick={() => {
+                    const next = [
+                      ...simEvents,
+                      { id: nextSimId(), mode: 'sc' as const, startLap: simFirstPit, laps: 3 },
+                    ];
+                    updateSim({ events: next });
+                    commitScen(next.map(({ mode, startLap, laps }) => ({ mode, startLap, laps })));
+                  }}
                   className="min-h-[32px] cursor-pointer rounded border border-line px-2.5 py-1 text-xs text-ink-soft transition-colors hover:bg-raised"
                   data-testid="sim-add-event"
                 >
@@ -2060,6 +2057,10 @@ export function TyreLabView({
                             ),
                           })
                         }
+                        onBlur={() => commitScen()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commitScen();
+                        }}
                         className="min-h-[44px] w-16 rounded-md border border-line bg-surface px-2 py-1 font-mono text-xs text-ink"
                         data-testid={`sim-rain-${i}-start`}
                       />
@@ -2077,6 +2078,10 @@ export function TyreLabView({
                             ),
                           })
                         }
+                        onBlur={() => commitScen()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commitScen();
+                        }}
                         className="min-h-[44px] w-16 rounded-md border border-line bg-surface px-2 py-1 font-mono text-xs text-ink"
                         data-testid={`sim-rain-${i}-laps`}
                       />
@@ -2084,7 +2089,11 @@ export function TyreLabView({
                       <button
                         type="button"
                         aria-label={tWhat('simDelete')}
-                        onClick={() => updateSim({ rain: simRain.filter((r) => r.id !== rw.id) })}
+                        onClick={() => {
+                          const next = simRain.filter((r) => r.id !== rw.id);
+                          updateSim({ rain: next });
+                          commitScen(undefined, next.map(({ startLap, laps }) => ({ startLap, laps })));
+                        }}
                         className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md border border-line text-ink-soft transition-colors hover:bg-raised hover:text-ink"
                         data-testid={`sim-rain-${i}-delete`}
                       >
@@ -2099,9 +2108,11 @@ export function TyreLabView({
                   spans 10 laps. */}
               <button
                 type="button"
-                onClick={() =>
-                  updateSim({ rain: [...simRain, { id: nextSimId(), startLap: simFirstPit, laps: 10 }] })
-                }
+                onClick={() => {
+                  const next = [...simRain, { id: nextSimId(), startLap: simFirstPit, laps: 10 }];
+                  updateSim({ rain: next });
+                  commitScen(undefined, next.map(({ startLap, laps }) => ({ startLap, laps })));
+                }}
                 className="mt-2 min-h-[32px] cursor-pointer rounded border border-line px-2.5 py-1 text-xs text-ink-soft transition-colors hover:bg-raised"
                 data-testid="sim-add-rain"
               >

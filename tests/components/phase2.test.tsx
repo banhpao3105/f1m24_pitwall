@@ -233,29 +233,22 @@ describe('CarLabView', () => {
   });
 });
 
-describe('TyreLabView — what-if', () => {
-  // v0.9.9 — the section collapses when idle (pitShift 0 + rain off): the
-  // header carries the status summary, the controls unmount, a header click
-  // expands them again.
-  it('collapses by default, shows the summary, and expands on header click', () => {
+describe('TyreLabView — v0.11.0 one workspace', () => {
+  // v0.11.0 — the three what-if blocks merged into the simulator workspace:
+  // the old pit-shift section and the SC/VSC card are GONE (testids deleted,
+  // never hidden), the whole-pit-shift slider lives inside the simulator,
+  // and the scenario recommendation card only exists once a scenario is
+  // committed.
+  it('old what-if sections are deleted; the workspace keeps the pit-shift control', () => {
     render(withI18n(<TyreLabView model={baseModel} raceId={2} />));
-    expect(screen.getByTestId('tyre-whatif')).toBeInTheDocument();
-    // collapsed: summary visible, controls gone
-    expect(screen.getByTestId('whatif-summary').textContent).toBe(
-      'Dời pit: 0 · Mưa: tắt',
-    );
-    expect(screen.queryByTestId('pit-shift-slider')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('rain-toggle')).not.toBeInTheDocument();
-    // expand via the header button
-    fireEvent.click(screen.getByTestId('whatif-toggle'));
-    expect(screen.getByTestId('whatif-toggle').getAttribute('aria-expanded')).toBe('true');
-    expect(screen.getByTestId('pit-shift-slider')).toBeInTheDocument();
-    expect(screen.getByTestId('rain-toggle')).toBeInTheDocument();
-    expect(screen.getByText('Giả lập mưa')).toBeInTheDocument();
-    // collapse again — summary survives
-    fireEvent.click(screen.getByTestId('whatif-toggle'));
-    expect(screen.getByTestId('whatif-toggle').getAttribute('aria-expanded')).toBe('false');
-    expect(screen.queryByTestId('pit-shift-slider')).not.toBeInTheDocument();
-    expect(screen.getByTestId('whatif-summary')).toBeInTheDocument();
+    expect(screen.queryByTestId('tyre-whatif')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('tyre-whatif-sc')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('whatif-toggle')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('whatif-summary')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('sc-toggle')).not.toBeInTheDocument();
+    expect(screen.getByTestId('tyre-simulator')).toBeInTheDocument();
+    expect(screen.getByTestId('sim-pit-shift')).toBeInTheDocument();
+    // no scenario committed yet — the recommendation card does not exist
+    expect(screen.queryByTestId('tyre-scenario-recommendation')).not.toBeInTheDocument();
   });
 });
