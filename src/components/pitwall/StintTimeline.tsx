@@ -434,6 +434,7 @@ export function SimTimeline({
                 aria-valuenow={stint.toLap}
                 aria-valuetext={`V${stint.toLap}`}
                 aria-orientation="horizontal"
+                style={{ left: `${pct(stint.toLap)}%` }}
                 onPointerDown={(e) => beginDrag(e, 'boundary', 'boundary', i, stint.toLap)}
                 onPointerMove={onDragMove}
                 onPointerUp={endDrag}
