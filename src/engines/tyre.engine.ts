@@ -2995,3 +2995,578 @@ export function whatIfSCVSCMulti(
     assumptions,
   };
 }
+
+/* ── v0.11.0 — the scenario recommender (one search under one scenario) ──── */
+
+/** Structured assumptions of the scenario recommendation — the UI
+ *  translates them (same law as the SCVSCAssumptionKey keys). */
+export type ScenarioAssumptionKey = 'scRatio' | 'vscMidpoint' | 'wetDegBorrowed';
+
+export interface ScenarioAssumption {
+  key: ScenarioAssumptionKey;
+  params: Record<string, string | number>;
+}
+
+/** The seed (lead) plan re-priced under the scenario: either its execution
+ *  price on the examined car's own garage, or WHY it cannot run at all
+ *  (the engine's verbatim validation errors — e.g. both slick stints
+ *  inside a rain window). */
+export type ScenarioCurrentPlan =
+  | { feasible: true; plan: ManualPlan }
+  | { feasible: false; errors: string[] };
+
+export interface ScenarioRecommendation {
+  laps: number;
+  carIndex: number;
+  carLabel: string;
+  /** The cheapest feasible plan found under the scenario (execution price). */
+  recommendation: ManualPlan;
+  /** The next ≤ 2 distinct plans (different stint signature = different
+   *  order or different pit laps), sorted by price. */
+  alternates: ManualPlan[];
+  currentUnderScenario: ScenarioCurrentPlan;
+  /** The seed plan's published GREEN price (the delta's reference number). */
+  currentGreenS: number | null;
+  /** recommendation.timeS − currentGreenS, rounded 0.1 (negative = the
+   *  recommendation is FASTER than the published plan). */
+  deltaS: number | null;
+  /**
+   * 'switch' | 'keep'. UI rule (NOT a model constant): switch only when
+   * the recommendation beats the published plan by MORE than 0.5s (the
+   * rounding-noise band — the same ±0.05 logic scaled up: a 0.1s "gain"
+   * is noise, a 2.9s gain is a decision), or when the current plan cannot
+   * run the scenario at all (mandatory switch). With exactly-one-window
+   * parity this keeps "keep" from flickering on ±0.1s rounding.
+   */
+  verdict: 'switch' | 'keep';
+  assumptions: ScenarioAssumption[];
+}
+
+export interface ScenarioSearchInput {
+  /** SC/VSC windows (pits inside price at the window's cost). */
+  events: SCVSCScenario[];
+  /** Rain windows (slick stints overlapping one are rejected). */
+  rain: RainWindow[];
+}
+
+/**
+ * v0.11.0 — finds the best plan UNDER a user-declared scenario (SC/VSC
+ * windows + rain), the piece the three old what-if blocks never had: the
+ * SC card only re-priced the top-6 green ranking, the rain toggle only
+ * swapped to the preset, and neither ever moved a pit lap into a window.
+ *
+ * Search law (bounded — no exponential blow-up):
+ *   · Dry: the SAME compound-order enumeration `buildTyreLab` uses
+ *     (oneStop + multiStop 2–3 ≈ 54 orders), each priced once through
+ *     `evaluateStrategy` for its OPTIMAL GREEN split; then a local search
+ *     moves each pit lap into each SC/VSC window (every lap inside the
+ *     window, stint minimum enforced, greedy one pass over pits — never
+ *     every pit position on the lap line);
+ *   · Rain: from each dry split, wet variants aligned to the rain window
+ *     edges — the wet stint starts at `rain.startLap` and ends either at
+ *     the window's last lap or one lap past it (both edge conventions are
+ *     priced, "để giá tự quyết" — a user-typed window edge is ±1 lap
+ *     honest input, not a model fact), plus the `buildWetPlan` preset;
+ *   · EVERY candidate is priced on the examined car's OWN stock through
+ *     the exact `priceManualPlan` path (validation, `pitCostAtLap`,
+ *     `assignSetsForCar`, `wearCorrection`) — not assignable = dropped,
+ *     same as an infeasible ranked plan. Wet deg borrows the M curve
+ *     (SIM_DEG, the v0.9.7 labelled assumption).
+ *
+ * `currentUnderScenario` re-prices the SEED plan (the lab's lead — the
+ * same plan the simulator seeds from) under the scenario on the same
+ * car basis, so the UI can say what the user's CURRENT plan costs now.
+ * The delta is measured against the seed's published GREEN price: under
+ * SC a pit inside a window is a pure discount, so the headline question
+ * is "how much does the scenario change my published number".
+ *
+ * Returns null when there is no scenario to recommend under, the data
+ * gate is closed, the car/garage is missing, or SC events exist without
+ * the track's real Races_Tracks columns (feature off, honestly — same
+ * law as `whatIfSCVSC`).
+ */
+export function recommendUnderScenario(
+  model: SaveModel,
+  raceId: number,
+  carIndex: number,
+  scenario: ScenarioSearchInput,
+): ScenarioRecommendation | null {
+  if (scenario.events.length === 0 && scenario.rain.length === 0) return null;
+  const race = model.races.find((r) => r.raceId === raceId) ?? null;
+  const lab = race ? buildTyreLab(model, raceId) : null;
+  const d = lab?.data ?? null;
+  if (!race || !d || !d.readiness.ready || !d.inventory) return null;
+  const car = d.inventory.cars[carIndex];
+  if (!car) return null;
+
+  const trackCols =
+    race.trackPitLaneTimeLossS != null &&
+    race.trackSafetyCarTimeLossS != null &&
+    race.trackPitLaneTimeLossS > 0
+      ? {
+          pitLaneS: race.trackPitLaneTimeLossS,
+          greenFlagS: race.trackGreenFlagTimeLossS ?? 0,
+          scS: race.trackSafetyCarTimeLossS,
+          chance: race.trackSafetyCarChance ?? 0,
+        }
+      : null;
+  if (scenario.events.length > 0 && !trackCols) return null;
+
+  const laps = d.laps;
+  const events = scenario.events;
+  const rain = scenario.rain;
+
+  /* the seed (lead) plan — the same plan the simulator seeds from. Needed
+     early: its compound vocabulary bounds the RAIN variant search (see the
+     variant block below) and its re-price is `currentUnderScenario`. */
+  const seedPlan = d.carPlans?.lead.plan ?? d.best ?? null;
+  if (!seedPlan) return null;
+  const seedCompounds = new Set(seedPlan.stints.map((st) => st.compound));
+
+  /* ── the per-car pricing context, built ONCE (priceManualPlan's exact
+     path minus the per-call lab rebuild — same validation strings, same
+     rounding, same assignment + wear law; parity is locked by test). ── */
+  const wet = wetPace(model);
+  const pricedLives: Record<SimCompound, number> = {
+    ...d.lives,
+    ...d.inventory.perCarMaxStint[car.carId]!,
+    I: wet?.lives.I ?? 0,
+    W: wet?.lives.W ?? 0,
+  };
+  const simDeltas: Record<SimCompound, number> = {
+    S: d.deltas.S,
+    M: d.deltas.M,
+    H: d.deltas.H,
+    I: wet?.deltas.I ?? 0,
+    W: wet?.deltas.W ?? 0,
+  };
+  const cols = trackCols ?? { pitLaneS: 1, scS: 0 };
+  const allocPace = getAllocationPace(model);
+  const mergedPace: AllocationPace | null = allocPace
+    ? {
+        ...allocPace,
+        lapTime: {
+          ...allocPace.lapTime,
+          I: wet?.elt.I ?? undefined,
+          W: wet?.elt.W ?? undefined,
+        },
+      }
+    : null;
+
+  const priceCandidate = (
+    stints: ReadonlyArray<SimStintInput>,
+  ): { ok: true; plan: ManualPlan } | { ok: false; errors: string[] } => {
+    const errors: string[] = [];
+    const total = stints.reduce((sum, st) => sum + st.laps, 0);
+    if (total !== laps) {
+      errors.push(`tổng số vòng ${total} ≠ ${laps} vòng của chặng`);
+    }
+    for (const st of stints) {
+      if (st.laps < MIN_STINT_LAPS) {
+        errors.push(`stint ${st.compound} ${st.laps} vòng < tối thiểu ${MIN_STINT_LAPS} vòng`);
+      }
+    }
+    const spans: ManualSpan[] = [];
+    let cursor = 0;
+    for (const st of stints) {
+      const from = cursor + 1;
+      cursor += st.laps;
+      spans.push({ compound: st.compound, laps: st.laps, from, to: cursor });
+    }
+    for (const sp of spans) {
+      if (sp.compound === 'I' || sp.compound === 'W') continue;
+      for (const rw of rain) {
+        const end = rw.startLap + rw.laps - 1;
+        if (sp.from <= end && sp.to >= rw.startLap) {
+          errors.push(
+            `stint ${sp.compound} vòng ${sp.from}–${sp.to} chạy slick trong mưa (cửa sổ ${rw.startLap}–${end})`,
+          );
+        }
+      }
+    }
+    if (events.length > 0 && !trackCols) {
+      errors.push(
+        'thiếu cột SC/pit của track (Races_Tracks) — không định giá được SC/VSC',
+      );
+    }
+    const usesWet = stints.some((st) => st.compound === 'I' || st.compound === 'W');
+    if (usesWet && wet == null) {
+      errors.push('save không có allocation lốp mưa (I/W) — không định giá được Inter/Wet');
+    }
+    for (const c of ['I', 'W'] as const) {
+      if (stints.some((st) => st.compound === c) && wet != null && wet.lives[c] == null) {
+        errors.push(`không có đời lốp ${c} trong allocation — không định giá được stint ${c}`);
+      }
+    }
+    if (errors.length > 0) return { ok: false, errors };
+
+    const base = priceFixedStints(
+      spans,
+      pricedLives,
+      simDeltas,
+      (pl) => pitCostAtLap(pl, d.pitCostS, cols, events),
+      SIM_DEG,
+    );
+    const assigns = assignSetsForCar(car.sets, spans);
+    if (!assigns) {
+      return { ok: false, errors: [manualAssignmentError(car.sets, spans)] };
+    }
+    const planStints: ManualPlan['stints'] = base.stints.map((fst, i) => {
+      const a = assigns.find((x) => x.stintIndex === i)!;
+      return {
+        ...fst,
+        setUsed: { tyreSetId: a.tyreSetId, fresh: a.fresh, life: a.life },
+      };
+    });
+    const corr = wearCorrection(planStints, car.sets, mergedPace, pricedLives, SIM_DEG);
+    const timeS = Math.round((base.timeS + corr.totalS) * 10) / 10;
+    const vsBestS = d.best != null ? Math.round((timeS - d.best.timeS) * 10) / 10 : null;
+    return {
+      ok: true,
+      plan: {
+        order: spans.map((sp) => sp.compound),
+        stops: spans.length - 1,
+        timeS,
+        ...(corr.totalS !== 0 ? { wearS: corr.totalS } : {}),
+        stints: planStints.map((st, i) =>
+          corr.perStint[i] !== 0 ? { ...st, wearS: corr.perStint[i] } : st,
+        ),
+        pitLaps: base.pitLaps,
+        vsBestS,
+        baseTimeS: base.timeS,
+      },
+    };
+  };
+
+  /* ── candidate collection: every candidate priced ONCE, deduped by its
+     stint signature (order + lap split — pits are derived from them). ── */
+  const byKey = new Map<string, ManualPlan>();
+  const pushCandidate = (stints: ReadonlyArray<SimStintInput>): void => {
+    /* the editor holds at most 4 stints — a recommendation the user cannot
+       apply would be a lie, so longer variants never enter the search */
+    if (stints.length > 4) return;
+    const key = `${stints.map((st) => st.compound).join('→')}:${stints.map((st) => st.laps).join('/')}`;
+    if (byKey.has(key)) return;
+    const priced = priceCandidate(stints);
+    if (priced.ok) byKey.set(key, priced.plan);
+  };
+
+  /* the same enumeration orders `buildTyreLab` ranks on (oneStop + multi 2–3) */
+  const oneStop: Compound[][] = [];
+  for (const a of DRY) for (const b of DRY) if (a !== b) oneStop.push([a, b]);
+  const multiStop = (n: 2 | 3): Compound[][] => {
+    const orders: Compound[][] = [];
+    for (const a of DRY) for (const b of DRY) for (const c of DRY) {
+      if (new Set([a, b, c]).size >= 2) {
+        if (n === 2) orders.push([a, b, c]);
+        if (n === 3) orders.push([a, b, c, a]);
+      }
+    }
+    return orders;
+  };
+  const orders: Compound[][] = [...oneStop, ...multiStop(2), ...multiStop(3)];
+  /* the lab's own throwaway-stint floor (v0.6.0 sanity filter) */
+  const sanityFloor = Math.max(MIN_STINT_LAPS + 1, Math.round(laps / 12));
+
+  /* every lap inside ANY SC/VSC window (deduped, sorted) — the only laps a
+     pit may move to in the local search */
+  const windowLaps: number[] = (() => {
+    const set = new Set<number>();
+    for (const ev of events) {
+      for (let L = ev.startLap; L < ev.startLap + ev.laps; L++) {
+        if (L >= 1 && L <= laps) set.add(L);
+      }
+    }
+    return [...set].sort((a, b) => a - b);
+  })();
+
+  /** The stint list with pit `i` FIXED at lap `L`: the compounds before it
+   *  re-split optimally over [1..L], the compounds after over [L+1..laps]
+   *  (evaluateStrategy on the sub-orders; a single-compound span is one
+   *  fixed stint — the dry rule of two distinct compounds must not erase
+   *  legal candidates). null when a multi-compound span cannot split. */
+  const resplitAroundPit = (
+    order: Compound[],
+    pitIndex: number,
+    lapL: number,
+    totalLaps: number,
+  ): SimStintInput[] | null => {
+    const headOrder = order.slice(0, pitIndex + 1);
+    const tailOrder = order.slice(pitIndex + 1);
+    if (tailOrder.length === 0) return null;
+    const headStints: SimStintInput[] | null =
+      headOrder.length === 1
+        ? [{ compound: headOrder[0]!, laps: lapL }]
+        : (() => {
+            const r = evaluateStrategy(headOrder, lapL, d.lives, d.deltas, d.pitCostS);
+            return r
+              ? r.stints.map((st) => ({ compound: st.compound, laps: st.laps }))
+              : null;
+          })();
+    if (!headStints) return null;
+    const tailStints: SimStintInput[] | null =
+      tailOrder.length === 1
+        ? [{ compound: tailOrder[0]!, laps: totalLaps - lapL }]
+        : (() => {
+            const r = evaluateStrategy(tailOrder, totalLaps - lapL, d.lives, d.deltas, d.pitCostS);
+            return r
+              ? r.stints.map((st) => ({ compound: st.compound, laps: st.laps }))
+              : null;
+          })();
+    if (!tailStints) return null;
+    return [...headStints, ...tailStints];
+  };
+
+  for (const order of orders) {
+    const split = evaluateStrategy(order, laps, d.lives, d.deltas, d.pitCostS);
+    if (!split) continue;
+    if (split.stints.some((st) => st.laps < sanityFloor)) continue;
+    /* candidate A — the optimal GREEN split priced under the scenario */
+    pushCandidate(split.stints.map((st) => ({ compound: st.compound, laps: st.laps })));
+
+    /* local search — for EACH pit, try EVERY lap inside the windows; the
+       pit is FIXED at the trial lap and the stints before/after it are
+       re-split OPTIMALLY over the remaining spans (evaluateStrategy on the
+       sub-orders — a single-compound span becomes one fixed stint). This
+       is what turns a green 19/18/19 into the DoD's S25/M13/S18: pit 1
+       moves to 25, the [M,S] tail re-splits 13/18. Bounded: pits × window
+       laps, never the whole lap line. */
+    if (events.length > 0 && windowLaps.length > 0) {
+      for (let i = 0; i < order.length - 1; i++) {
+        for (const L of windowLaps) {
+          const cand = resplitAroundPit(order, i, L, laps);
+          if (cand) pushCandidate(cand);
+        }
+      }
+    }
+
+    /* rain variants from THIS dry split (only when rain exists). The
+       variant's DRY compounds must stay inside the seed plan's own
+       vocabulary: the rain plan is an ADAPTATION of the race the user
+       already planned — it recombines the compounds that plan commits to
+       (plus the wet tyres the scenario forces). Measured on Shanghai
+       (seed S/S/M): letting every order contribute its tail leaks
+       S18/I10/H28 (163.6s) above the DoD's second alternate
+       S18/I10/M28 (164.6s) — an H stint the weekend plan never
+       considered; the vocabulary rule keeps the adaptation honest. The
+       DRY search below keeps the FULL enumeration. */
+    if (rain.length > 0 && wet != null) {
+      const variants = rainVariantsFromSplit(split.stints, rain, laps);
+      for (const v of variants) {
+        if (!v.every((st) => st.compound === 'RAIN' || seedCompounds.has(st.compound))) {
+          continue;
+        }
+        for (const wetC of ['I', 'W'] as const) {
+          pushCandidate(
+            v.map((st) =>
+              st.compound === 'RAIN'
+                ? { compound: wetC, laps: st.laps }
+                : { compound: st.compound as SimCompound, laps: st.laps },
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  /* the wet preset (buildWetPlan) as its own candidate — the old rain
+     toggle's plan keeps its place in the search */
+  if (rain.length > 0 && wet != null) {
+    const preset = buildWetPlan(model, laps, d.inventory);
+    if (preset) pushCandidate(preset.stints);
+  }
+
+  if (byKey.size === 0) return null;
+  /* the seed's stint signature — an EXACT price tie prefers the plan the
+     user is already running (measured on Shanghai SC [19,21]: S→S→M and
+     S→M→S tie to the stint multiset {S19,S19,M18}; the seed match picks
+     the "giữ plan, pit dưới SC" reading instead of an order-equivalent
+     twin) */
+  const seedKey = `${seedPlan.stints.map((st) => st.compound).join('→')}:${seedPlan.stints.map((st) => st.laps).join('/')}`;
+  const ranked = [...byKey.entries()]
+    .map(([key, plan]) => ({ key, plan }))
+    .sort(
+      (a, b) =>
+        a.plan.timeS - b.plan.timeS ||
+        (a.key === seedKey ? 0 : 1) - (b.key === seedKey ? 0 : 1) ||
+        a.plan.stops - b.plan.stops ||
+        a.plan.order.join('→').localeCompare(b.plan.order.join('→')),
+    );
+  const recommendation = ranked[0]!.plan;
+  /* alternates: the next ≤ 2 DISTINCT stint signatures (the dedup key
+     above already guarantees distinctness) */
+  const alternates = ranked.slice(1, 3).map((r) => r.plan);
+
+  /* the seed re-priced under the scenario on THIS car's stock */
+  const seedPriced = priceCandidate(
+    seedPlan.stints.map((st) => ({ compound: st.compound as SimCompound, laps: st.laps })),
+  );
+  const currentUnderScenario: ScenarioCurrentPlan = seedPriced.ok
+    ? { feasible: true, plan: seedPriced.plan }
+    : { feasible: false, errors: seedPriced.errors };
+  const currentGreenS = Math.round(seedPlan.timeS * 10) / 10;
+  const deltaS =
+    currentGreenS != null
+      ? Math.round((recommendation.timeS - currentGreenS) * 10) / 10
+      : null;
+  /* the 0.5s rule is a UI law (see ScenarioRecommendation.verdict) */
+  const verdict: 'switch' | 'keep' =
+    !currentUnderScenario.feasible || (deltaS != null && deltaS < -0.5)
+      ? 'switch'
+      : 'keep';
+
+  const assumptions: ScenarioAssumption[] = [];
+  if (events.some((e) => e.mode === 'sc') && trackCols) {
+    const scCost = d.pitCostS * clamp(trackCols.scS / trackCols.pitLaneS, 0, 1);
+    assumptions.push({
+      key: 'scRatio',
+      params: {
+        sc: trackCols.scS,
+        pit: trackCols.pitLaneS,
+        green: d.pitCostS.toFixed(1),
+        cost: scCost.toFixed(1),
+      },
+    });
+  }
+  if (events.some((e) => e.mode === 'vsc') && trackCols) {
+    const vscCost = d.pitCostS * (1 - (1 - clamp(trackCols.scS / trackCols.pitLaneS, 0, 1)) / 2);
+    assumptions.push({ key: 'vscMidpoint', params: { cost: vscCost.toFixed(1) } });
+  }
+  if (recommendation.stints.some((st) => st.compound === 'I' || st.compound === 'W')) {
+    assumptions.push({ key: 'wetDegBorrowed', params: {} });
+  }
+
+  return {
+    laps,
+    carIndex,
+    carLabel: car.label,
+    recommendation,
+    alternates,
+    currentUnderScenario,
+    currentGreenS,
+    deltaS,
+    verdict,
+    assumptions,
+  };
+}
+
+/**
+ * v0.11.0 — the rain-variant shapes from ONE dry split: the dry stints
+ * before the first rain window keep their compounds AND their internal
+ * pits (truncated at the window's first lap); each rain window becomes
+ * ONE wet stint (compound decided by the caller — I and W are both
+ * priced); every dry lap AFTER the first window runs the compound of the
+ * first stint that lies fully past the last window (the lead's own
+ * M18 stays M for its post-window remainder — measured on Shanghai:
+ * S18/I10/M28 is the third-best rain plan, exactly the DoD's alternate).
+ * Returns lap-split segments with the sentinel compound 'RAIN' for the
+ * wet stints, or an empty array when no variant fits (window past the
+ * race distance). Stints shorter than the builder floor fail validation
+ * in the pricing path — an honestly infeasible variant, not an error.
+ */
+interface RainVariantStint {
+  compound: Compound | 'RAIN';
+  laps: number;
+}
+
+function rainVariantsFromSplit(
+  splitStints: PlannedStint[],
+  rain: RainWindow[],
+  laps: number,
+): RainVariantStint[][] {
+  /* merge the user windows into sorted, non-touching intervals
+     (1-based inclusive [start, end]) */
+  const ivs = rain
+    .filter((rw) => rw.laps > 0 && rw.startLap >= 1 && rw.startLap <= laps)
+    .map((rw) => ({ start: rw.startLap, end: Math.min(rw.startLap + rw.laps - 1, laps) }))
+    .sort((a, b) => a.start - b.start);
+  const merged: { start: number; end: number }[] = [];
+  for (const iv of ivs) {
+    const last = merged[merged.length - 1];
+    if (last && iv.start <= last.end + 1) {
+      last.end = Math.max(last.end, iv.end);
+    } else {
+      merged.push({ ...iv });
+    }
+  }
+  if (merged.length === 0) return [];
+
+  /* the first NON-touching stint's compound: the dry compound that runs
+     every dry lap after the first window */
+  let cursor = 0;
+  let postCompound: Compound | null = null;
+  for (const st of splitStints) {
+    const stStart = cursor + 1;
+    cursor += st.laps;
+    if (stStart > merged[merged.length - 1]!.end) {
+      postCompound = st.compound;
+      break;
+    }
+  }
+  /* no dry stint survives past the last window — the dry laps after the
+     first window carry the compound of the last PRE-window stint (the
+     stint the window truncates) */
+  const fallbackCompound = (() => {
+    let pos = 0;
+    let compound: Compound | null = null;
+    for (const st of splitStints) {
+      if (pos + 1 >= merged[0]!.start) break;
+      compound = st.compound;
+      pos += st.laps;
+    }
+    return compound;
+  })();
+  const dryAfterCompound = postCompound ?? fallbackCompound ?? splitStints[0]!.compound;
+
+  /* two edge conventions per window set — the caller prices both:
+     'exact' ends the wet stint at the window's last lap; 'spill' runs one
+     lap past it (the "kết thúc ở startLap + laps" reading of the window
+     edge). Both are honest readings of a user-typed window. */
+  const conventions: Array<(end: number) => number> = [
+    (end) => end,
+    (end) => Math.min(laps, end + 1),
+  ];
+
+  const out: RainVariantStint[][] = [];
+  for (const conv of conventions) {
+    /* re-merge under this convention (spill can make windows touch) */
+    const ivs2 = merged
+      .map((iv) => ({ start: iv.start, end: conv(iv.end) }))
+      .sort((a, b) => a.start - b.start);
+    const wetIvs: { start: number; end: number }[] = [];
+    for (const iv of ivs2) {
+      const last = wetIvs[wetIvs.length - 1];
+      if (last && iv.start <= last.end + 1) {
+        last.end = Math.max(last.end, iv.end);
+      } else {
+        wetIvs.push({ ...iv });
+      }
+    }
+    const stints: RainVariantStint[] = [];
+    /* pre part — original compounds + internal pits, truncated at the
+       first window's first lap */
+    let cursor2 = 0;
+    for (const st of splitStints) {
+      const stStart = cursor2 + 1;
+      if (stStart >= wetIvs[0]!.start) break;
+      stints.push({ compound: st.compound, laps: Math.min(st.laps, wetIvs[0]!.start - stStart) });
+      cursor2 += st.laps;
+    }
+    /* wet stints + the dry gaps between/after them (one compound) */
+    for (let k = 0; k < wetIvs.length; k++) {
+      const iv = wetIvs[k]!;
+      stints.push({ compound: 'RAIN', laps: iv.end - iv.start + 1 });
+      const gapStart = iv.end + 1;
+      const gapEnd = k + 1 < wetIvs.length ? wetIvs[k + 1]!.start - 1 : laps;
+      if (gapEnd >= gapStart) {
+        stints.push({ compound: dryAfterCompound, laps: gapEnd - gapStart + 1 });
+      }
+    }
+    /* drop a trailing stint that would exceed the race (cannot happen:
+       gaps are clamped) and the degenerate empty shape */
+    if (stints.length > 0 && stints.every((st) => st.laps > 0)) {
+      out.push(stints);
+    }
+  }
+  return out;
+}
