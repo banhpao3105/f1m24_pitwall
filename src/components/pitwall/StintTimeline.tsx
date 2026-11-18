@@ -487,7 +487,7 @@ export function SimTimeline({
                 onKeyDown={(e) =>
                   onHandleKeyDown(e, (next) => onBoundaryChange?.(i, next), clamp2.min, clamp2.max, stint.toLap)
                 }
-                className="absolute bottom-0 top-0 z-[5] w-3 -translate-x-1/2 cursor-col-resize touch-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-teal"
+                className="absolute bottom-0 top-0 z-[4] w-3 -translate-x-1/2 cursor-col-resize touch-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-teal"
                 data-testid={`sim-timeline-boundary-${i}`}
               >
                 <span
@@ -553,7 +553,7 @@ export function SimTimeline({
                           ev.startLap,
                         )
                       }
-                      className="absolute inset-y-0 inset-x-0 cursor-move touch-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-amber"
+                      className="absolute inset-y-0 inset-x-0 z-[5] cursor-move touch-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-amber"
                       data-testid={`sim-timeline-event-${i}-move`}
                     >
                       {ev.laps / totalLaps >= BAND_TAG_SHARE ? (
@@ -590,7 +590,7 @@ export function SimTimeline({
                           ev.startLap,
                         )
                       }
-                      className="absolute inset-y-0 left-0 z-[6] w-2.5 cursor-ew-resize touch-none border-l-2 border-dashed border-amber focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-amber"
+                      className="absolute inset-y-0 left-0 z-[6] w-1.5 cursor-ew-resize touch-none border-l-2 border-dashed border-amber focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-amber"
                       data-testid={`sim-timeline-event-${i}-resize-start`}
                     />
                     <span
@@ -620,7 +620,7 @@ export function SimTimeline({
                           ev.startLap + ev.laps - 1,
                         )
                       }
-                      className="absolute inset-y-0 right-0 z-[6] w-2.5 cursor-ew-resize touch-none border-r-2 border-dashed border-amber focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-amber"
+                      className="absolute inset-y-0 right-0 z-[6] w-1.5 cursor-ew-resize touch-none border-r-2 border-dashed border-amber focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-amber"
                       data-testid={`sim-timeline-event-${i}-resize-end`}
                     />
                   </>
@@ -680,7 +680,7 @@ export function SimTimeline({
                           rw.startLap,
                         )
                       }
-                      className="absolute inset-y-0 inset-x-0 cursor-move touch-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-info"
+                      className="absolute inset-y-0 inset-x-0 z-[5] cursor-move touch-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-info"
                       data-testid={`sim-timeline-rain-${i}-move`}
                     >
                       {rw.laps / totalLaps >= BAND_TAG_SHARE ? (
@@ -717,7 +717,7 @@ export function SimTimeline({
                           rw.startLap,
                         )
                       }
-                      className="absolute inset-y-0 left-0 z-[6] w-2.5 cursor-ew-resize touch-none border-l-2 border-info focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-info"
+                      className="absolute inset-y-0 left-0 z-[6] w-1.5 cursor-ew-resize touch-none border-l-2 border-info focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-info"
                       data-testid={`sim-timeline-rain-${i}-resize-start`}
                     />
                     <span
@@ -747,7 +747,7 @@ export function SimTimeline({
                           rw.startLap + rw.laps - 1,
                         )
                       }
-                      className="absolute inset-y-0 right-0 z-[6] w-2.5 cursor-ew-resize touch-none border-r-2 border-info focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-info"
+                      className="absolute inset-y-0 right-0 z-[6] w-1.5 cursor-ew-resize touch-none border-r-2 border-info focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-info"
                       data-testid={`sim-timeline-rain-${i}-resize-end`}
                     />
                   </>

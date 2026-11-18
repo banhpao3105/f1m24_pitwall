@@ -2,6 +2,76 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.11.1] — Sửa 2 lỗi kéo-thả của 0.11.0: band sai chỗ + thẻ gợi ý không tính lại
+
+Base `a49c5d2` verify PARTIAL PASS: engine + gợi ý + kéo biên đúng hết, nhưng
+2 lỗi thật ở Step 3. Phạm vi: `StintTimeline.tsx` (SimTimeline) + wiring
+drag/commit trong `TyreLabView.tsx` + 2 test. **Luật chốt (chủ quyết
+2026-11-18): kết thúc 1 cử chỉ kéo (pointerup CÓ di chuyển) và rời khỏi
+handle bàn phím (blur/Enter) LÀ 1 lần chốt** — thẻ gợi ý tính lại đúng 1 lần
+lúc đó; không commit trên từng pointermove/keypress (tìm kiếm ~4.4s/lần —
+commit liên tục là spam). Không đụng đường commit cũ (blur/Enter ô số,
+mode-change, add/delete vẫn như cũ).
+
+### Bước 1 — B1: band trả lại vị trí (`51019ef`)
+
+- Bản 0.11.0 viết lại band và làm rớt `absolute inset-y-0`: span band thành
+  phần tử static trong flex row → `left` bị bỏ qua (band vẽ tít mép phải —
+  owner đo: SC [19,21] nằm ở x=1341 trên bar 1118px thay vì ~32.1%), và tay
+  kéo move (`absolute inset-x-0`) neo theo BAR → phủ kín timeline, chặn mọi
+  click segment (click-to-focus của 0.10.0 hỏng hẳn khi có event).
+- Trả lại đúng class v0.10.0, nguyên văn: event band
+  `absolute inset-y-0 border border-dashed border-amber bg-amber/20`; mưa
+  `absolute inset-y-0 border-x border-info bg-info/20`. Audit DoD: mọi
+  `style={{ left }}` trong file đều nằm trên phần tử absolute.
+- Live: SC [24,26] → left 40.4% / width 5.3% (cùng công thức với DoD
+  Shanghai 32.1% / 5.4%), tag vắng (<8%); mưa [24,33] → 17.5% + tag MƯA
+  (≥8%); click-to-focus hoạt động lại trên cả 2 segment (row focus + ring
+  teal); kéo biên chuột vẫn re-price. 581 test xanh.
+
+### Bước 2 — B2: kéo xong là chốt (`65f086b`)
+
+- `SimTimeline` thêm **đúng một prop `onDragEnd`** (không tạo cơ chế thứ hai):
+  1 flag pending — set CHỈ khi một thay đổi thực sự được áp dụng (pointermove
+  dịch giá trị, phím đổi giá trị), clear khi focus và sau mỗi lần commit →
+  pointerup không di chuyển / blur không đổi / Enter không đổi KHÔNG commit,
+  1 cử chỉ không bao giờ commit 2 lần. Cả 7 handle (biên + band move/start/
+  end × SC/mưa) commit tại blur và Enter.
+- `TyreLabView` truyền `onDragEnd={() => commitScen()}` — chọn dạng KHÔNG
+  đối số (quyết định cuối, ghi rõ): tại thời điểm kết thúc cử chỉ, mọi
+  pointermove/keypress đã re-render nên closure mang events/rain mới nhất;
+  không chạy song song dạng truyền tường minh (tránh double commit).
+- **Đính chính engine (tối thiểu, do số DoD bộc lộ)**: `rainVariantsFromSplit`
+  ghép phần đầu khô bị cắt của stint chạm cửa sổ vào stint TRƯỚC nó (trước
+  đây là segment riêng → thừa 1 stint + 1 pit). Điểm mù của spec v0.11.0:
+  số [19,28] không phân biệt được 2 cách đọc (head không có stint trước);
+  cửa sổ [47,56] phân biệt — chủ đo từ engine thật: S19/S27/I10 **151.8s**,
+  không phải 163s (head riêng). **Không số lock nào đổi** — probe đối chiếu:
+  SC[25,27] 80.2 / SC[19,21] 75.8 / mưa[19,28] 154.1/157.9/164.6 / rỗng →
+  null, tất cả nguyên văn; full suite xanh.
+- **2 test sửa theo DoD** (không theo code cũ): bàn phím [19,21]→[25,27] +
+  blur → thẻ hiện S→M→S **80.2s** / −2.9s / "Đổi sang S→M→S" (giữa cử chỉ
+  thẻ vẫn 75.8s); mưa End tới [47,56] + blur → thẻ **151.8s**, stint cuối là
+  I mở bởi pit V46 (không khóa thứ tự 2 stint S). Không thêm test mới gọi
+  `recommendUnderScenario`.
+- Live: kéo thân band giữa chừng — thẻ đứng nguyên câu trả lời cũ (58.3s),
+  thả → thẻ tính lại câu trả lời khác thật sự (59.0s dưới [29,31]); bàn phím
+  4× mũi tên — thẻ đứng 59.0s, Enter → thẻ tính lại 58.5s dưới [25,27].
+
+### Bước 3 — Release (commit này)
+
+- version `0.11.1`, SW cache `pitwall-v0.11.1`, full check: lint + tsc +
+  vitest 581/581 + build sạch.
+- Hồi quy engine không đổi số nào: Shanghai lead/trail 83.1s (game 104s),
+  SC[25,27] 80.2s, SC[19,21] 75.8s, mưa[19,28] 154.1s; Vegas 72.2/75.7/73.4;
+  MarinaBay 97.1/103.7; Monza 57.6/75.0; Interlagos 93.2/121.5 — tất cả được
+  khóa bởi suite hiện có.
+- Live full-flow: thêm SC → thẻ 58.3s → kéo band → thẻ tính lại → "Áp dụng"
+  → editor đổi theo hero → reset "Về plan lead" → 0 event/mưa + thẻ biến
+  mất; mobile 375px band nằm đúng chỗ, kéo được, không scroll ngang;
+  reduced-motion giữ nguyên các nhánh render-ngay; 0 console error ở cả
+  1440px và 375px.
+
 ## [0.11.0] — Ba khối what-if gộp thành một workspace + engine tìm plan theo tình huống
 
 Trên Tyre Lab có 3 khối what-if không dính gì tới nhau (slider dời pit,
