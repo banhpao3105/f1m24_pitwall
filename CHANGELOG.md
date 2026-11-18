@@ -2,6 +2,101 @@
 
 Tất cả thay đổi đáng chú ý của F1 Pit Wall. Format theo [Keep a Changelog](https://keepachangelog.com/), version theo [SemVer](https://semver.org/).
 
+## [0.11.0] — Ba khối what-if gộp thành một workspace + engine tìm plan theo tình huống
+
+Trên Tyre Lab có 3 khối what-if không dính gì tới nhau (slider dời pit,
+card SC/VSC, mô phỏng tự do) — mỗi khối 1 state, 1 kết quả, và **không khối
+nào tìm plan mới**: tất cả chỉ re-price plan đã cố định. Thêm SC ở simulator
+không hiện ở khối SC, gạt slider không động tới draft. Version này sửa cả 3
+điểm: **1 workspace, 1 state, 1 thẻ gợi ý** — thêm SC/mưa là app trả lời
+"nên chạy plan nào, đổi hay giữ, tiết kiệm bao nhiêu". Engine cũ
+(`buildTyreLab`, `evaluateStrategy`, `priceManualPlan`, `whatIfSCVSC*`,
+`buildWetPlan`, DEG/SC ratio/VSC midpoint) **không bị đụng** — Step 1 chỉ
+THÊM hàm; regression giữ nguyên từng số (Shanghai lead/trail 83.1s, game
+104s; B1 100.4 / B3 160.2 / B5 191.6 / B6 353.8, M1 saved 10.9; Vegas
+72.2/75.7/73.4; MarinaBay 97.1/103.7; Monza 57.6/75.0; Interlagos 93.2/121.5).
+
+### Bước 1 — `recommendUnderScenario` (`e0206d1`)
+
+- **Tìm kiếm có giới hạn** (không hàm mũ): dry = đúng bộ order
+  `buildTyreLab` đang enumerate (~54), mỗi order lấy pit tối ưu khô rồi
+  **thử dịch từng pit vào từng cửa sổ** (mỗi pit thử mọi vòng trong cửa sổ,
+  phần đầu/đuôi quanh pit được chia lại tối ưu — pit tối ưu khô 19/18/19
+  của S→M→S thành S25/M13/S18 dưới SC [25,27]); mưa = biến thể căn mép cửa
+  mưa (đúng mép + tràn 1 vòng — cả hai đều được định giá, "để giá tự quyết"),
+  hợp chất khô giữ trong vocabulary của plan seed, cộng thêm wet preset
+  `buildWetPlan`. Mọi ứng viên được định giá **trên kho đúng xe đó** qua
+  đúng đường `priceManualPlan` (validation, `pitCostAtLap`,
+  `assignSetsForCar`, `wearCorrection`) — parity khóa bằng test.
+- **Kết quả**: `recommendation` + `alternates[0..2]` (khác signature) +
+  `currentUnderScenario` (plan seed re-price dưới tình huống; infeasible →
+  lỗi engine nguyên văn) + `verdict` 'switch'/'keep' (ngưỡng 0.5s là **quy
+  tắc UI** chống nhiễu làm tròn — ghi rõ trong comment, không phải hằng số
+  model) + `assumptions` (scRatio / vscMidpoint / wetDegBorrowed).
+- Hòa giá tuyệt đối ưu tiên signature của plan đang chạy (Shanghai SC
+  [19,21]: S→S→M và S→M→S hòa đúng multiset {S19,S19,M18} — chọn "giữ plan,
+  pit dưới SC" thay vì anh em song sinh đổi order).
+- Số lock trên fixture Shanghai 2028 (= SQL thật của autosave-5.sav, chủ đã
+  verify): SC [25,27] → S→M→S pit 25/38 **80.2s** (−2.9s, switch — plan mà
+  card top-6 cũ KHÔNG BAO GIỜ thấy); SC [19,21] → chính plan lead
+  **75.8s** (−7.3s, switch); mưa [19,28] → S18/I10/S28 **154.1s**,
+  alternates 157.9s + 164.6s, lead infeasible (2 lỗi slick-trong-mưa) →
+  switch bắt buộc; không tình huống → `null`. 13 test mới; `probe-v110-rec.ts`
+  in cả bộ DoD. 553 → 566 test xanh.
+
+### Bước 2 — Một workspace "Tình huống" (`ed9e454`)
+
+- **Xóa hẳn** 2 section cũ `tyre-whatif` + `tyre-whatif-sc` (section, state
+  `pitShift/rainOn/whatIfOpen/scOn/scMode/scStart/scLaps`, i18n key, test) —
+  không để lại section ẩn hay code chết.
+- **Thẻ gợi ý** `tyre-scenario-recommendation` trên cùng workspace, chỉ hiện
+  khi có ≥1 event hoặc cửa mưa: chip tóm tắt (`SC V25–27` / `Mưa V19–28`),
+  câu verdict 3 dạng (`Đổi sang… — tiết kiệm Ns` / `Giữ plan, pit ở Vx dưới
+  SC/VSC — tiết kiệm Ns` / `Plan hiện tại không chạy được dưới tình huống
+  này — phải đổi sang…`), số thời gian + chip delta so với giá green của
+  plan lead, nút **"Áp dụng plan này"** viết thẳng plan gợi ý vào editor,
+  2 alternates mỗi dòng 1 nút "Áp dụng" riêng, giả định nằm sau toggle
+  "Xem bằng chứng" — không bao giờ trình bày số giả định như số đo.
+- **Tìm kiếm chạy trên tình huống đã CHỐT**: nút bấm commit khi click,
+  ô số commit khi blur/Enter — không bao giờ chạy theo từng keystroke, và
+  (Step 3) không bao giờ chạy theo từng pointermove.
+- Slider dời pit cũ sống lại làm control **"Dịch toàn bộ pit ±N vòng"**
+  trong workspace: mọi pit lap dịch cùng delta, clamp mọi stint ≥ 4 vòng
+  trong [1, laps]; áp lũy tiến theo vị trí slider, mọi edit khác reset về 0;
+  thẻ gợi ý KHÔNG phụ thuộc draft nên slider không chạy search.
+- `sim-reset` ("Về plan lead") cũng xóa tình huống đã chốt (thẻ gợi ý biến
+  mất); thumb của Radix slider có tên a11y (`thumbLabel`).
+- Test: card Shanghai lock số DoD (80.2s/−2.9s/"Đổi sang S→M→S, pit V25/V38"
+  → áp dụng = editor 25/13/18 hero 80.2s; mưa → 154.1s + câu infeasible +
+  alternates 157.9/164.6 → áp alt 0 = 18/11/27 hero 157.9s; slider +2 → pit
+  V21/V40); MarinaBay card 87.9s/−9.2s + VSC 92.5s (midpoint 16.1) thay test
+  card cũ; phase2 assert testid cũ biến mất khỏi DOM. 566 → 572 xanh. Live
+  browser: card + áp dụng + slider chạy đúng trên save thật, 0 console error.
+
+### Bước 3 — Kéo-thả trên timeline (`4cefd07` + live-fix `e9b15ea`)
+
+- **Pointer Events thuần** (không framer-motion `drag`, không lib DnD): cờ
+  pit thành **handle kéo biên** (role slider, focus ring, aria-valuetext)
+  — snap vòng nguyên, clamp stint ≥ 4 (4/34/18 và 34/4/18 trên draft
+  Shanghai — vi phạm đời bộ vẫn là lỗi engine trung thực, không clamp UI);
+  band SC/VSC + mưa có **thân kéo dời** (giữ grab offset) + **2 mép
+  resize** (clamp `startLap ≤ totalLaps − laps + 1`); `touch-action: none`.
+- **Bàn phím ngang hàng**: mũi tên ±1, Shift ±5, Home/End tới clamp — mọi
+  handle focus được, có `aria-label`, có focus ring.
+- **Live mỗi pointermove**: draft + giá re-price theo từng bước kéo (thẻ
+  gợi ý vẫn chờ commit — luật Step 2); tooltip khi kéo có chữ
+  (`V19 → V25`, resize `V19–V21 → V19–V38`); ô số + stepper ở lại và đồng
+  bộ 2 chiều ngay.
+- Testid cũ `sim-timeline-pit-{lap}` sống lại **bên trong** handle (đường
+  amber chính là cờ). Số lock: kéo biên V19→V25 = 25/13/18 90.2s +7.1s;
+  biên 2 38→30 = 19/11/26 90.0s, bàn phím tới V44 = 19/25/12 87.4s; band SC
+  [19,21]→[25,27] trả về 83.1s, resize [19,38] = 68.6s (2 pit trong cửa
+  sổ); band mưa End tới [47,56] gọn còn đúng 1 lỗi "stint M vòng 39–56 chạy
+  slick trong mưa (cửa sổ 47–56)". 572 → 581 xanh. Live-fix `e9b15ea`: handle
+  thiếu `left` style (jsdom không hit-test nên test không bắt được) — kéo
+  chuột thật đã verify: tooltip hiện, draft + giá + editor đồng bộ, 0
+  console error.
+
 ## [0.10.0] — Simulator xài ui-ux-pro-max (mặt tiền + ergonomics + điểm nhấn cyber tiết chế)
 
 v0.9.9 sửa xong tính thân thiện nhưng nhìn vẫn "trần": editor là dãy
