@@ -472,7 +472,13 @@ export function SimTimeline({
                 key={`ev-${i}`}
                 layout
                 transition={spring}
-                className="bg-amber/20"
+                /* v0.11.1 B1 — the v0.11.0 rewrite dropped `absolute
+                   inset-y-0` from this span: a static child of the flex
+                   bar ignores `left`, so the band painted at the flow edge
+                   and its move handle (absolute) anchored to the BAR,
+                   covering every segment click. The v0.10.0 class is back,
+                   verbatim. */
+                className="absolute inset-y-0 border border-dashed border-amber bg-amber/20"
                 style={{ left: `${pct(ev.startLap - 1)}%`, width: `${pct(ev.laps)}%` }}
                 data-testid={`sim-timeline-event-${i}`}
               >
@@ -592,7 +598,8 @@ export function SimTimeline({
                 key={`rain-${i}`}
                 layout
                 transition={spring}
-                className="bg-info/20"
+                /* v0.11.1 B1 — same restore as the SC band above. */
+                className="absolute inset-y-0 border-x border-info bg-info/20"
                 style={{ left: `${pct(rw.startLap - 1)}%`, width: `${pct(rw.laps)}%` }}
                 data-testid={`sim-timeline-rain-${i}`}
               >
